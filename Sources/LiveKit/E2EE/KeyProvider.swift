@@ -88,6 +88,7 @@ public final class BaseKeyProvider: NSObject, Loggable, Sendable {
 
     let rtcKeyProvider: LKRTCFrameCryptorKeyProvider
 
+    @available(*, deprecated, message: "Use init(isSharedKey:sharedKey:) with Data type for sharedKey instead of String.")
     public init(isSharedKey: Bool, sharedKey: String? = nil) {
         options = KeyProviderOptions(sharedKey: isSharedKey)
         rtcKeyProvider = LKRTCFrameCryptorKeyProvider(ratchetSalt: options.ratchetSalt,
@@ -101,6 +102,19 @@ public final class BaseKeyProvider: NSObject, Loggable, Sendable {
             rtcKeyProvider.setSharedKey(keyData, with: 0)
         }
     }
+    
+    public init(isSharedKey: Bool, sharedKey: Data? = nil) {
+        options = KeyProviderOptions(sharedKey: isSharedKey)
+        rtcKeyProvider = LKRTCFrameCryptorKeyProvider(ratchetSalt: options.ratchetSalt,
+                                                      ratchetWindowSize: options.ratchetWindowSize,
+                                                      sharedKeyMode: isSharedKey,
+                                                      uncryptedMagicBytes: options.uncryptedMagicBytes,
+                                                      failureTolerance: options.failureTolerance,
+                                                      keyRingSize: 16)
+        if isSharedKey, let sharedKey = sharedKey {
+            rtcKeyProvider.setSharedKey(sharedKey, with: 0)
+        }
+    }
 
     public init(options: KeyProviderOptions = KeyProviderOptions()) {
         self.options = options
@@ -110,6 +124,7 @@ public final class BaseKeyProvider: NSObject, Loggable, Sendable {
                                                       uncryptedMagicBytes: options.uncryptedMagicBytes)
     }
 
+    @available(*, deprecated, message: "Use setKey(_:participantId:index:) with Data type instead of String.")
     public func setKey(key: String, participantId: String? = nil, index: Int32? = 0) {
         if options.sharedKey {
             let keyData = key.data(using: .utf8)!
