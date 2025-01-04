@@ -125,6 +125,20 @@ public final class BaseKeyProvider: NSObject, Loggable, Sendable {
         let keyData = key.data(using: .utf8)!
         rtcKeyProvider.setKey(keyData, with: index!, forParticipant: participantId!)
     }
+    
+    public func setKey(key: Data, participantId: String? = nil, index: Int32? = 0) {
+        if options.sharedKey {
+            rtcKeyProvider.setSharedKey(key, with: index ?? 0)
+            return
+        }
+
+        if participantId == nil {
+            log("setKey: Please provide valid participantId for non-SharedKey mode.")
+            return
+        }
+
+        rtcKeyProvider.setKey(key, with: index!, forParticipant: participantId!)
+    }
 
     public func ratchetKey(participantId: String? = nil, index: Int32? = 0) -> Data? {
         if options.sharedKey {
