@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 LiveKit
+ * Copyright 2025 LiveKit
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -186,10 +186,9 @@ class AudioTrackWatcher: AudioRenderer {
     }
 
     func render(pcmBuffer: AVAudioPCMBuffer) {
-        print("did receive first audio frame: \(String(describing: pcmBuffer))")
-
         _state.mutate {
             if !$0.didRenderFirstFrame {
+                print("did receive first audio frame: \(String(describing: pcmBuffer))")
                 $0.didRenderFirstFrame = true
                 onDidRenderFirstFrame?(id)
             }

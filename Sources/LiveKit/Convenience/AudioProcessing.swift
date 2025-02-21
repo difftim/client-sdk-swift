@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 LiveKit
+ * Copyright 2025 LiveKit
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,6 +52,17 @@ public extension LKAudioBuffer {
             }
         }
 
+        return pcmBuffer
+    }
+}
+
+public extension CMSampleBuffer {
+    func toAVAudioPCMBuffer() -> AVAudioPCMBuffer? {
+        let format = AVAudioFormat(cmAudioFormatDescription: formatDescription!)
+        let numSamples = AVAudioFrameCount(numSamples)
+        let pcmBuffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: numSamples)!
+        pcmBuffer.frameLength = numSamples
+        CMSampleBufferCopyPCMDataIntoAudioBufferList(self, at: 0, frameCount: Int32(numSamples), into: pcmBuffer.mutableAudioBufferList)
         return pcmBuffer
     }
 }

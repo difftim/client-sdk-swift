@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 LiveKit
+ * Copyright 2025 LiveKit
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,12 +29,10 @@ class TestTrack: LocalAudioTrack {
 
     override func startCapture() async throws {
         try? await Task.sleep(nanoseconds: UInt64(Double.random(in: 0.0 ... 1.0) * 1_000_000))
-        try await AudioManager.shared.trackDidStart(.local)
     }
 
     override func stopCapture() async throws {
         try? await Task.sleep(nanoseconds: UInt64(Double.random(in: 0.0 ... 1.0) * 1_000_000))
-        try await AudioManager.shared.trackDidStop(.local)
     }
 }
 
@@ -71,7 +69,7 @@ class TrackTests: XCTestCase {
 
         AudioManager.shared.customConfigureAudioSessionFunc = nil
 
-        XCTAssertEqual(AudioManager.shared.state.localTracksCount, 0, "localTracksCount should be 0")
+        XCTAssertEqual(AudioManager.shared._state.localTracksCount, 0, "localTracksCount should be 0")
     }
     #endif
 }

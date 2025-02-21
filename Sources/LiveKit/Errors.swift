@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 LiveKit
+ * Copyright 2025 LiveKit
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@ public enum LiveKitErrorType: Int, Sendable {
     case failedToParseUrl = 102
     case failedToConvertData = 103
     case invalidState = 104
+    case invalidParameter = 105
 
     case webRTC = 201
 
@@ -66,6 +67,8 @@ extension LiveKitErrorType: CustomStringConvertible {
             return "Failed to convert data"
         case .invalidState:
             return "Invalid state"
+        case .invalidParameter:
+            return "Invalid parameter"
         case .webRTC:
             return "WebRTC error"
         case .network:

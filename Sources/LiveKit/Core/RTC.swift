@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 LiveKit
+ * Copyright 2025 LiveKit
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,19 +50,6 @@ private class VideoEncoderFactorySimulcast: LKRTCVideoEncoderFactorySimulcast {
 }
 
 class RTC {
-    private static var _bypassVoiceProcessing: Bool = false
-    private static var _peerConnectionFactoryInitialized = false
-
-    static var bypassVoiceProcessing: Bool {
-        get { _bypassVoiceProcessing }
-        set {
-            if _peerConnectionFactoryInitialized {
-                logger.log("Warning: Setting bypassVoiceProcessing after PeerConnectionFactory initialization has no effect. Set it at application launch.", .warning, type: Room.self)
-            }
-            _bypassVoiceProcessing = newValue
-        }
-    }
-
     static let h264BaselineLevel5CodecInfo: LKRTCVideoCodecInfo = {
         // this should never happen
         guard let profileLevelId = LKRTCH264ProfileLevelId(profile: .constrainedBaseline, level: .level5) else {
@@ -100,8 +87,7 @@ class RTC {
 
         logger.log("Initializing PeerConnectionFactory...", type: Room.self)
 
-        _peerConnectionFactoryInitialized = true
-        return LKRTCPeerConnectionFactory(bypassVoiceProcessing: bypassVoiceProcessing,
+        return LKRTCPeerConnectionFactory(bypassVoiceProcessing: false,
                                           encoderFactory: encoderFactory,
                                           decoderFactory: decoderFactory,
                                           audioProcessingModule: audioProcessingModule)
