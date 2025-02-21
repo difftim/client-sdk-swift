@@ -102,7 +102,7 @@ public final class BaseKeyProvider: NSObject, Loggable, Sendable {
             rtcKeyProvider.setSharedKey(keyData, with: 0)
         }
     }
-    
+
     public init(isSharedKey: Bool, sharedKey: Data? = nil) {
         options = KeyProviderOptions(sharedKey: isSharedKey)
         rtcKeyProvider = LKRTCFrameCryptorKeyProvider(ratchetSalt: options.ratchetSalt,
@@ -111,8 +111,8 @@ public final class BaseKeyProvider: NSObject, Loggable, Sendable {
                                                       uncryptedMagicBytes: options.uncryptedMagicBytes,
                                                       failureTolerance: options.failureTolerance,
                                                       keyRingSize: 16)
-        if isSharedKey, let sharedKey = sharedKey {
-            rtcKeyProvider.setSharedKey(sharedKey, with: 0)
+        if isSharedKey, let sharedKeyUnwrapped = sharedKey {
+            rtcKeyProvider.setSharedKey(sharedKeyUnwrapped, with: 0)
         }
     }
 
@@ -140,7 +140,7 @@ public final class BaseKeyProvider: NSObject, Loggable, Sendable {
         let keyData = key.data(using: .utf8)!
         rtcKeyProvider.setKey(keyData, with: index!, forParticipant: participantId!)
     }
-    
+
     public func setKey(key: Data, participantId: String? = nil, index: Int32? = 0) {
         if options.sharedKey {
             rtcKeyProvider.setSharedKey(key, with: index ?? 0)
