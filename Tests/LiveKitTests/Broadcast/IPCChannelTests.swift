@@ -20,7 +20,7 @@
 import Network
 import XCTest
 
-final class IPCChannelTests: XCTestCase {
+final class IPCChannelTests: LKTestCase {
     private var socketPath: SocketPath!
 
     enum TestSetupError: Error {
@@ -93,6 +93,7 @@ final class IPCChannelTests: XCTestCase {
         await fulfillment(of: [cancelThrowsError], timeout: 5.0)
     }
 
+    // swiftformat:disable redundantSelf hoistAwait
     func testConnectorCancelDuringInit() async throws {
         try await assertInitCancellationThrows(
             await IPCChannel(connectingTo: self.socketPath)
@@ -104,6 +105,8 @@ final class IPCChannelTests: XCTestCase {
             await IPCChannel(acceptingOn: self.socketPath)
         )
     }
+
+    // swiftformat:enable all
 
     private struct TestHeader: Codable, Equatable {
         let someField: Int

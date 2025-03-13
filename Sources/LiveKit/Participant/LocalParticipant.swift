@@ -35,8 +35,6 @@ public class LocalParticipant: Participant {
 
     private var trackPermissions: [ParticipantTrackPermission] = []
 
-    let rpcState = RpcStateManager()
-
     /// publish a new audio track to the Room
     @objc
     @discardableResult
@@ -418,7 +416,7 @@ extension LocalParticipant {
     {
         let room = try requireRoom()
 
-        let videoCodec = try subscribedCodec.toVideoCodec()
+        guard let videoCodec = subscribedCodec.toVideoCodec() else { return }
 
         log("[Publish/Backup] Additional video codec: \(videoCodec)...")
 
@@ -468,7 +466,7 @@ extension LocalParticipant {
             $0.simulcastCodecs = [
                 Livekit_SimulcastCodec.with { sc in
                     sc.cid = sender.senderId
-                    sc.codec = videoCodec.id
+                    sc.codec = videoCodec.name
                 },
             ]
 
@@ -503,6 +501,8 @@ private extension LocalParticipant {
     @discardableResult
     private func _publish(track: LocalTrack, options: TrackPublishOptions? = nil) async throws -> LocalTrackPublication {
         log("[publish] \(track) options: \(String(describing: options ?? nil))...", .info)
+
+        try checkPermissions(toPublish: track)
 
         let room = try requireRoom()
         let publisher = try room.requirePublisher()
@@ -563,7 +563,7 @@ private extension LocalParticipant {
                         Livekit_SimulcastCodec.with {
                             $0.cid = track.mediaTrack.trackId
                             if let preferredCodec = publishOptions.preferredCodec {
-                                $0.codec = preferredCodec.id
+                                $0.codec = preferredCodec.name
                             }
                         },
                     ]
@@ -572,7 +572,7 @@ private extension LocalParticipant {
                         // Add backup codec to simulcast codecs...
                         let lkSimulcastCodec = Livekit_SimulcastCodec.with {
                             $0.cid = ""
-                            $0.codec = backupCodec.id
+                            $0.codec = backupCodec.name
                         }
                         simulcastCodecs.append(lkSimulcastCodec)
                     }
@@ -633,7 +633,7 @@ private extension LocalParticipant {
 
                 if track is LocalVideoTrack {
                     if let firstCodecMime = addTrackResult.trackInfo.codecs.first?.mimeType,
-                       let firstVideoCodec = try? VideoCodec.from(mimeType: firstCodecMime)
+                       let firstVideoCodec = VideoCodec.from(mimeType: firstCodecMime)
                     {
                         log("[Publish] First video codec: \(firstVideoCodec)")
                         track._state.mutate { $0.videoCodec = firstVideoCodec }
@@ -696,6 +696,17 @@ private extension LocalParticipant {
             try await track.stop()
             // Rethrow
             throw error
+        }
+    }
+
+    private func checkPermissions(toPublish track: LocalTrack) throws {
+        guard permissions.canPublish else {
+            throw LiveKitError(.insufficientPermissions, message: "Participant does not have permission to publish")
+        }
+
+        let sources = permissions.canPublishSources
+        if !sources.isEmpty, !sources.contains(track.source.rawValue) {
+            throw LiveKitError(.insufficientPermissions, message: "Participant does not have permission to publish tracks from this source")
         }
     }
 }

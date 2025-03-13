@@ -17,7 +17,7 @@
 @testable import LiveKit
 import XCTest
 
-class RoomTests: XCTestCase {
+class RoomTests: LKTestCase {
     func testRoomProperties() async throws {
         try await withRooms([RoomTestingOptions()]) { rooms in
             // Alias to Room
@@ -38,6 +38,24 @@ class RoomTests: XCTestCase {
         // Create 2 Rooms
         try await withRooms([RoomTestingOptions(delegate: self), RoomTestingOptions(delegate: self)]) { _ in
             // Nothing to do here
+        }
+    }
+
+    func testSendDataPacket() async throws {
+        try await withRooms([RoomTestingOptions()]) { rooms in
+            let room = rooms[0]
+
+            let expectDataPacket = self.expectation(description: "Should send data packet")
+
+            let mockDataChannel = MockDataChannelPair { packet in
+                XCTAssertEqual(packet.participantIdentity, room.localParticipant.identity?.stringValue ?? "")
+                expectDataPacket.fulfill()
+            }
+            room.publisherDataChannel = mockDataChannel
+
+            try await room.send(dataPacket: Livekit_DataPacket())
+
+            await self.fulfillment(of: [expectDataPacket], timeout: 5)
         }
     }
 }

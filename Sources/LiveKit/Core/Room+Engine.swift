@@ -102,8 +102,12 @@ extension Room {
             log("publisher data channel is not .open", .error)
         }
 
-        // Should return true if successful
-        try publisherDataChannel.send(dataPacket: packet)
+        var packet = packet
+        if let identity = localParticipant.identity?.stringValue {
+            packet.participantIdentity = identity
+        }
+
+        try await publisherDataChannel.send(dataPacket: packet)
     }
 }
 

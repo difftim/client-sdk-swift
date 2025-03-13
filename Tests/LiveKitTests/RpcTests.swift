@@ -17,20 +17,7 @@
 @testable import LiveKit
 import XCTest
 
-class RpcTests: XCTestCase {
-    // Mock DataChannelPair to intercept outgoing packets
-    class MockDataChannelPair: DataChannelPair {
-        var packetHandler: (Livekit_DataPacket) -> Void
-
-        init(packetHandler: @escaping (Livekit_DataPacket) -> Void) {
-            self.packetHandler = packetHandler
-        }
-
-        override func send(dataPacket packet: Livekit_DataPacket) throws {
-            packetHandler(packet)
-        }
-    }
-
+class RpcTests: LKTestCase {
     // Test performing RPC calls and verifying outgoing packets
     func testPerformRpc() async throws {
         try await withRooms([RoomTestingOptions()]) { rooms in
@@ -105,8 +92,18 @@ class RpcTests: XCTestCase {
 
             room.publisherDataChannel = mockDataChannel
 
-            await room.localParticipant.registerRpcMethod("greet") { data in
+            try await room.registerRpcMethod("greet") { data in
                 "Hello, \(data.callerIdentity)!"
+            }
+
+            let isRegistered = await room.isRpcMethodRegistered("greet")
+            XCTAssertTrue(isRegistered)
+
+            do {
+                try await room.registerRpcMethod("greet") { _ in "" }
+                XCTFail("Duplicate RPC method registration should fail.")
+            } catch {
+                XCTAssertNotNil(error as? LiveKitError)
             }
 
             await room.localParticipant.handleIncomingRpcRequest(
@@ -148,7 +145,7 @@ class RpcTests: XCTestCase {
 
             room.publisherDataChannel = mockDataChannel
 
-            await room.localParticipant.registerRpcMethod("failingMethod") { _ in
+            try await room.registerRpcMethod("failingMethod") { _ in
                 throw RpcError(code: 2000, message: "Custom error", data: "Additional data")
             }
 
@@ -188,11 +185,14 @@ class RpcTests: XCTestCase {
 
             room.publisherDataChannel = mockDataChannel
 
-            await room.localParticipant.registerRpcMethod("test") { _ in
+            try await room.registerRpcMethod("test") { _ in
                 "test response"
             }
 
-            await room.localParticipant.unregisterRpcMethod("test")
+            await room.unregisterRpcMethod("test")
+
+            let isRegistered = await room.isRpcMethodRegistered("test")
+            XCTAssertFalse(isRegistered)
 
             await room.localParticipant.handleIncomingRpcRequest(
                 callerIdentity: Participant.Identity(from: "test-caller"),

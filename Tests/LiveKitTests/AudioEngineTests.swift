@@ -19,12 +19,7 @@
 import LiveKitWebRTC
 import XCTest
 
-class AudioEngineTests: XCTestCase {
-    override class func setUp() {
-        LiveKitSDK.setLoggerStandardOutput()
-        RTCSetMinDebugLogLevel(.info)
-    }
-
+class AudioEngineTests: LKTestCase {
     override func tearDown() async throws {}
 
     #if !targetEnvironment(simulator)
@@ -65,22 +60,29 @@ class AudioEngineTests: XCTestCase {
         XCTAssert(!adm.isPlayoutInitialized)
     }
 
-    func testRecordingAlwaysPreparedMode() async {
+    func testRecordingAlwaysPreparedMode() async throws {
         let adm = AudioManager.shared
 
         // Ensure initially not initialized.
         XCTAssert(!adm.isRecordingInitialized)
 
         // Ensure recording is initialized after set to true.
-        adm.isRecordingAlwaysPrepared = true
+        try adm.setRecordingAlwaysPreparedMode(true)
+
+        #if os(iOS)
+        let session = AVAudioSession.sharedInstance()
+        XCTAssert(session.category == .playAndRecord)
+        XCTAssert(session.mode == .videoChat || session.mode == .voiceChat)
+        #endif
+
+        adm.initRecording()
         XCTAssert(adm.isRecordingInitialized)
 
         adm.startRecording()
         XCTAssert(adm.isRecordingInitialized)
 
-        // Should be still initialized after stopRecording() is called.
         adm.stopRecording()
-        XCTAssert(adm.isRecordingInitialized)
+        XCTAssert(!adm.isRecordingInitialized)
     }
 
     func testConfigureDucking() async {
@@ -108,7 +110,7 @@ class AudioEngineTests: XCTestCase {
     // Test start generating local audio buffer without joining to room.
     func testPreconnectAudioBuffer() async throws {
         print("Setting recording always prepared mode...")
-        AudioManager.shared.isRecordingAlwaysPrepared = true
+        try AudioManager.shared.setRecordingAlwaysPreparedMode(true)
 
         var counter = 0
         // Executes 10 times by default.
@@ -131,9 +133,9 @@ class AudioEngineTests: XCTestCase {
             // Attach audio frame watcher...
             localMicTrack.add(audioRenderer: audioFrameWatcher)
 
-            Task.detached {
+            Task {
                 print("Starting local recording...")
-                AudioManager.shared.startLocalRecording()
+                try AudioManager.shared.startLocalRecording()
             }
 
             // Wait for audio frame...
@@ -145,12 +147,17 @@ class AudioEngineTests: XCTestCase {
                 print("Connecting to room...")
                 try await self.withRooms([RoomTestingOptions(canPublish: true)]) { rooms in
                     print("Publishing mic...")
-                    try await rooms[0].localParticipant.setMicrophone(enabled: true)
-                    didConnectToRoom.fulfill()
+                    do {
+                        try await rooms[0].localParticipant.setMicrophone(enabled: true)
+                        didConnectToRoom.fulfill()
+                    } catch {
+                        print("Failed to publish mic: \(error)")
+                    }
                 }
             }
 
             print("Waiting for room to connect & disconnect...")
+            // await fulfillment(of: [didConnectToRoom], timeout: 10)
             wait(for: [didConnectToRoom], timeout: 30)
 
             localMicTrack.remove(audioRenderer: audioFrameWatcher)
@@ -161,7 +168,8 @@ class AudioEngineTests: XCTestCase {
     // In manual rendering, no device access will be initialized such as mic and speaker.
     func testManualRenderingModeSineGenerator() async throws {
         // Set manual rendering mode...
-        AudioManager.shared.isManualRenderingMode = true
+        try AudioManager.shared.setManualRenderingMode(true)
+
         // Attach sine wave generator when engine requests input node.
         // inputMixerNode will automatically convert to RTC's internal format (int16).
         AudioManager.shared.set(engineObservers: [SineWaveNodeHook()])
@@ -178,7 +186,7 @@ class AudioEngineTests: XCTestCase {
         track.add(audioRenderer: recorder)
 
         // Start engine...
-        AudioManager.shared.startLocalRecording()
+        try AudioManager.shared.startLocalRecording()
 
         // Render for 5 seconds...
         try? await Task.sleep(nanoseconds: 5 * 1_000_000_000)
@@ -187,11 +195,11 @@ class AudioEngineTests: XCTestCase {
         print("Written to: \(recorder.filePath)")
 
         // Stop engine
-        AudioManager.shared.stopRecording()
+        try AudioManager.shared.stopLocalRecording()
 
         // Play the recorded file...
         let player = try AVAudioPlayer(contentsOf: recorder.filePath)
-        player.play()
+        XCTAssertTrue(player.play(), "Failed to start audio playback")
         while player.isPlaying {
             try? await Task.sleep(nanoseconds: 1 * 100_000_000) // 10ms
         }
@@ -218,7 +226,7 @@ class AudioEngineTests: XCTestCase {
         print("Interleaved: \(audioFileFormat.isInterleaved)")
 
         // Set manual rendering mode...
-        AudioManager.shared.isManualRenderingMode = true
+        try AudioManager.shared.setManualRenderingMode(true)
 
         let playerNodeHook = PlayerNodeHook(playerNodeFormat: audioFileFormat)
         AudioManager.shared.set(engineObservers: [playerNodeHook])
@@ -235,7 +243,7 @@ class AudioEngineTests: XCTestCase {
         track.add(audioRenderer: recorder)
 
         // Start engine...
-        AudioManager.shared.startLocalRecording()
+        try AudioManager.shared.startLocalRecording()
 
         let scheduleAndPlayTask = Task {
             print("Will scheduleFile")
@@ -251,11 +259,11 @@ class AudioEngineTests: XCTestCase {
         print("Processed file: \(recorder.filePath)")
 
         // Stop engine
-        AudioManager.shared.stopRecording()
+        try AudioManager.shared.stopLocalRecording()
 
         // Play the recorded file...
         let player = try AVAudioPlayer(contentsOf: recorder.filePath)
-        player.play()
+        XCTAssertTrue(player.play(), "Failed to start audio playback")
         while player.isPlaying {
             try? await Task.sleep(nanoseconds: 1 * 100_000_000) // 10ms
         }
@@ -302,6 +310,58 @@ class AudioEngineTests: XCTestCase {
         AudioManager.shared.stopPlayout()
     }
     #endif
+
+    func testAudioRecorder() async throws {
+        try AudioManager.shared.setRecordingAlwaysPreparedMode(true)
+
+        print("Connecting to room...")
+        try await withRooms([RoomTestingOptions(canPublish: true)]) { rooms in
+            print("Publishing mic...")
+            try await rooms[0].localParticipant.setMicrophone(enabled: true)
+            // Wait 3 seconds...
+            try? await Task.sleep(nanoseconds: 3 * 1_000_000_000)
+        }
+
+        let format16k: [String: Any] = [
+            AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
+            AVSampleRateKey: 16000,
+            AVNumberOfChannelsKey: 1,
+            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue,
+        ]
+
+        let tempLocalUrl = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathExtension("aac")
+        let recorder = try AVAudioRecorder(url: tempLocalUrl, settings: format16k)
+        XCTAssertTrue(recorder.record(), "Failed to start audio recording")
+        // Record for 5 seconds...
+        try? await Task.sleep(nanoseconds: 5 * 1_000_000_000)
+        recorder.stop()
+
+        // Play the recorded file...
+        let player = try AVAudioPlayer(contentsOf: tempLocalUrl)
+        XCTAssertTrue(player.play(), "Failed to start audio playback")
+        while player.isPlaying {
+            try? await Task.sleep(nanoseconds: 1 * 100_000_000) // 10ms
+        }
+    }
+
+    func testFailingPublish() async throws {
+        AudioManager.shared.set(engineObservers: [FailingEngineObserver()])
+        // Should fail
+        // swiftformat:disable redundantSelf hoistAwait
+        await XCTAssertThrowsErrorAsync(try await withRooms([RoomTestingOptions(canPublish: true)]) { rooms in
+            print("Publishing mic...")
+            try await rooms[0].localParticipant.setMicrophone(enabled: true)
+        })
+    }
+}
+
+final class FailingEngineObserver: AudioEngineObserver {
+    var next: (any LiveKit.AudioEngineObserver)?
+
+    func engineWillEnable(_: AVAudioEngine, isPlayoutEnabled _: Bool, isRecordingEnabled _: Bool) -> Int {
+        // Fail
+        -4101
+    }
 }
 
 final class SineWaveNodeHook: AudioEngineObserver {
@@ -309,17 +369,20 @@ final class SineWaveNodeHook: AudioEngineObserver {
 
     let sineWaveNode = SineWaveSourceNode()
 
-    func engineDidCreate(_ engine: AVAudioEngine) {
+    func engineDidCreate(_ engine: AVAudioEngine) -> Int {
         engine.attach(sineWaveNode)
+        return 0
     }
 
-    func engineWillRelease(_ engine: AVAudioEngine) {
+    func engineWillRelease(_ engine: AVAudioEngine) -> Int {
         engine.detach(sineWaveNode)
+        return 0
     }
 
-    func engineWillConnectInput(_ engine: AVAudioEngine, src _: AVAudioNode?, dst: AVAudioNode, format: AVAudioFormat, context _: [AnyHashable: Any]) {
+    func engineWillConnectInput(_ engine: AVAudioEngine, src _: AVAudioNode?, dst: AVAudioNode, format: AVAudioFormat, context _: [AnyHashable: Any]) -> Int {
         print("engineWillConnectInput")
         engine.connect(sineWaveNode, to: dst, format: format)
+        return 0
     }
 }
 
@@ -334,19 +397,22 @@ final class PlayerNodeHook: AudioEngineObserver {
         self.playerNodeFormat = playerNodeFormat
     }
 
-    public func engineDidCreate(_ engine: AVAudioEngine) {
+    public func engineDidCreate(_ engine: AVAudioEngine) -> Int {
         engine.attach(playerNode)
         engine.attach(playerMixerNode)
+        return 0
     }
 
-    public func engineWillRelease(_ engine: AVAudioEngine) {
+    public func engineWillRelease(_ engine: AVAudioEngine) -> Int {
         engine.detach(playerNode)
         engine.detach(playerMixerNode)
+        return 0
     }
 
-    func engineWillConnectInput(_ engine: AVAudioEngine, src _: AVAudioNode?, dst: AVAudioNode, format: AVAudioFormat, context _: [AnyHashable: Any]) {
+    func engineWillConnectInput(_ engine: AVAudioEngine, src _: AVAudioNode?, dst: AVAudioNode, format: AVAudioFormat, context _: [AnyHashable: Any]) -> Int {
         print("engineWillConnectInput")
         engine.connect(playerNode, to: playerMixerNode, format: playerNodeFormat)
         engine.connect(playerMixerNode, to: dst, format: format)
+        return 0
     }
 }
