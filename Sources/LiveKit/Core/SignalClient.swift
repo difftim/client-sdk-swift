@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 LiveKit
+ * Copyright 2025 LiveKit
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -405,7 +405,8 @@ extension SignalClient {
                          type: Livekit_TrackType,
                          source: Livekit_TrackSource = .unknown,
                          encryption: Livekit_Encryption.TypeEnum = .none,
-                         _ populator: AddTrackRequestPopulator<R>) async throws -> AddTrackResult<R>
+                         _ populator: AddTrackRequestPopulator<R>,
+                         mute: Bool = false) async throws -> AddTrackResult<R>
     {
         var addTrackRequest = Livekit_AddTrackRequest.with {
             $0.cid = cid
@@ -413,6 +414,7 @@ extension SignalClient {
             $0.type = type
             $0.source = source
             $0.encryption = encryption
+            $0.muted = mute
         }
 
         let populateResult = try populator(&addTrackRequest)

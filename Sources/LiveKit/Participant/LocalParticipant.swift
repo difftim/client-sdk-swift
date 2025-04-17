@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 LiveKit
+ * Copyright 2025 LiveKit
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -276,12 +276,14 @@ public extension LocalParticipant {
     @discardableResult
     func setMicrophone(enabled: Bool,
                        captureOptions: AudioCaptureOptions? = nil,
-                       publishOptions: AudioPublishOptions? = nil) async throws -> LocalTrackPublication?
+                       publishOptions: AudioPublishOptions? = nil,
+                       publishMuted: Bool = false) async throws -> LocalTrackPublication?
     {
         try await set(source: .microphone,
                       enabled: enabled,
                       captureOptions: captureOptions,
-                      publishOptions: publishOptions)
+                      publishOptions: publishOptions,
+                      publishMuted: publishMuted)
     }
 
     /// Enable or disable screen sharing. This has different behavior depending on the platform.
@@ -304,7 +306,8 @@ public extension LocalParticipant {
     func set(source: Track.Source,
              enabled: Bool,
              captureOptions: CaptureOptions? = nil,
-             publishOptions: TrackPublishOptions? = nil) async throws -> LocalTrackPublication?
+             publishOptions: TrackPublishOptions? = nil,
+             publishMuted: Bool = false) async throws -> LocalTrackPublication?
     {
         try await _publishSerialRunner.run {
             let room = try self.requireRoom()
@@ -331,7 +334,10 @@ public extension LocalParticipant {
                 } else if source == .microphone {
                     let localTrack = LocalAudioTrack.createTrack(options: (captureOptions as? AudioCaptureOptions) ?? room._state.roomOptions.defaultAudioCaptureOptions,
                                                                  reportStatistics: room._state.roomOptions.reportRemoteTrackStatistics)
-                    return try await self._publish(track: localTrack, options: publishOptions)
+                    if publishMuted {
+                        try await localTrack.mute(shouldSendSignal: false)
+                    }
+                    return try await self._publish(track: localTrack, options: publishOptions, publishMuted: publishMuted)
                 } else if source == .screenShareVideo {
                     #if os(iOS)
                     let localTrack: LocalVideoTrack
@@ -453,7 +459,7 @@ extension [Livekit_SubscribedQuality] {
 
 private extension LocalParticipant {
     @discardableResult
-    private func _publish(track: LocalTrack, options: TrackPublishOptions? = nil) async throws -> LocalTrackPublication {
+    private func _publish(track: LocalTrack, options: TrackPublishOptions? = nil, publishMuted: Bool = false) async throws -> LocalTrackPublication {
         log("[publish] \(track) options: \(String(describing: options ?? nil))...", .info)
 
         let room = try requireRoom()
@@ -469,6 +475,9 @@ private extension LocalParticipant {
 
         // Try to start the Track
         try await track.start()
+        if publishMuted {
+            try await track.disable()
+        }
         // Starting the Track could be time consuming especially for camera etc.
         // Check cancellation after track starts.
         try Task.checkCancellation()
@@ -566,7 +575,8 @@ private extension LocalParticipant {
                                                                           type: track.kind.toPBType(),
                                                                           source: track.source.toPBType(),
                                                                           encryption: room.e2eeManager?.e2eeOptions.encryptionType.toPBType() ?? .none,
-                                                                          populatorFunc)
+                                                                          populatorFunc,
+                                                                          mute: track.isMuted)
 
             log("[Publish] server responded trackInfo: \(addTrackResult.trackInfo)")
 
