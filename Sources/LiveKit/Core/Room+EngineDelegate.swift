@@ -103,6 +103,9 @@ extension Room {
                 if participantSid == localParticipant.sid {
                     localParticipant._state.mutate {
                         $0.audioLevel = speaker.level
+                        if !$0.isSpeaking {
+                            $0.lastSpokeAt = Int64(Date().timeIntervalSince1970 * 1000)
+                        }
                         $0.isSpeaking = true
                     }
                     activeSpeakers.append(localParticipant)
@@ -110,6 +113,9 @@ extension Room {
                     if let participant = state.remoteParticipant(forSid: participantSid) {
                         participant._state.mutate {
                             $0.audioLevel = speaker.level
+                            if !$0.isSpeaking {
+                                $0.lastSpokeAt = Int64(Date().timeIntervalSince1970 * 1000)
+                            }
                             $0.isSpeaking = true
                         }
                         activeSpeakers.append(participant)
