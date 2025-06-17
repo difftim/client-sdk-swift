@@ -130,7 +130,7 @@ extension Room {
         let rtcConfiguration = makeConfiguration()
 
         if case let .join(joinResponse) = connectResponse {
-            log("Configuring transports with JOIN response...")
+            log("*track: Configuring transports with JOIN response... \(joinResponse)")
 
             guard _state.subscriber == nil, _state.publisher == nil else {
                 log("Transports are already configured")
@@ -139,7 +139,7 @@ extension Room {
 
             // protocol v3
             let isSubscriberPrimary = joinResponse.subscriberPrimary
-            log("subscriberPrimary: \(joinResponse.subscriberPrimary)")
+            log("*track: subscriberPrimary: \(joinResponse.subscriberPrimary), fastPublish: \(joinResponse.fastPublish)")
 
             let subscriber = try Transport(config: rtcConfiguration,
                                            target: .subscriber,
@@ -177,7 +177,7 @@ extension Room {
                 $0.isSubscriberPrimary = isSubscriberPrimary
             }
 
-            if !isSubscriberPrimary {
+            if !isSubscriberPrimary/* || joinResponse.fastPublish*/ {
                 // lazy negotiation for protocol v3+
                 try await publisherShouldNegotiate()
             }
@@ -253,7 +253,7 @@ extension Room {
         try Task.checkCancellation()
 
         _state.mutate { $0.connectStopwatch.split(label: "engine") }
-        log("\(_state.connectStopwatch)")
+        log("*track: \(_state.connectStopwatch)")
     }
 
     func startReconnect(reason: StartReconnectReason, nextReconnectMode: ReconnectMode? = nil) async throws {
@@ -332,7 +332,7 @@ extension Room {
                 $0.connectionState = .reconnecting
             }
 
-            await cleanUp(isFullReconnect: true)
+            await cleanUp(isFullReconnect: true, removePar:false)
 
             guard let url = _state.url,
                   let token = _state.token
@@ -345,6 +345,8 @@ extension Room {
         }
 
         do {
+            var errorReconnect: LiveKitError? = nil
+
             try await Task.retrying(totalAttempts: _state.connectOptions.reconnectAttempts,
                                     retryDelay: _state.connectOptions.reconnectAttemptDelay)
             { currentAttempt, totalAttempts in
@@ -352,13 +354,28 @@ extension Room {
                 // Not reconnecting state anymore
                 guard let currentMode = self._state.isReconnectingWithMode else {
                     self.log("[Connect] Not in reconnect state anymore, exiting retry cycle.")
+
+                    errorReconnect = LiveKitError(.network, message: "Not in reconnect state anymore")
+                    return
+                }
+
+                guard !self._state.serverNotifyDisconnect else {
+                    self.log("[Connect] server notify disconnect, exiting retry cycle.")
+
+                    errorReconnect = LiveKitError(.network, message: "server notify disconnect")
                     return
                 }
 
                 // Full reconnect failed, give up
-                guard currentMode != .full else { return }
+                // guard currentMode != .full else { return }
+                guard totalAttempts >= currentAttempt else { 
+                    self.log("[Connect] Reconnect attempts exhausted, giving up.", .error)
 
-                self.log("[Connect] Retry in \(self._state.connectOptions.reconnectAttemptDelay) seconds, \(currentAttempt)/\(totalAttempts) tries left.")
+                    errorReconnect = LiveKitError(.network, message: "Reconnect attempts(\(totalAttempts)) exhausted")
+                    return
+                }
+
+                self.log("[Connect] currentMode:\(currentMode) Retry in \(self._state.connectOptions.reconnectAttemptDelay) seconds, \(currentAttempt)/\(totalAttempts) tries left.")
 
                 // Try full reconnect for the final attempt
                 if totalAttempts == currentAttempt, self._state.nextReconnectMode == nil {
@@ -384,6 +401,10 @@ extension Room {
                     throw error
                 }
             }.value
+
+            if let err = errorReconnect{
+                throw err
+            }
 
             // Re-connect sequence successful
             log("[Connect] Sequence completed")

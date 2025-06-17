@@ -34,7 +34,7 @@ extension RTCPeerConnectionState {
 
 extension Room: TransportDelegate {
     func transport(_ transport: Transport, didUpdateState pcState: RTCPeerConnectionState) {
-        log("target: \(transport.target), connectionState: \(pcState.description)")
+        log("*track: target: \(transport.target), connectionState: \(pcState.description)")
 
         // primary connected
         if transport.isPrimary {
@@ -59,9 +59,9 @@ extension Room: TransportDelegate {
             if transport.isPrimary || (_state.hasPublished && transport.target == .publisher), pcState.isDisconnected {
                 Task {
                     do {
-                        try await startReconnect(reason: .transport)
+                        try await startReconnect(reason: .transport, nextReconnectMode: .full)
                     } catch {
-                        log("Failed calling startReconnect, error: \(error)", .error)
+                        log("*track: Failed calling startReconnect, error: \(error)", .error)
                     }
                 }
             }

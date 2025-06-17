@@ -197,8 +197,11 @@ public class Participant: NSObject, ObservableObject, Loggable {
     func cleanUp(notify _notify: Bool = true) async {
         await unpublishAll(notify: _notify)
 
+        log("*track: Participant.cleanUp: \(self.identity) sid: \(self.sid) self: \(self)")
+
         if let self = self as? RemoteParticipant, let room = self._room {
             // Call async version of notify to wait delegates before resetting state
+            log("*track: Participant.cleanUp ininininin: \(self.identity) sid: \(self.sid) self: \(self)")
             await room.delegates.notifyAsync {
                 $0.room?(room, participantDidDisconnect: self)
             }

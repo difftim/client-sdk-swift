@@ -148,6 +148,8 @@ public class Room: NSObject, ObservableObject, Loggable {
         var subscriber: Transport?
         var isSubscriberPrimary: Bool = false
 
+        var serverNotifyDisconnect: Bool = false
+
         // Agents
         var transcriptionReceivedTimes: [String: Date] = [:]
 
@@ -362,9 +364,10 @@ public class Room: NSObject, ObservableObject, Loggable {
 extension Room {
     // Resets state of Room
     func cleanUp(withError disconnectError: Error? = nil,
-                 isFullReconnect: Bool = false) async
+                 isFullReconnect: Bool = false,
+                 removePar: Bool = true) async
     {
-        log("withError: \(String(describing: disconnectError)), isFullReconnect: \(isFullReconnect)")
+        log("*track: withError: \(String(describing: disconnectError)), isFullReconnect: \(isFullReconnect), removePar:\(removePar)")
 
         // Reset completers
         _sidCompleter.reset()
@@ -373,7 +376,10 @@ extension Room {
 
         await signalClient.cleanUp(withError: disconnectError)
         await cleanUpRTC()
-        await cleanUpParticipants(isFullReconnect: isFullReconnect)
+
+        //if removePar {
+            await cleanUpParticipants(isFullReconnect: isFullReconnect)
+        //}
 
         // Cleanup for E2EE
         if let e2eeManager {
@@ -383,9 +389,12 @@ extension Room {
         // Reset state
         _state.mutate {
             // if isFullReconnect, keep connection related states
+            log("*track: Reset state: isFullReconnect: \(isFullReconnect), nextReconnectMode:\(String(describing: $0.nextReconnectMode)), isReconnectingWithMode:\(String(describing: $0.isReconnectingWithMode)), connectionState:\($0.connectionState)")
+
             $0 = isFullReconnect ? State(
                 connectOptions: $0.connectOptions,
                 roomOptions: $0.roomOptions,
+                //remoteParticipants: removePar ? [:] : $0.remoteParticipants,
                 url: $0.url,
                 token: $0.token,
                 nextReconnectMode: $0.nextReconnectMode,
@@ -394,6 +403,7 @@ extension Room {
             ) : State(
                 connectOptions: $0.connectOptions,
                 roomOptions: $0.roomOptions,
+                //remoteParticipants: removePar ? [:] : $0.remoteParticipants,
                 connectionState: .disconnected,
                 disconnectError: LiveKitError.from(error: disconnectError)
             )
@@ -405,7 +415,7 @@ extension Room {
 
 extension Room {
     func cleanUpParticipants(isFullReconnect: Bool = false, notify _notify: Bool = true) async {
-        log("notify: \(_notify)")
+        log("*track: notify: \(_notify) isFullReconnect: \(isFullReconnect)")
 
         // Stop all local & remote tracks
         var allParticipants: [Participant] = Array(_state.remoteParticipants.values)
@@ -425,6 +435,7 @@ extension Room {
         }
 
         _state.mutate {
+            log("*track: notify: \(_notify) isFullReconnect: \(isFullReconnect) clear participants: \($0.remoteParticipants.count)")
             $0.remoteParticipants = [:]
         }
     }
