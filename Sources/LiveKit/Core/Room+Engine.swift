@@ -130,7 +130,7 @@ extension Room {
         let rtcConfiguration = makeConfiguration()
 
         if case let .join(joinResponse) = connectResponse {
-            log("*track: Configuring transports with JOIN response... \(joinResponse)")
+            log("Configuring transports with JOIN response...")
 
             guard _state.subscriber == nil, _state.publisher == nil else {
                 log("Transports are already configured")
@@ -139,7 +139,8 @@ extension Room {
 
             // protocol v3
             let isSubscriberPrimary = joinResponse.subscriberPrimary
-            log("*track: subscriberPrimary: \(joinResponse.subscriberPrimary), fastPublish: \(joinResponse.fastPublish)")
+            let isFastPublish = joinResponse.fastPublish
+            log("subscriberPrimary: \(isSubscriberPrimary), fastPublish: \(isFastPublish)")
 
             let subscriber = try Transport(config: rtcConfiguration,
                                            target: .subscriber,
@@ -177,7 +178,7 @@ extension Room {
                 $0.isSubscriberPrimary = isSubscriberPrimary
             }
 
-            if !isSubscriberPrimary/* || joinResponse.fastPublish*/ {
+            if !isSubscriberPrimary || isFastPublish  {
                 // lazy negotiation for protocol v3+
                 try await publisherShouldNegotiate()
             }
@@ -253,7 +254,7 @@ extension Room {
         try Task.checkCancellation()
 
         _state.mutate { $0.connectStopwatch.split(label: "engine") }
-        log("*track: \(_state.connectStopwatch)")
+        log("\(_state.connectStopwatch)")
     }
 
     func startReconnect(reason: StartReconnectReason, nextReconnectMode: ReconnectMode? = nil) async throws {

@@ -16,7 +16,7 @@
 
 import Foundation
 
-class AsyncSerialDelegate<T>: Loggable {
+class AsyncSerialDelegate<T> {
     private struct State {
         weak var delegate: AnyObject?
     }
@@ -28,30 +28,16 @@ class AsyncSerialDelegate<T>: Loggable {
         _state.mutate { $0.delegate = delegate as AnyObject }
     }
 
-    public func notifyAsync(_ fnc: @escaping (T) async -> Void, name: String = #function, file: String = #file, line: Int = #line) async throws {
-       let newName = "\(file):\(line) \(name)"
-
-        guard let delegate = _state.read({ $0.delegate }) as? T else {
-            self.log("delegate not found, name:\(String(describing: newName))")
-            return
-        }
-        self.log("delegate found, name:\(String(describing: newName))")
-        try await _serialRunner.run(block: {
+    public func notifyAsync(_ fnc: @escaping (T) async -> Void) async throws {
+        guard let delegate = _state.read({ $0.delegate }) as? T else { return }
+        try await _serialRunner.run {
             await fnc(delegate)
-        }, nameoo:name, file: file, line: line)
+        }
     }
 
-    public func notifyDetached(_ fnc: @escaping (T) async -> Void, name: String = #function, file: String = #file, line: Int = #line) {
-        let newName = "\(file):\(line) \(name)"
-
-        self.log("notifyDetached1111, name:\(String(describing: newName))")
+    public func notifyDetached(_ fnc: @escaping (T) async -> Void) {
         Task.detached {
-            do {
-                self.log("notifyDetached22222, name:\(String(describing: newName))")
-                try await self.notifyAsync(fnc, name:name, file: file, line: line)
-            } catch {
-                self.log("Detached notification failed with error: \(error), name:\(String(describing: newName))")
-            }
+            try await self.notifyAsync(fnc)
         }
     }
 }

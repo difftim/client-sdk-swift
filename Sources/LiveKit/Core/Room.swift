@@ -367,7 +367,7 @@ extension Room {
                  isFullReconnect: Bool = false,
                  removePar: Bool = true) async
     {
-        log("*track: withError: \(String(describing: disconnectError)), isFullReconnect: \(isFullReconnect), removePar:\(removePar)")
+        log("withError: \(String(describing: disconnectError)), isFullReconnect: \(isFullReconnect), removePar: \(removePar)")
 
         // Reset completers
         _sidCompleter.reset()
@@ -389,8 +389,6 @@ extension Room {
         // Reset state
         _state.mutate {
             // if isFullReconnect, keep connection related states
-            log("*track: Reset state: isFullReconnect: \(isFullReconnect), nextReconnectMode:\(String(describing: $0.nextReconnectMode)), isReconnectingWithMode:\(String(describing: $0.isReconnectingWithMode)), connectionState:\($0.connectionState)")
-
             $0 = isFullReconnect ? State(
                 connectOptions: $0.connectOptions,
                 roomOptions: $0.roomOptions,
@@ -415,7 +413,7 @@ extension Room {
 
 extension Room {
     func cleanUpParticipants(isFullReconnect: Bool = false, notify _notify: Bool = true) async {
-        log("*track: notify: \(_notify) isFullReconnect: \(isFullReconnect)")
+        log("notify: \(_notify), isFullReconnect: \(isFullReconnect)")
 
         // Stop all local & remote tracks
         var allParticipants: [Participant] = Array(_state.remoteParticipants.values)
@@ -435,7 +433,6 @@ extension Room {
         }
 
         _state.mutate {
-            log("*track: notify: \(_notify) isFullReconnect: \(isFullReconnect) clear participants: \($0.remoteParticipants.count)")
             $0.remoteParticipants = [:]
         }
     }

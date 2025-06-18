@@ -36,20 +36,18 @@ extension Room: SignalClientDelegate {
            // engine is currently connected state
            case .connected = _state.connectionState
         {
-            log("*track: connectionState: \(connectionState), oldState: \(oldState), errorType: \(errorType), _state.connectionState: \(_state.connectionState)")
-
             Task.detached {
-            do {
-                try await self.startReconnect(reason: .websocket/*, nextReconnectMode: .full*/)
-            } catch {
-                self.log("*track: Failed calling startReconnect, error: \(error)", .error)
-            }
+                do {
+                    try await self.startReconnect(reason: .websocket/*, nextReconnectMode: .full*/)
+                } catch {
+                    self.log("Failed calling startReconnect, error: \(error)", .error)
+                }
             }
         }
     }
 
     func signalClient(_: SignalClient, didReceiveLeave canReconnect: Bool, reason: Livekit_DisconnectReason, action: Livekit_LeaveRequest.Action) async {
-        log("*track: canReconnect: \(canReconnect), reason: \(reason), action: \(action)")
+        log("canReconnect: \(canReconnect), reason: \(reason), action: \(action)")
         
         switch action {
         case .resume:
@@ -243,7 +241,7 @@ extension Room: SignalClientDelegate {
     }
 
     func signalClient(_: SignalClient, didUpdateParticipants participants: [Livekit_ParticipantInfo]) async {
-        log("*track:  in participants: \(participants)")
+        log("participants: \(participants)")
 
         var disconnectedParticipantIdentities = [Participant.Identity]()
         var newParticipants = [RemoteParticipant]()
@@ -260,7 +258,6 @@ extension Room: SignalClientDelegate {
                 if info.state == .disconnected {
                     // when it's disconnected, send updates
                     disconnectedParticipantIdentities.append(infoIdentity)
-                    log("*track: disconnectedParticipantIdentities append: \(infoIdentity)")
                 } else {
                     let isNewParticipant = $0.remoteParticipants[infoIdentity] == nil
                     let participant = $0.updateRemoteParticipant(info: info, room: self)
@@ -276,7 +273,6 @@ extension Room: SignalClientDelegate {
 
         await withTaskGroup(of: Void.self) { group in
             for identity in disconnectedParticipantIdentities {
-                log("*track: _onParticipantDidDisconnect: \(identity)")
                 group.addTask {
                     do {
                         try await self._onParticipantDidDisconnect(identity: identity)

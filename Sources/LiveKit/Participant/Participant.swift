@@ -197,11 +197,8 @@ public class Participant: NSObject, ObservableObject, Loggable {
     func cleanUp(notify _notify: Bool = true) async {
         await unpublishAll(notify: _notify)
 
-        log("*track: Participant.cleanUp: \(self.identity) sid: \(self.sid) self: \(self)")
-
         if let self = self as? RemoteParticipant, let room = self._room {
             // Call async version of notify to wait delegates before resetting state
-            log("*track: Participant.cleanUp ininininin: \(self.identity) sid: \(self.sid) self: \(self)")
             await room.delegates.notifyAsync {
                 $0.room?(room, participantDidDisconnect: self)
             }
@@ -216,14 +213,8 @@ public class Participant: NSObject, ObservableObject, Loggable {
     }
 
     func add(publication: TrackPublication) {
-        log("*track: addpublication new: \(publication)")
-
         publication.track?._state.mutate { $0.sid = publication.sid }
         _state.mutate { $0.trackPublications[publication.sid] = publication }
-
-        for track in _state.trackPublications.values {
-            log(" *track: addpublication: \(track)")
-        }
     }
 
     func set(info: Livekit_ParticipantInfo, connectionState _: ConnectionState) {
