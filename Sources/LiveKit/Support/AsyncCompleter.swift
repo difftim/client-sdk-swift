@@ -113,6 +113,8 @@ class AsyncCompleter<T>: Loggable {
 
     public func reset() {
         _lock.sync {
+            self.log("\(self.label) reset , number of entries: \(self._entries.count), values:\(_entries.keys)")
+
             for entry in _entries.values {
                 entry.cancel()
             }
@@ -122,7 +124,10 @@ class AsyncCompleter<T>: Loggable {
     }
 
     public func resume(with result: Result<T, Error>) {
+        log("\(label)")
+
         _lock.sync {
+            self.log("\(self.label) resume , number of entries: \(self._entries.count), values:\(_entries.keys)")
             for entry in _entries.values {
                 entry.resume(with: result)
             }
@@ -159,6 +164,8 @@ class AsyncCompleter<T>: Loggable {
         // Create ids for continuation & timeoutBlock
         let entryId = UUID()
 
+        log("start new wait: \(label) id: \(entryId)")
+
         // Create a cancel-aware timed continuation
         return try await withTaskCancellationHandler {
             try await withUnsafeThrowingContinuation { continuation in
@@ -166,7 +173,7 @@ class AsyncCompleter<T>: Loggable {
                 // Create time-out block
                 let timeoutBlock = DispatchWorkItem { [weak self] in
                     guard let self else { return }
-                    self.log("\(self.label) id: \(entryId) timed out")
+                    self.log("\(self.label) id: \(entryId) timed out, number of entries: \(self._entries.count), values:\(_entries.keys)")
                     self._lock.sync {
                         if let entry = self._entries[entryId] {
                             entry.timeout()
@@ -182,12 +189,14 @@ class AsyncCompleter<T>: Loggable {
                     // Store entry
                     _entries[entryId] = WaitEntry(continuation: continuation, timeoutBlock: timeoutBlock)
 
-                    log("\(label) id: \(entryId) waiting for \(computedTimeout)")
+                    log("\(label) id: \(entryId) waiting for \(computedTimeout), number of entries: \(self._entries.count), values:\(_entries.keys)")
                 }
             }
         } onCancel: {
             // Cancel only this completer when Task gets cancelled
             _lock.sync {
+                log("\(label) id: \(entryId) onCancel, number of entries: \(self._entries.count), values:\(_entries.keys)")
+
                 if let entry = self._entries[entryId] {
                     entry.cancel()
                 }

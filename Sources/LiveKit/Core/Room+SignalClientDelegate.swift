@@ -38,10 +38,12 @@ extension Room: SignalClientDelegate {
         {
             log("*track: connectionState: \(connectionState), oldState: \(oldState), errorType: \(errorType), _state.connectionState: \(_state.connectionState)")
 
+            Task.detached {
             do {
-                try await startReconnect(reason: .websocket, nextReconnectMode: .full)
+                try await self.startReconnect(reason: .websocket/*, nextReconnectMode: .full*/)
             } catch {
-                log("*track: Failed calling startReconnect, error: \(error)", .error)
+                self.log("*track: Failed calling startReconnect, error: \(error)", .error)
+            }
             }
         }
     }

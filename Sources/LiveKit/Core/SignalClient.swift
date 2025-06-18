@@ -243,6 +243,8 @@ private extension SignalClient {
             return
         }
 
+        self.log("*track read message in \(response)")
+
         Task.detached {
             let alwaysProcess: Bool = {
                 switch response.message {
@@ -250,8 +252,12 @@ private extension SignalClient {
                 default: return false
                 }
             }()
+            self.log("*track read message iinn alwaysProcess:\(alwaysProcess) \(response)")
+
             // Always process join or reconnect messages even if suspended...
             await self._responseQueue.processIfResumed(response, or: alwaysProcess)
+
+            self.log("*track read message out alwaysProcess:\(alwaysProcess) \(response)")
         }
     }
 
@@ -265,6 +271,8 @@ private extension SignalClient {
             log("Failed to decode SignalResponse", .warning)
             return
         }
+
+        self.log("*track process message in \(signalResponse)")
 
         switch message {
         case let .join(joinResponse):
@@ -283,7 +291,13 @@ private extension SignalClient {
             _delegate.notifyDetached { await $0.signalClient(self, didReceiveAnswer: sd.toRTCType()) }
 
         case let .offer(sd):
-            _delegate.notifyDetached { await $0.signalClient(self, didReceiveOffer: sd.toRTCType()) }
+            _delegate.notifyDetached( { 
+                self.log("*track process message offer in \(signalResponse)")
+
+                await $0.signalClient(self, didReceiveOffer: sd.toRTCType()) 
+
+                self.log("*track process message offer out \(signalResponse)")
+            }, name: "offer")
 
         case let .trickle(trickle):
             guard let rtcCandidate = try? RTC.createIceCandidate(fromJsonString: trickle.candidateInit) else {
@@ -347,6 +361,8 @@ private extension SignalClient {
         case let .trackSubscribed(trackSubscribed):
             _delegate.notifyDetached { await $0.signalClient(self, didSubscribeTrack: Track.Sid(from: trackSubscribed.trackSid)) }
         }
+
+        self.log("*track process message out \(signalResponse)")
     }
 }
 

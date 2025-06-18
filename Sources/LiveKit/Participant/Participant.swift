@@ -216,8 +216,14 @@ public class Participant: NSObject, ObservableObject, Loggable {
     }
 
     func add(publication: TrackPublication) {
-        _state.mutate { $0.trackPublications[publication.sid] = publication }
+        log("*track: addpublication new: \(publication)")
+
         publication.track?._state.mutate { $0.sid = publication.sid }
+        _state.mutate { $0.trackPublications[publication.sid] = publication }
+
+        for track in _state.trackPublications.values {
+            log(" *track: addpublication: \(track)")
+        }
     }
 
     func set(info: Livekit_ParticipantInfo, connectionState _: ConnectionState) {

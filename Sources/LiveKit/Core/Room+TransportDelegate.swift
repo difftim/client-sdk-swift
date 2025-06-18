@@ -57,11 +57,11 @@ extension Room: TransportDelegate {
         if _state.connectionState == .connected {
             // Attempt re-connect if primary or publisher transport failed
             if transport.isPrimary || (_state.hasPublished && transport.target == .publisher), pcState.isDisconnected {
-                Task {
+                Task.detached {
                     do {
-                        try await startReconnect(reason: .transport, nextReconnectMode: .full)
+                        try await self.startReconnect(reason: .transport, nextReconnectMode: .full)
                     } catch {
-                        log("*track: Failed calling startReconnect, error: \(error)", .error)
+                        self.log("*track: Failed calling startReconnect, error: \(error)", .error)
                     }
                 }
             }

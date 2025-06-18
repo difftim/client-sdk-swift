@@ -26,7 +26,12 @@ public extension Participant {
     }
 
     var firstAudioPublication: TrackPublication? {
-        audioTracks.first
+        log("*track: firstAudioPublication audioTracks:")
+        for track in audioTracks {
+            log("*track: firstAudioPublication: \(track)")
+        }
+        
+        return audioTracks.first
     }
 
     var firstTrackEncryptionType: EncryptionType {

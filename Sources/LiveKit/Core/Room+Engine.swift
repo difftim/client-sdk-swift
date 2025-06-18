@@ -368,7 +368,7 @@ extension Room {
 
                 // Full reconnect failed, give up
                 // guard currentMode != .full else { return }
-                guard totalAttempts >= currentAttempt else { 
+                guard currentAttempt <= totalAttempts else { 
                     self.log("[Connect] Reconnect attempts exhausted, giving up.", .error)
 
                     errorReconnect = LiveKitError(.network, message: "Reconnect attempts(\(totalAttempts)) exhausted")
@@ -378,7 +378,7 @@ extension Room {
                 self.log("[Connect] currentMode:\(currentMode) Retry in \(self._state.connectOptions.reconnectAttemptDelay) seconds, \(currentAttempt)/\(totalAttempts) tries left.")
 
                 // Try full reconnect for the final attempt
-                if totalAttempts == currentAttempt, self._state.nextReconnectMode == nil {
+                if (totalAttempts == currentAttempt || currentAttempt > 3), self._state.nextReconnectMode == nil {
                     self._state.mutate { $0.nextReconnectMode = .full }
                 }
 
