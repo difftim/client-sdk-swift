@@ -33,6 +33,7 @@ public enum LiveKitErrorType: Int, Sendable {
     case webRTC = 201
 
     case network // Network issue
+    case reconnectFailure // Network issue
 
     // Server
     case duplicateIdentity = 500
@@ -70,6 +71,8 @@ extension LiveKitErrorType: CustomStringConvertible {
             return "WebRTC error"
         case .network:
             return "Network error"
+        case .reconnectFailure:
+            return "Reconnect failure"
         case .duplicateIdentity:
             return "Duplicate Participant identity"
         case .serverShutdown:

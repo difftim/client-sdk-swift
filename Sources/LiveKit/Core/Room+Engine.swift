@@ -356,14 +356,14 @@ extension Room {
                 guard let currentMode = self._state.isReconnectingWithMode else {
                     self.log("[Connect] Not in reconnect state anymore, exiting retry cycle.")
 
-                    errorReconnect = LiveKitError(.network, message: "Not in reconnect state anymore")
+                    errorReconnect = LiveKitError(.reconnectFailure, message: "Not in reconnect state anymore")
                     return
                 }
 
                 guard !self._state.serverNotifyDisconnect else {
                     self.log("[Connect] server notify disconnect, exiting retry cycle.")
 
-                    errorReconnect = LiveKitError(.network, message: "server notify disconnect")
+                    errorReconnect = LiveKitError(.reconnectFailure, message: "server notify disconnect")
                     return
                 }
 
@@ -372,7 +372,7 @@ extension Room {
                 guard currentAttempt <= totalAttempts else { 
                     self.log("[Connect] Reconnect attempts exhausted, giving up.", .error)
 
-                    errorReconnect = LiveKitError(.network, message: "Reconnect attempts(\(totalAttempts)) exhausted")
+                    errorReconnect = LiveKitError(.reconnectFailure, message: "Reconnect attempts(\(totalAttempts)) exhausted")
                     return
                 }
 
@@ -398,8 +398,13 @@ extension Room {
                     }
                 } catch {
                     self.log("[Connect] Reconnect mode: \(mode) failed with error: \(error)", .error)
-                    // Re-throw
-                    throw error
+                    // throw
+                    if let err = error as? LiveKitError {
+                        throw LiveKitError(.reconnectFailure, message: err.message, internalError: err.underlyingError)
+                    }else{
+                        throw LiveKitError(.reconnectFailure, message: "mode: \(mode)", internalError: error)
+                    }
+                    
                 }
             }.value
 

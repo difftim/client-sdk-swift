@@ -397,7 +397,8 @@ extension Room {
                 token: $0.token,
                 nextReconnectMode: $0.nextReconnectMode,
                 isReconnectingWithMode: $0.isReconnectingWithMode,
-                connectionState: $0.connectionState
+                connectionState: $0.connectionState,
+                disconnectError: LiveKitError.from(error: disconnectError)
             ) : State(
                 connectOptions: $0.connectOptions,
                 roomOptions: $0.roomOptions,
