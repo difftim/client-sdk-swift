@@ -187,7 +187,7 @@ extension Room {
         let identity = Participant.Identity(from: packet.participantIdentity)
         let participant = _state.remoteParticipants[identity]
 
-        if case .connected = engine._state.connectionState {
+        // if case .connected = engine._state.connectionState {
             delegates.notify(label: { "room.didReceive data: \(packet.payload)" }) {
                 $0.room?(self, participant: participant, didReceiveData: packet.payload, forTopic: packet.topic)
             }
@@ -198,7 +198,7 @@ extension Room {
                     delegate.participant?(participant, didReceiveData: packet.payload, forTopic: packet.topic)
                 }
             }
-        }
+        // }
     }
 
     func room(didReceiveTranscriptionPacket packet: Livekit_Transcription) {

@@ -111,4 +111,12 @@ public class MulticastDelegate<T>: NSObject, Loggable {
             }
         }
     }
+
+    func notifySync(label _: (() -> String)? = nil, _ fnc: @escaping (T) -> Void) {
+        let delegates = _state.read { $0.delegates.allObjects.compactMap { $0 as? T } }
+
+        for delegate in delegates {
+            fnc(delegate)
+        }
+    }
 }
