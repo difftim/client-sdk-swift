@@ -63,7 +63,7 @@ extension Room {
                 e2eeManager = nil
                 // Disconnected
                 if case .connecting = oldState.connectionState {
-                    delegates.notify { $0.room?(self, didFailToConnectWithError: oldState.disconnectError) }
+                    delegates.notify { $0.room?(self, didFailToConnectWithError: state.disconnectError) }
                 } else {
                     delegates.notify { $0.room?(self, didDisconnectWithError: state.disconnectError) }
                 }
