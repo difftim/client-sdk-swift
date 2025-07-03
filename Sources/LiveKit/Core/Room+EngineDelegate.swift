@@ -150,6 +150,14 @@ extension Room {
     }
 
     func engine(_: Room, didAddTrack track: LKRTCMediaStreamTrack, rtpReceiver: LKRTCRtpReceiver, stream: LKRTCMediaStream) async {
+        let startTime = Date()
+        log("ENTER - trackId: \(track.trackId), streamId: \(stream.streamId), time: \(startTime)", .info)
+        
+        defer {
+            let duration = Date().timeIntervalSince(startTime)
+            log("EXIT - trackId: \(track.trackId), duration: \(String(format: "%.3f", duration))s", .info)
+        }
+        
         let parseResult = parse(streamId: stream.streamId)
         let trackId = parseResult.trackId ?? Track.Sid(from: track.trackId)
 

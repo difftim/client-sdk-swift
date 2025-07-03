@@ -335,7 +335,12 @@ extension Room: SignalClientDelegate {
     }
 
     func signalClient(_ signalClient: SignalClient, didReceiveOffer offer: LKRTCSessionDescription) async {
-        log("Received offer, creating & sending answer...")
+        let startTime = Date()
+        log("ENTER - Received offer, creating & sending answer...", .info)
+        
+        defer {
+            log("EXIT - Received offer, duration: \(String(format: "%.3f", Date().timeIntervalSince(startTime)))s", .info)
+        }
 
         guard let subscriber = _state.subscriber else {
             log("Failed to send answer, subscriber is nil", .error)
@@ -344,9 +349,13 @@ extension Room: SignalClientDelegate {
 
         do {
             try await subscriber.set(remoteDescription: offer)
+            log("remoteDescription - Received offer, duration: \(String(format: "%.3f", Date().timeIntervalSince(startTime)))s", .info)
             let answer = try await subscriber.createAnswer()
+            log("createAnswer - Received offer, duration: \(String(format: "%.3f", Date().timeIntervalSince(startTime)))s", .info)
             try await subscriber.set(localDescription: answer)
+            log("localDescription - Received offer, duration: \(String(format: "%.3f", Date().timeIntervalSince(startTime)))s", .info)
             try await signalClient.send(answer: answer)
+            log("sendAnswer - Received offer, duration: \(String(format: "%.3f", Date().timeIntervalSince(startTime)))s", .info)
         } catch {
             log("Failed to send answer with error: \(error)", .error)
         }
