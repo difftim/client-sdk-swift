@@ -331,7 +331,12 @@ public class Room: NSObject, ObservableObject, Loggable {
             // update internal vars (only if connect succeeded)
             _state.mutate {
                 $0.url = url
-                $0.token = token
+                
+                // Only set token if server hasn't provided(refreashToken) one yet
+                if $0.token == nil {
+                    $0.token = token
+                }
+
                 $0.connectionState = .connected
             }
 

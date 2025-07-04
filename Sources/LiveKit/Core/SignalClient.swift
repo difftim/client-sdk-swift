@@ -271,7 +271,7 @@ private extension SignalClient {
             _lastJoinResponse = joinResponse
             _delegate.notifyDetached { await $0.signalClient(self, didReceiveConnectResponse: .join(joinResponse)) }
             _connectResponseCompleter.resume(returning: .join(joinResponse))
-            print("creationTime: \(joinResponse.room.creationTime)")
+            log("creationTime: \(joinResponse.room.creationTime)")
             await _restartPingTimer()
 
         case let .reconnect(response):
@@ -330,7 +330,7 @@ private extension SignalClient {
             _delegate.notifyDetached { await $0.signalClient(self, didUpdateSubscriptionPermission: permissionUpdate) }
 
         case let .refreshToken(token):
-            _delegate.notifyDetached { await $0.signalClient(self, didUpdateToken: token) }
+                        _delegate.notifyDetached { await $0.signalClient(self, didUpdateToken: token) }
 
         case let .pong(r):
             await _onReceivedPong(r)
