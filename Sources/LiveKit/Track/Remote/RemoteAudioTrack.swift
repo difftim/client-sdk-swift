@@ -72,7 +72,10 @@ public class RemoteAudioTrack: Track, RemoteTrack, AudioTrack {
         // Remove adapter only if there are no more delegates
         if _adapter.countDelegates == 0 {
             guard let audioTrack = mediaTrack as? LKRTCAudioTrack else { return }
-            audioTrack.remove(_adapter)
+            
+            Task {
+                audioTrack.remove(_adapter)
+            }
         }
     }
 
