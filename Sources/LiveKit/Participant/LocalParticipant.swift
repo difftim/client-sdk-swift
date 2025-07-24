@@ -70,6 +70,7 @@ public class LocalParticipant: Participant {
             } catch {
                 log("Failed to unpublish track \(publication.sid) with error \(error)", .error)
             }
+            publication.cleanUp()
         }
     }
 
@@ -409,7 +410,7 @@ extension LocalParticipant {
 
         // Add transceiver to publisher pc...
         let transceiver = try await publisher.addTransceiver(with: track.mediaTrack, transceiverInit: transInit)
-        log("[Publish] Added transceiver...")
+        log("[publish] Added transceiver...")
 
         // Set codec...
         transceiver.set(preferredVideoCodec: videoCodec)
@@ -433,7 +434,7 @@ extension LocalParticipant {
             $0.layers = dimensions.videoLayers(for: encodings)
         }
 
-        log("[Publish] server responded trackInfo: \(addTrackResult.trackInfo)")
+        log("[publish] server responded trackInfo: \(addTrackResult.trackInfo)")
 
         sender._set(subscribedQualities: subscribedCodec.qualities)
 
@@ -487,7 +488,7 @@ private extension LocalParticipant {
 
             if let track = track as? LocalVideoTrack {
                 // Wait for Dimensions...
-                log("[Publish] Waiting for dimensions to resolve...")
+                log("[publish] Waiting for dimensions to resolve...")
                 dimensions = try await track.capturer.dimensionsCompleter.wait()
             }
 
@@ -578,11 +579,11 @@ private extension LocalParticipant {
                                                                           populatorFunc,
                                                                           mute: track.isMuted)
 
-            log("[Publish] server responded trackInfo: \(addTrackResult.trackInfo)")
+            log("[publish] server responded trackInfo: \(addTrackResult.trackInfo)")
 
             // Add transceiver to pc
             let transceiver = try await publisher.addTransceiver(with: track.mediaTrack, transceiverInit: addTrackResult.result)
-            log("[Publish] Added transceiver: \(addTrackResult.trackInfo)...")
+            log("[publish] Added transceiver: \(addTrackResult.trackInfo)...")
 
             do {
                 try await track.onPublish()
@@ -597,7 +598,7 @@ private extension LocalParticipant {
                     if let firstCodecMime = addTrackResult.trackInfo.codecs.first?.mimeType,
                        let firstVideoCodec = try? VideoCodec.from(mimeType: firstCodecMime)
                     {
-                        log("[Publish] First video codec: \(firstVideoCodec)")
+                        log("[publish] First video codec: \(firstVideoCodec)")
                         track._state.mutate { $0.videoCodec = firstVideoCodec }
                     }
 

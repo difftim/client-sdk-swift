@@ -186,6 +186,14 @@ public class TrackPublication: NSObject, ObservableObject, Loggable {
 
         return oldValue
     }
+
+    func cleanUp () {
+        track?.remove(delegate: self)
+    }
+
+    deinit {
+        cleanUp()
+    }
 }
 
 // MARK: - TrackDelegate
