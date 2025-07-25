@@ -47,7 +47,7 @@ public class MulticastDelegate<T>: NSObject, Loggable {
     // MARK: - Private properties
 
     private struct State {
-        let delegates = NSHashTable<AnyObject>.weakObjects()
+        let delegates = NSHashTable<AnyObject>(options: [.weakMemory, .objectPointerPersonality])
     }
 
     private let _queue: DispatchQueue

@@ -379,7 +379,7 @@ extension LocalParticipant {
 
         let videoCodec = try subscribedCodec.toVideoCodec()
 
-        log("[Publish/Backup] Additional video codec: \(videoCodec)...")
+        log("[publish/Backup] Additional video codec: \(videoCodec)...")
 
         guard let track = localTrackPublication.track as? LocalVideoTrack else {
             throw LiveKitError(.invalidState, message: "Track is nil")
@@ -400,7 +400,7 @@ extension LocalParticipant {
                                                     publishOptions: publishOptions,
                                                     overrideVideoCodec: videoCodec)
 
-        log("[Publish/Backup] Using encodings: \(encodings.map { $0.toDebugString() }.joined(separator: ", "))")
+        log("[publish/Backup] Using encodings: \(encodings.map { $0.toDebugString() }.joined(separator: ", "))")
 
         // Add transceiver first...
 
