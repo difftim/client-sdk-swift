@@ -275,6 +275,7 @@ private extension SignalClient {
             _state.mutate { $0.lastJoinResponse = joinResponse }
             _delegate.notifyDetached { await $0.signalClient(self, didReceiveConnectResponse: .join(joinResponse)) }
             _connectResponseCompleter.resume(returning: .join(joinResponse))
+            log("creationTime: \(joinResponse.room.creationTime)")
             await _restartPingTimer()
 
         case let .reconnect(response):
@@ -319,7 +320,7 @@ private extension SignalClient {
             _delegate.notifyDetached { await $0.signalClient(self, didUpdateRemoteMute: Track.Sid(from: mute.sid), muted: mute.muted) }
 
         case let .leave(leave):
-            _delegate.notifyDetached { await $0.signalClient(self, didReceiveLeave: leave.canReconnect, reason: leave.reason) }
+            _delegate.notifyDetached { await $0.signalClient(self, didReceiveLeave: leave.canReconnect, reason: leave.reason, action: leave.action) }
 
         case let .streamStateUpdate(states):
             _delegate.notifyDetached { await $0.signalClient(self, didUpdateTrackStreamStates: states.streamStates) }
@@ -333,7 +334,7 @@ private extension SignalClient {
             _delegate.notifyDetached { await $0.signalClient(self, didUpdateSubscriptionPermission: permissionUpdate) }
 
         case let .refreshToken(token):
-            _delegate.notifyDetached { await $0.signalClient(self, didUpdateToken: token) }
+                        _delegate.notifyDetached { await $0.signalClient(self, didUpdateToken: token) }
 
         case let .pong(r):
             await _onReceivedPong(r)
@@ -411,7 +412,8 @@ extension SignalClient {
                       type: Livekit_TrackType,
                       source: Livekit_TrackSource = .unknown,
                       encryption: Livekit_Encryption.TypeEnum = .none,
-                      _ populator: AddTrackRequestPopulator) async throws -> Livekit_TrackInfo
+                      _ populator: AddTrackRequestPopulator,
+                      mute: Bool = false) async throws -> Livekit_TrackInfo
     {
         var addTrackRequest = Livekit_AddTrackRequest.with {
             $0.cid = cid
@@ -419,6 +421,7 @@ extension SignalClient {
             $0.type = type
             $0.source = source
             $0.encryption = encryption
+            $0.muted = mute
         }
 
         try populator(&addTrackRequest)

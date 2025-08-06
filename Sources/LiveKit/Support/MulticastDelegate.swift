@@ -47,7 +47,7 @@ public class MulticastDelegate<T: Sendable>: NSObject, @unchecked Sendable, Logg
     // MARK: - Private properties
 
     private struct State {
-        let delegates = NSHashTable<AnyObject>.weakObjects()
+        let delegates = NSHashTable<AnyObject>(options: [.weakMemory, .objectPointerPersonality])
     }
 
     private let _queue: DispatchQueue
@@ -109,6 +109,14 @@ public class MulticastDelegate<T: Sendable>: NSObject, @unchecked Sendable, Logg
                 }
                 continuation.resume()
             }
+        }
+    }
+
+    func notifySync(label _: (() -> String)? = nil, _ fnc: @escaping (T) -> Void) {
+        let delegates = _state.read { $0.delegates.allObjects.compactMap { $0 as? T } }
+
+        for delegate in delegates {
+            fnc(delegate)
         }
     }
 }

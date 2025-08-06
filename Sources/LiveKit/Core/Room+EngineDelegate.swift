@@ -59,7 +59,7 @@ extension Room {
                 e2eeManager = nil
                 // Disconnected
                 if case .connecting = oldState.connectionState {
-                    delegates.notify { $0.room?(self, didFailToConnectWithError: oldState.disconnectError) }
+                    delegates.notify { $0.room?(self, didFailToConnectWithError: state.disconnectError) }
                 } else {
                     delegates.notify { $0.room?(self, didDisconnectWithError: state.disconnectError) }
                 }
@@ -107,6 +107,9 @@ extension Room {
                 if participantSid == localParticipant.sid {
                     localParticipant._state.mutate {
                         $0.audioLevel = speaker.level
+                        if !$0.isSpeaking {
+                            $0.lastSpokeAt = Int64(Date().timeIntervalSince1970 * 1000)
+                        }
                         $0.isSpeaking = true
                     }
                     activeSpeakers.append(localParticipant)
@@ -114,6 +117,9 @@ extension Room {
                     if let participant = state.remoteParticipant(forSid: participantSid) {
                         participant._state.mutate {
                             $0.audioLevel = speaker.level
+                            if !$0.isSpeaking {
+                                $0.lastSpokeAt = Int64(Date().timeIntervalSince1970 * 1000)
+                            }
                             $0.isSpeaking = true
                         }
                         activeSpeakers.append(participant)
@@ -148,6 +154,14 @@ extension Room {
     }
 
     func engine(_: Room, didAddTrack track: LKRTCMediaStreamTrack, rtpReceiver: LKRTCRtpReceiver, stream: LKRTCMediaStream) async {
+        let startTime = Date()
+        log("ENTER - trackId: \(track.trackId), streamId: \(stream.streamId), time: \(startTime)", .info)
+        
+        defer {
+            let duration = Date().timeIntervalSince(startTime)
+            log("EXIT - trackId: \(track.trackId), duration: \(String(format: "%.3f", duration))s", .info)
+        }
+        
         let parseResult = parse(streamId: stream.streamId)
         let trackId = parseResult.trackId ?? Track.Sid(from: track.trackId)
 
@@ -185,7 +199,7 @@ extension Room {
         let identity = Participant.Identity(from: packet.participantIdentity)
         let participant = _state.remoteParticipants[identity]
 
-        if case .connected = engine._state.connectionState {
+        // if case .connected = engine._state.connectionState {
             delegates.notify(label: { "room.didReceive data: \(packet.payload)" }) {
                 $0.room?(self, participant: participant, didReceiveData: packet.payload, forTopic: packet.topic)
             }
@@ -196,7 +210,7 @@ extension Room {
                     delegate.participant?(participant, didReceiveData: packet.payload, forTopic: packet.topic)
                 }
             }
-        }
+        // }
     }
 
     func room(didReceiveTranscriptionPacket packet: Livekit_Transcription) {

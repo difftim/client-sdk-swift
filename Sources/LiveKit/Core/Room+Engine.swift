@@ -149,7 +149,7 @@ extension Room {
 
             // protocol v3
             let isSubscriberPrimary = joinResponse.subscriberPrimary
-            log("subscriberPrimary: \(joinResponse.subscriberPrimary)")
+            log("subscriberPrimary: \(isSubscriberPrimary), fastPublish: \(joinResponse.fastPublish)")
 
             let subscriber = try Transport(config: rtcConfiguration,
                                            target: .subscriber,
@@ -344,7 +344,7 @@ extension Room {
                 $0.connectionState = .reconnecting
             }
 
-            await cleanUp(isFullReconnect: true)
+            await cleanUp(isFullReconnect: true, removePar:false)
 
             guard let url = _state.url,
                   let token = _state.token
@@ -357,6 +357,8 @@ extension Room {
         }
 
         do {
+            var errorReconnect: LiveKitError? = nil
+
             try await Task.retrying(totalAttempts: _state.connectOptions.reconnectAttempts,
                                     retryDelay: { @Sendable attempt in
                                         let delay = TimeInterval.computeReconnectDelay(forAttempt: attempt,
@@ -370,16 +372,31 @@ extension Room {
                 // Not reconnecting state anymore
                 guard let currentMode = self._state.isReconnectingWithMode else {
                     self.log("[Connect] Not in reconnect state anymore, exiting retry cycle.")
+
+                    errorReconnect = LiveKitError(.reconnectFailure, message: "Not in reconnect state anymore")
+                    return
+                }
+
+                guard !self._state.serverNotifyDisconnect else {
+                    self.log("[Connect] server notify disconnect, exiting retry cycle.")
+
+                    errorReconnect = LiveKitError(.reconnectFailure, message: "server notify disconnect")
                     return
                 }
 
                 // Full reconnect failed, give up
-                guard currentMode != .full else { return }
+                // guard currentMode != .full else { return }
+                guard currentAttempt <= totalAttempts else { 
+                    self.log("[Connect] Reconnect attempts exhausted, giving up.", .error)
 
-                self.log("[Connect] Starting retry attempt \(currentAttempt)/\(totalAttempts) with mode: \(currentMode)")
+                    errorReconnect = LiveKitError(.reconnectFailure, message: "Reconnect attempts(\(totalAttempts)) exhausted")
+                    return
+                }
+
+                self.log("[Connect] currentMode:\(currentMode) Retry in \(self._state.connectOptions.reconnectAttemptDelay) seconds, \(currentAttempt)/\(totalAttempts) tries left.")
 
                 // Try full reconnect for the final attempt
-                if totalAttempts == currentAttempt, self._state.nextReconnectMode == nil {
+                if (totalAttempts == currentAttempt || currentAttempt > 3), self._state.nextReconnectMode == nil {
                     self._state.mutate { $0.nextReconnectMode = .full }
                 }
 
@@ -400,10 +417,19 @@ extension Room {
                     }
                 } catch {
                     self.log("[Connect] Reconnect mode: \(mode) failed with error: \(error)", .error)
-                    // Re-throw
-                    throw error
+                    // throw
+                    if let err = error as? LiveKitError {
+                        throw LiveKitError(.reconnectFailure, message: err.message, internalError: err.underlyingError)
+                    }else{
+                        throw LiveKitError(.reconnectFailure, message: "mode: \(mode)", internalError: error)
+                    }
+                    
                 }
             }.value
+
+            if let err = errorReconnect{
+                throw err
+            }
 
             // Re-connect sequence successful
             log("[Connect] Sequence completed")

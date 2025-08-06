@@ -63,6 +63,7 @@ public class LocalParticipant: Participant, @unchecked Sendable {
             } catch {
                 log("Failed to unpublish track \(publication.sid) with error \(error)", .error)
             }
+            publication.cleanUp()
         }
     }
 
@@ -316,12 +317,14 @@ public extension LocalParticipant {
     @discardableResult
     func setMicrophone(enabled: Bool,
                        captureOptions: AudioCaptureOptions? = nil,
-                       publishOptions: AudioPublishOptions? = nil) async throws -> LocalTrackPublication?
+                       publishOptions: AudioPublishOptions? = nil,
+                       publishMuted: Bool = false) async throws -> LocalTrackPublication?
     {
         try await set(source: .microphone,
                       enabled: enabled,
                       captureOptions: captureOptions,
-                      publishOptions: publishOptions)
+                      publishOptions: publishOptions,
+                      publishMuted: publishMuted)
     }
 
     /// Enable or disable screen sharing. This has different behavior depending on the platform.
@@ -344,7 +347,8 @@ public extension LocalParticipant {
     func set(source: Track.Source,
              enabled: Bool,
              captureOptions: CaptureOptions? = nil,
-             publishOptions: TrackPublishOptions? = nil) async throws -> LocalTrackPublication?
+             publishOptions: TrackPublishOptions? = nil,
+             publishMuted: Bool = false) async throws -> LocalTrackPublication?
     {
         try await _publishSerialRunner.run {
             let room = try self.requireRoom()
@@ -371,7 +375,10 @@ public extension LocalParticipant {
                 } else if source == .microphone {
                     let localTrack = LocalAudioTrack.createTrack(options: (captureOptions as? AudioCaptureOptions) ?? room._state.roomOptions.defaultAudioCaptureOptions,
                                                                  reportStatistics: room._state.roomOptions.reportRemoteTrackStatistics)
-                    return try await self._publish(track: localTrack, options: publishOptions)
+                    if publishMuted {
+                        try await localTrack.mute(shouldSendSignal: false)
+                    }
+                    return try await self._publish(track: localTrack, options: publishOptions, publishMuted: publishMuted)
                 } else if source == .screenShareVideo {
                     #if os(iOS)
 
@@ -422,7 +429,7 @@ extension LocalParticipant {
 
         guard let videoCodec = subscribedCodec.toVideoCodec() else { return }
 
-        log("[Publish/Backup] Additional video codec: \(videoCodec)...")
+        log("[publish/Backup] Additional video codec: \(videoCodec)...")
 
         guard let track = localTrackPublication.track as? LocalVideoTrack else {
             throw LiveKitError(.invalidState, message: "Track is nil")
@@ -443,7 +450,7 @@ extension LocalParticipant {
                                                     publishOptions: publishOptions,
                                                     overrideVideoCodec: videoCodec)
 
-        log("[Publish/Backup] Using encodings: \(encodings.map { $0.toDebugString() }.joined(separator: ", "))")
+        log("[publish/Backup] Using encodings: \(encodings.map { $0.toDebugString() }.joined(separator: ", "))")
 
         // Add transceiver first...
 
@@ -455,7 +462,7 @@ extension LocalParticipant {
 
         // Add transceiver to publisher pc...
         let transceiver = try await publisher.addTransceiver(with: track.mediaTrack, transceiverInit: transInit)
-        log("[Publish] Added transceiver...")
+        log("[publish] Added transceiver...")
 
         // Set codec...
         transceiver.set(preferredVideoCodec: videoCodec)
@@ -479,7 +486,7 @@ extension LocalParticipant {
             $0.layers = layers
         }
 
-        log("[Publish] server responded trackInfo: \(trackInfo)")
+        log("[publish] server responded trackInfo: \(trackInfo)")
 
         sender._set(subscribedQualities: subscribedCodec.qualities)
 
@@ -505,7 +512,7 @@ extension [Livekit_SubscribedQuality] {
 
 extension LocalParticipant {
     @discardableResult
-    func _publish(track: LocalTrack, options: TrackPublishOptions? = nil) async throws -> LocalTrackPublication {
+    func _publish(track: LocalTrack, options: TrackPublishOptions? = nil, publishMuted: Bool = false) async throws -> LocalTrackPublication {
         log("[publish] \(track) options: \(String(describing: options ?? nil))...", .info)
 
         try checkPermissions(toPublish: track)
@@ -523,6 +530,9 @@ extension LocalParticipant {
 
         // Try to start the Track
         try await track.start()
+        if publishMuted {
+            try await track.disable()
+        }
         // Starting the Track could be time consuming especially for camera etc.
         // Check cancellation after track starts.
         try Task.checkCancellation()
@@ -544,7 +554,7 @@ extension LocalParticipant {
                 }
 
                 // Wait for Dimensions...
-                log("[Publish] Waiting for dimensions to resolve...")
+                log("[publish] Waiting for dimensions to resolve...")
                 dimensions = try await track.capturer.dimensionsCompleter.wait()
 
                 guard let dimensions else {
@@ -636,7 +646,8 @@ extension LocalParticipant {
                                                          type: track.kind.toPBType(),
                                                          source: track.source.toPBType(),
                                                          encryption: room.e2eeManager?.e2eeOptions.encryptionType.toPBType() ?? .none,
-                                                         populatorFunc)
+                                                         populatorFunc,
+                                                         mute: track.isMuted)
             }
 
             let negotiateFunc: @Sendable () async throws -> Void = {

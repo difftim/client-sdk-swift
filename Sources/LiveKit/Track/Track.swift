@@ -343,7 +343,7 @@ extension Track {
     // workaround for error:
     // @objc can only be used with members of classes, @objc protocols, and concrete extensions of classes
     //
-    func _mute() async throws {
+    func _mute(shouldSendSignal: Bool = true) async throws {
         // LocalTrack only, already muted
         guard self is LocalTrack, !isMuted else { return }
         try await disable() // Disable track first
@@ -351,7 +351,7 @@ extension Track {
         if self is LocalVideoTrack {
             try await stop()
         }
-        set(muted: true, shouldSendSignal: true)
+        set(muted: true, shouldSendSignal: shouldSendSignal)
     }
 
     func _unmute() async throws {

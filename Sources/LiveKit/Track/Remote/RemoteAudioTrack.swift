@@ -53,7 +53,9 @@ public class RemoteAudioTrack: Track, RemoteTrack, AudioTrack, @unchecked Sendab
 
     deinit {
         if let audioTrack = mediaTrack as? LKRTCAudioTrack {
-            audioTrack.remove(_adapter)
+            Task {
+                audioTrack.remove(_adapter)
+            }
         }
     }
 

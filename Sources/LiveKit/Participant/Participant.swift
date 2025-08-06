@@ -38,6 +38,9 @@ public class Participant: NSObject, @unchecked Sendable, ObservableObject, Logga
 
     @objc
     public var isSpeaking: Bool { _state.isSpeaking }
+    
+    @objc
+    public var lastSpokeAt: Int64 { _state.lastSpokeAt }
 
     @objc
     public var metadata: String? { _state.metadata }
@@ -87,6 +90,7 @@ public class Participant: NSObject, @unchecked Sendable, ObservableObject, Logga
         var name: String?
         var audioLevel: Float = 0.0
         var isSpeaking: Bool = false
+        var lastSpokeAt: Int64 = 0
         var metadata: String?
         var joinedAt: Date?
         var kind: Kind = .unknown
@@ -230,8 +234,8 @@ public class Participant: NSObject, @unchecked Sendable, ObservableObject, Logga
     }
 
     func add(publication: TrackPublication) {
-        _state.mutate { $0.trackPublications[publication.sid] = publication }
         publication.track?._state.mutate { $0.sid = publication.sid }
+        _state.mutate { $0.trackPublications[publication.sid] = publication }
     }
 
     func set(info: Livekit_ParticipantInfo, connectionState _: ConnectionState) {

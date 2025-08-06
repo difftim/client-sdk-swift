@@ -32,7 +32,9 @@ extension Loggable {
              function: String = #function,
              line: UInt = #line)
     {
-        logger.log(message ?? "",
+        let ptr = Unmanaged.passUnretained(self as AnyObject).toOpaque()
+        let className = String(describing: type(of: self))
+        logger.log("[\(className):\(ptr)] \(message)" ?? "",
                    level,
                    file: file,
                    type: type_ ?? type(of: self),

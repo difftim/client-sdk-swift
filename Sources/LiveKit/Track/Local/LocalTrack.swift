@@ -25,7 +25,7 @@ public protocol LocalTrack where Self: Track {
     var publishState: PublishState { get }
 
     @objc
-    func mute() async throws
+    func mute(shouldSendSignal: Bool) async throws
 
     @objc
     func unmute() async throws

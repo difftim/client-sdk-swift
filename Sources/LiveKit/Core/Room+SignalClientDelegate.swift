@@ -32,21 +32,29 @@ extension Room: SignalClientDelegate {
            // engine is currently connected state
            case .connected = _state.connectionState
         {
-            do {
-                try await startReconnect(reason: .websocket)
-            } catch {
-                log("Failed calling startReconnect, error: \(error)", .error)
+            Task.detached {
+                do {
+                    try await self.startReconnect(reason: .websocket/*, nextReconnectMode: .full*/)
+                } catch {
+                    self.log("Failed calling startReconnect, error: \(error)", .error)
+                }
             }
         }
     }
 
-    func signalClient(_: SignalClient, didReceiveLeave canReconnect: Bool, reason: Livekit_DisconnectReason) async {
-        log("canReconnect: \(canReconnect), reason: \(reason)")
-
-        if canReconnect {
+    func signalClient(_: SignalClient, didReceiveLeave canReconnect: Bool, reason: Livekit_DisconnectReason, action: Livekit_LeaveRequest.Action) async {
+        log("canReconnect: \(canReconnect), reason: \(reason), action: \(action)")
+        
+        switch action {
+        case .resume:
+            _state.mutate { $0.nextReconnectMode = .quick }
+        case .reconnect:
             // force .full for next reconnect
             _state.mutate { $0.nextReconnectMode = .full }
-        } else {
+        case .disconnect:
+            _state.mutate { $0.serverNotifyDisconnect = true }
+            fallthrough
+        default:
             // Server indicates it's not recoverable
             await cleanUp(withError: LiveKitError.from(reason: reason))
         }
@@ -148,6 +156,9 @@ extension Room: SignalClientDelegate {
 
                 participant._state.mutate {
                     $0.audioLevel = speaker.level
+                    if !$0.isSpeaking && speaker.active {
+                        $0.lastSpokeAt = Int64(Date().timeIntervalSince1970 * 1000)
+                    }
                     $0.isSpeaking = speaker.active
                 }
 
@@ -330,7 +341,12 @@ extension Room: SignalClientDelegate {
     }
 
     func signalClient(_ signalClient: SignalClient, didReceiveOffer offer: LKRTCSessionDescription) async {
-        log("Received offer, creating & sending answer...")
+        let startTime = Date()
+        log("ENTER - Received offer, creating & sending answer...", .info)
+        
+        defer {
+            log("EXIT - Received offer, duration: \(String(format: "%.3f", Date().timeIntervalSince(startTime)))s", .info)
+        }
 
         guard let subscriber = _state.subscriber else {
             log("Failed to send answer, subscriber is nil", .error)
@@ -339,9 +355,13 @@ extension Room: SignalClientDelegate {
 
         do {
             try await subscriber.set(remoteDescription: offer)
+            log("remoteDescription - Received offer, duration: \(String(format: "%.3f", Date().timeIntervalSince(startTime)))s", .info)
             let answer = try await subscriber.createAnswer()
+            log("createAnswer - Received offer, duration: \(String(format: "%.3f", Date().timeIntervalSince(startTime)))s", .info)
             try await subscriber.set(localDescription: answer)
+            log("localDescription - Received offer, duration: \(String(format: "%.3f", Date().timeIntervalSince(startTime)))s", .info)
             try await signalClient.send(answer: answer)
+            log("sendAnswer - Received offer, duration: \(String(format: "%.3f", Date().timeIntervalSince(startTime)))s", .info)
         } catch {
             log("Failed to send answer with error: \(error)", .error)
         }

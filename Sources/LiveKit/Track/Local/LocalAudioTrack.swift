@@ -80,8 +80,8 @@ public class LocalAudioTrack: Track, LocalTrack, AudioTrack, @unchecked Sendable
                                captureOptions: options)
     }
 
-    public func mute() async throws {
-        try await super._mute()
+    public func mute(shouldSendSignal: Bool = true) async throws {
+        try await super._mute(shouldSendSignal: shouldSendSignal)
     }
 
     public func unmute() async throws {

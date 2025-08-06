@@ -44,8 +44,8 @@ public class LocalVideoTrack: Track, LocalTrack, @unchecked Sendable {
                    reportStatistics: reportStatistics)
     }
 
-    public func mute() async throws {
-        try await super._mute()
+    public func mute(shouldSendSignal: Bool = true) async throws {
+        try await super._mute(shouldSendSignal: shouldSendSignal)
     }
 
     public func unmute() async throws {
