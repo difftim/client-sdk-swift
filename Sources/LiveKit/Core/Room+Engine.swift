@@ -357,9 +357,7 @@ extension Room {
         }
 
         do {
-            var errorReconnect: LiveKitError? = nil
-
-            try await Task.retrying(totalAttempts: _state.connectOptions.reconnectAttempts,
+            let result = try await Task.retrying(totalAttempts: _state.connectOptions.reconnectAttempts,
                                     retryDelay: { @Sendable attempt in
                                         let delay = TimeInterval.computeReconnectDelay(forAttempt: attempt,
                                                                                        baseDelay: self._state.connectOptions.reconnectAttemptDelay,
@@ -368,20 +366,18 @@ extension Room {
                                                                                        addJitter: true)
                                         self.log("[Connect] Retry cycle waiting for \(String(format: "%.2f", delay)) seconds before attempt \(attempt + 1)")
                                         return delay
-                                    }) { currentAttempt, totalAttempts in
+                                    }) { currentAttempt, totalAttempts -> Result<Void, LiveKitError> in
                 // Not reconnecting state anymore
                 guard let currentMode = self._state.isReconnectingWithMode else {
                     self.log("[Connect] Not in reconnect state anymore, exiting retry cycle.")
 
-                    errorReconnect = LiveKitError(.reconnectFailure, message: "Not in reconnect state anymore")
-                    return
+                    return .failure(LiveKitError(.reconnectFailure, message: "Not in reconnect state anymore"))
                 }
 
                 guard !self._state.serverNotifyDisconnect else {
                     self.log("[Connect] server notify disconnect, exiting retry cycle.")
 
-                    errorReconnect = LiveKitError(.reconnectFailure, message: "server notify disconnect")
-                    return
+                    return .failure(LiveKitError(.reconnectFailure, message: "server notify disconnect"))
                 }
 
                 // Full reconnect failed, give up
@@ -389,8 +385,7 @@ extension Room {
                 guard currentAttempt <= totalAttempts else { 
                     self.log("[Connect] Reconnect attempts exhausted, giving up.", .error)
 
-                    errorReconnect = LiveKitError(.reconnectFailure, message: "Reconnect attempts(\(totalAttempts)) exhausted")
-                    return
+                    return .failure(LiveKitError(.reconnectFailure, message: "Reconnect attempts(\(totalAttempts)) exhausted"))
                 }
 
                 self.log("[Connect] currentMode:\(currentMode) Retry in \(self._state.connectOptions.reconnectAttemptDelay) seconds, \(currentAttempt)/\(totalAttempts) tries left.")
@@ -415,6 +410,7 @@ extension Room {
                         try await fullReconnectSequence()
                         self.log("[Connect] Full reconnect succeeded for attempt \(currentAttempt)")
                     }
+                    return .success(())
                 } catch {
                     self.log("[Connect] Reconnect mode: \(mode) failed with error: \(error)", .error)
                     // throw
@@ -427,8 +423,11 @@ extension Room {
                 }
             }.value
 
-            if let err = errorReconnect{
-                throw err
+            switch result {
+                case .success:
+                    break // 成功，继续执行
+                case .failure(let error):
+                    throw error
             }
 
             // Re-connect sequence successful
