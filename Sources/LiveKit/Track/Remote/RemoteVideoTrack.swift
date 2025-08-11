@@ -18,7 +18,8 @@ internal import LiveKitWebRTC
 
 @objc
 public class RemoteVideoTrack: Track, RemoteTrack, @unchecked Sendable {
-    private var proxyRender = VideoRendererProxy()
+    private lazy var _proxyRender = VideoRendererProxy()
+    private var useProxyRender: Bool = true
     
     init(name: String,
          source: Track.Source,
@@ -31,15 +32,38 @@ public class RemoteVideoTrack: Track, RemoteTrack, @unchecked Sendable {
                    track: track,
                    reportStatistics: reportStatistics)
         
+        log("*track: init", .debug)
+
+        guard useProxyRender else {
+            return
+        }
+        
         guard let rtcVideoTrack = mediaTrack as? LKRTCVideoTrack else {
             log("mediaTrack is not a RTCVideoTrack", .error)
             return
         }
         
-        rtcVideoTrack.add(proxyRender)
+        rtcVideoTrack.add(_proxyRender)
     }
-}
+    
+    deinit {
+        guard useProxyRender else {
+            return
+        }
 
+        if let rtcVideoTrack = mediaTrack as? LKRTCVideoTrack {
+            let proxyRender = _proxyRender
+            let ptr = Unmanaged.passUnretained(self as AnyObject).toOpaque()
+            let className = String(describing: type(of: self))
+            Task.detached {
+                logger.debug("[\(className):\(ptr)] *track: deinit beg")
+                rtcVideoTrack.remove(proxyRender)
+                logger.debug("[\(className):\(ptr)] *track: deinit end")
+            }
+        }
+    }
+    
+}
 // MARK: - VideoTrack Protocol
 
 extension RemoteVideoTrack: VideoTrack {
@@ -53,7 +77,11 @@ extension RemoteVideoTrack: VideoTrack {
             $0.videoRenderers.add(videoRenderer)
         }
 
-        proxyRender.add(render: videoRenderer)
+        if (useProxyRender) {
+            _proxyRender.add(render: videoRenderer)
+        } else {
+            rtcVideoTrack.add(VideoRendererAdapter(target: videoRenderer))
+        }
     }
 
     public func remove(videoRenderer: VideoRenderer) {
@@ -66,6 +94,10 @@ extension RemoteVideoTrack: VideoTrack {
             $0.videoRenderers.remove(videoRenderer)
         }
 
-        proxyRender.remove(render: videoRenderer)
+        if (useProxyRender) {
+            _proxyRender.remove(render: videoRenderer)
+        } else {
+            rtcVideoTrack.remove(VideoRendererAdapter(target: videoRenderer))
+        }
     }
 }

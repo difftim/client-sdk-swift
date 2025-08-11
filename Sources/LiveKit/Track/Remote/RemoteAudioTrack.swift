@@ -46,6 +46,8 @@ public class RemoteAudioTrack: Track, RemoteTrack, AudioTrack, @unchecked Sendab
                    track: track,
                    reportStatistics: reportStatistics)
 
+        log("*track: init", .debug)
+
         if let audioTrack = mediaTrack as? LKRTCAudioTrack {
             audioTrack.add(_adapter)
         }
@@ -54,8 +56,12 @@ public class RemoteAudioTrack: Track, RemoteTrack, AudioTrack, @unchecked Sendab
     deinit {
         if let audioTrack = mediaTrack as? LKRTCAudioTrack {
             let adapter = _adapter
+            let ptr = Unmanaged.passUnretained(self as AnyObject).toOpaque()
+            let className = String(describing: type(of: self))
             Task.detached {
+                logger.debug("[\(className):\(ptr)] *track: deinit beg")
                 audioTrack.remove(adapter)
+                logger.debug("[\(className):\(ptr)] *track: deinit end")
             }
         }
     }
