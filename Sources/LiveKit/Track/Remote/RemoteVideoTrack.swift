@@ -18,6 +18,8 @@ internal import LiveKitWebRTC
 
 @objc
 public class RemoteVideoTrack: Track, RemoteTrack, @unchecked Sendable {
+    private var proxyRender = VideoRendererProxy()
+    
     init(name: String,
          source: Track.Source,
          track: LKRTCMediaStreamTrack,
@@ -28,6 +30,13 @@ public class RemoteVideoTrack: Track, RemoteTrack, @unchecked Sendable {
                    source: source,
                    track: track,
                    reportStatistics: reportStatistics)
+        
+        guard let rtcVideoTrack = mediaTrack as? LKRTCVideoTrack else {
+            log("mediaTrack is not a RTCVideoTrack", .error)
+            return
+        }
+        
+        rtcVideoTrack.add(proxyRender)
     }
 }
 
@@ -44,7 +53,7 @@ extension RemoteVideoTrack: VideoTrack {
             $0.videoRenderers.add(videoRenderer)
         }
 
-        rtcVideoTrack.add(VideoRendererAdapter(target: videoRenderer))
+        proxyRender.add(render: videoRenderer)
     }
 
     public func remove(videoRenderer: VideoRenderer) {
@@ -57,6 +66,6 @@ extension RemoteVideoTrack: VideoTrack {
             $0.videoRenderers.remove(videoRenderer)
         }
 
-        rtcVideoTrack.remove(VideoRendererAdapter(target: videoRenderer))
+        proxyRender.remove(render: videoRenderer)
     }
 }

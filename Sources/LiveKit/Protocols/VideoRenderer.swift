@@ -71,3 +71,41 @@ class VideoRendererAdapter: NSObject, LKRTCVideoRenderer {
         return ObjectIdentifier(target).hashValue
     }
 }
+
+
+class VideoRendererProxy: NSObject, LKRTCVideoRenderer {
+    private var rendererDelegates = MulticastDelegate<VideoRenderer>(label: "VideoRendererProxyDelegate")
+    private var currentSize:CGSize?
+
+    func setSize(_ size: CGSize) {
+        currentSize = size
+        
+        if rendererDelegates.isDelegatesNotEmpty {
+                rendererDelegates.notifySync { renderer in
+                    renderer.set!(size: size)
+            }
+        }
+    }
+    
+    func add(render: VideoRenderer) {
+        rendererDelegates.add(delegate: render)
+        
+        guard let size = currentSize else { return }
+        render.set?(size: size)
+    }
+
+    func remove(render: VideoRenderer) {
+        rendererDelegates.remove(delegate: render)
+    }
+
+    func renderFrame(_ frame: LKRTCVideoFrame?) {
+        guard let lkFrame = frame?.toLKType() else { return }
+        
+        if rendererDelegates.isDelegatesNotEmpty {
+            rendererDelegates.notifySync { [lkFrame] renderer in
+                renderer.render?(frame: lkFrame)
+                renderer.render?(frame: lkFrame, captureDevice: nil, captureOptions: nil)
+            }
+        }
+    }
+}
