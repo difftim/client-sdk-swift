@@ -32,7 +32,7 @@ public class RemoteVideoTrack: Track, RemoteTrack, @unchecked Sendable {
                    track: track,
                    reportStatistics: reportStatistics)
         
-        log("*track: init", .debug)
+        log("*track: init")
 
         guard useProxyRender else {
             return
@@ -53,12 +53,10 @@ public class RemoteVideoTrack: Track, RemoteTrack, @unchecked Sendable {
 
         if let rtcVideoTrack = mediaTrack as? LKRTCVideoTrack {
             let proxyRender = _proxyRender
-            let ptr = Unmanaged.passUnretained(self as AnyObject).toOpaque()
-            let className = String(describing: type(of: self))
             Task.detached {
-                logger.debug("[\(className):\(ptr)] *track: deinit beg")
+                logger.log("*track: deinit beg", type: RemoteVideoTrack.self)
                 rtcVideoTrack.remove(proxyRender)
-                logger.debug("[\(className):\(ptr)] *track: deinit end")
+                logger.log("*track: deinit end", type: RemoteVideoTrack.self)
             }
         }
     }

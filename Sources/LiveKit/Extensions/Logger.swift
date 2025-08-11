@@ -32,17 +32,7 @@ extension Loggable {
              function: String = #function,
              line: UInt = #line)
     {
-        let ptr = Unmanaged.passUnretained(self as AnyObject).toOpaque()
-        let className = String(describing: type(of: self))
-
-        let logMessage: Logger.Message
-        if let message = message {
-            logMessage = "[\(className):\(ptr)] \(message)"
-        } else {
-            logMessage = "[\(className):\(ptr)]"
-        }
-
-        logger.log(logMessage,
+        logger.log(message ?? "",
                    level,
                    file: file,
                    type: type_ ?? type(of: self),
@@ -67,8 +57,10 @@ extension Logger {
             return " [\(metaData.map { "\($0): \($1)" }.joined(separator: ", "))]"
         }
 
+        let ptr = Unmanaged.passUnretained(self as AnyObject).toOpaque()
+
         log(level: level,
-            "\(String(describing: type)).\(function) \(message)\(_buildScopedMetadataString())",
+            "\(String(describing: type)).\(function) [\(ptr)] \(message)\(_buildScopedMetadataString())",
             file: file,
             function: function,
             line: line)
