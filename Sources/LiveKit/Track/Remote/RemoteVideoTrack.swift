@@ -53,10 +53,11 @@ public class RemoteVideoTrack: Track, RemoteTrack, @unchecked Sendable {
 
         if let rtcVideoTrack = mediaTrack as? LKRTCVideoTrack {
             let proxyRender = _proxyRender
+            let ptr = String(describing: Unmanaged.passUnretained(self as AnyObject).toOpaque())
             Task.detached {
-                logger.log("*track: deinit beg", type: RemoteVideoTrack.self)
+                logger.log("*track: deinit beg", type: RemoteVideoTrack.self, ptr: ptr)
                 rtcVideoTrack.remove(proxyRender)
-                logger.log("*track: deinit end", type: RemoteVideoTrack.self)
+                logger.log("*track: deinit end", type: RemoteVideoTrack.self, ptr: ptr)
             }
         }
     }

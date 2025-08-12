@@ -621,8 +621,10 @@ extension LocalParticipant {
                 ]
 
                 populatorFunc = { populator in
+                    let enableE2ee = room.e2eeManager?.e2eeOptions.encryptionType != .none
+                    
                     populator.disableDtx = !audioPublishOptions.dtx
-                    populator.disableRed = !audioPublishOptions.red
+                    populator.disableRed = enableE2ee || !audioPublishOptions.red
                     populator.audioFeatures = Array(audioPublishOptions.toFeatures())
 
                     if let streamName = options?.streamName {
@@ -704,15 +706,19 @@ extension LocalParticipant {
 
             // At this point at least 1 audio frame should be generated to continue
             if let track = track as? LocalAudioTrack {
-                log("[Publish] Waiting for audio frame...")
-                try await track.startWaitingForFrames()
+                log("[publish] Waiting for audio frame...")
+                if !publishMuted {
+                    try await track.startWaitingForFrames()
+                } else {
+                    log("[publish] Skipping waiting for audio frame since track is muted")
+                }
             }
 
             if track is LocalVideoTrack {
                 if let firstCodecMime = trackInfo.codecs.first?.mimeType,
                    let firstVideoCodec = VideoCodec.from(mimeType: firstCodecMime)
                 {
-                    log("[Publish] First video codec: \(firstVideoCodec)")
+                    log("[publish] First video codec: \(firstVideoCodec)")
                     track._state.mutate { $0.videoCodec = firstVideoCodec }
                 }
             }

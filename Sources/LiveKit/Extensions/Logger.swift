@@ -30,14 +30,18 @@ extension Loggable {
              file: String = #fileID,
              type type_: Any.Type? = nil,
              function: String = #function,
-             line: UInt = #line)
+             line: UInt = #line,
+             ptr: String? = nil)
     {
+        let ptr = ptr ?? String(describing: Unmanaged.passUnretained(self as AnyObject).toOpaque())
+
         logger.log(message ?? "",
                    level,
                    file: file,
                    type: type_ ?? type(of: self),
                    function: function,
-                   line: line)
+                   line: line,
+                   ptr: ptr)
     }
 }
 
@@ -50,14 +54,15 @@ extension Logger {
              type: Any.Type,
              function: String = #function,
              line: UInt = #line,
-             metaData: ScopedMetadataContainer = ScopedMetadataContainer())
+             metaData: ScopedMetadataContainer = ScopedMetadataContainer(),
+             ptr: String? = nil)
     {
         func _buildScopedMetadataString() -> String {
             guard !metaData.isEmpty else { return "" }
             return " [\(metaData.map { "\($0): \($1)" }.joined(separator: ", "))]"
         }
 
-        let ptr = Unmanaged.passUnretained(self as AnyObject).toOpaque()
+        let ptr = ptr ?? String(describing: Unmanaged.passUnretained(self as AnyObject).toOpaque())
 
         log(level: level,
             "\(String(describing: type)).\(function) [\(ptr)] \(message)\(_buildScopedMetadataString())",

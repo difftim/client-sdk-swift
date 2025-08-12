@@ -56,10 +56,11 @@ public class RemoteAudioTrack: Track, RemoteTrack, AudioTrack, @unchecked Sendab
     deinit {
         if let audioTrack = mediaTrack as? LKRTCAudioTrack {
             let adapter = _adapter
+            let ptr = String(describing: Unmanaged.passUnretained(self as AnyObject).toOpaque())
             Task.detached {
-                logger.log("*track: deinit beg", type: RemoteAudioTrack.self)
+                logger.log("*track: deinit beg", type: RemoteAudioTrack.self, ptr: ptr)
                 audioTrack.remove(adapter)
-                logger.log("*track: deinit end", type: RemoteAudioTrack.self)
+                logger.log("*track: deinit end", type: RemoteAudioTrack.self, ptr: ptr)
             }
         }
     }
