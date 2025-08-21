@@ -514,7 +514,9 @@ extension Room {
             throw LiveKitError(.invalidState, message: "Participant not found for \(identity)")
         }
 
+        log("[emptysid] participant  in: {\(participant.sid?.stringValue ?? "nil"),\(participant.identity?.stringValue ?? "nil")}")
         await participant.cleanUp(notify: true)
+        log("[emptysid] participant out: {\(participant.sid?.stringValue ?? "nil"),\(participant.identity?.stringValue ?? "nil")}")
     }
 }
 

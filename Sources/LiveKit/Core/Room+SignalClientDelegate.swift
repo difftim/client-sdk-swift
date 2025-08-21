@@ -247,7 +247,8 @@ extension Room: SignalClientDelegate {
     }
 
     func signalClient(_: SignalClient, didUpdateParticipants participants: [Livekit_ParticipantInfo]) async {
-        log("participants: \(participants)")
+        log("[emptysid] participants: \(participants)")
+        log("[emptysid] mapinfo 1: [\((["\(localParticipant.sid?.stringValue ?? "nil"),\(localParticipant.identity?.stringValue ?? "nil")"] + _state.read { $0.remoteParticipants }.map { "\($0.value.sid?.stringValue ?? "nil"),\($0.value.identity?.stringValue ?? "nil")" }).map { "{\($0)}" }.joined(separator: ","))]")
 
         var disconnectedParticipantIdentities = [Participant.Identity]()
         var newParticipants = [RemoteParticipant]()
@@ -277,6 +278,8 @@ extension Room: SignalClientDelegate {
             }
         }
 
+        log("[emptysid] mapinfo 2: [\((["\(localParticipant.sid?.stringValue ?? "nil"),\(localParticipant.identity?.stringValue ?? "nil")"] + _state.read { $0.remoteParticipants }.map { "\($0.value.sid?.stringValue ?? "nil"),\($0.value.identity?.stringValue ?? "nil")" }).map { "{\($0)}" }.joined(separator: ","))]")
+
         await withTaskGroup(of: Void.self) { group in
             for identity in disconnectedParticipantIdentities {
                 group.addTask {
@@ -291,10 +294,14 @@ extension Room: SignalClientDelegate {
             await group.waitForAll()
         }
 
+        log("[emptysid] mapinfo 3: [\((["\(localParticipant.sid?.stringValue ?? "nil"),\(localParticipant.identity?.stringValue ?? "nil")"] + _state.read { $0.remoteParticipants }.map { "\($0.value.sid?.stringValue ?? "nil"),\($0.value.identity?.stringValue ?? "nil")" }).map { "{\($0)}" }.joined(separator: ","))]")
+
         if case .connected = _state.connectionState {
             for participant in newParticipants {
                 delegates.notify(label: { "room.remoteParticipantDidConnect: \(participant)" }) {
+                    self.log("[emptysid] didConnect  in: {\(participant.sid?.stringValue ?? "nil"),\(participant.identity?.stringValue ?? "nil")}")
                     $0.room?(self, participantDidConnect: participant)
+                    self.log("[emptysid] didConnect out: {\(participant.sid?.stringValue ?? "nil"),\(participant.identity?.stringValue ?? "nil")}")
                 }
             }
         }
