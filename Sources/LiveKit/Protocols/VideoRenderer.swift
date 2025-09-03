@@ -42,70 +42,20 @@ public protocol VideoRenderer: Sendable {
     nonisolated func render(frame: VideoFrame, captureDevice: AVCaptureDevice?, captureOptions: VideoCaptureOptions?)
 }
 
-class VideoRendererAdapter: NSObject, LKRTCVideoRenderer {
-    private weak var target: VideoRenderer?
+final class VideoRendererAdapter: NSObject, LKRTCVideoRenderer {
+    weak var renderer: VideoRenderer?
 
-    init(target: VideoRenderer) {
-        self.target = target
+    init(renderer: VideoRenderer) {
+        self.renderer = renderer
     }
 
     func setSize(_ size: CGSize) {
-        target?.set?(size: size)
+        renderer?.set?(size: size)
     }
 
     func renderFrame(_ frame: LKRTCVideoFrame?) {
         guard let frame = frame?.toLKType() else { return }
-        target?.render?(frame: frame)
-        target?.render?(frame: frame, captureDevice: nil, captureOptions: nil)
-    }
-
-    // Proxy the equality operators
-
-    override func isEqual(_ object: Any?) -> Bool {
-        guard let other = object as? VideoRendererAdapter else { return false }
-        return target === other.target
-    }
-
-    override var hash: Int {
-        guard let target else { return 0 }
-        return ObjectIdentifier(target).hashValue
-    }
-}
-
-
-class VideoRendererProxy: NSObject, LKRTCVideoRenderer {
-    private var rendererDelegates = MulticastDelegate<VideoRenderer>(label: "VideoRendererProxyDelegate")
-    private var currentSize:CGSize?
-
-    func setSize(_ size: CGSize) {
-        currentSize = size
-        
-        if rendererDelegates.isDelegatesNotEmpty {
-                rendererDelegates.notifySync { renderer in
-                    renderer.set!(size: size)
-            }
-        }
-    }
-    
-    func add(render: VideoRenderer) {
-        rendererDelegates.add(delegate: render)
-        
-        guard let size = currentSize else { return }
-        render.set?(size: size)
-    }
-
-    func remove(render: VideoRenderer) {
-        rendererDelegates.remove(delegate: render)
-    }
-
-    func renderFrame(_ frame: LKRTCVideoFrame?) {
-        guard let lkFrame = frame?.toLKType() else { return }
-        
-        if rendererDelegates.isDelegatesNotEmpty {
-            rendererDelegates.notifySync { [lkFrame] renderer in
-                renderer.render?(frame: lkFrame)
-                renderer.render?(frame: lkFrame, captureDevice: nil, captureOptions: nil)
-            }
-        }
+        renderer?.render?(frame: frame)
+        renderer?.render?(frame: frame, captureDevice: nil, captureOptions: nil)
     }
 }

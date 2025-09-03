@@ -11,7 +11,9 @@
 # iOS/macOS Swift SDK for LiveKit
 
 <!--BEGIN_DESCRIPTION-->
+
 Use this SDK to add realtime video, audio and data features to your Swift app. By connecting to <a href="https://livekit.io/">LiveKit</a> Cloud or a self-hosted server, you can quickly build applications such as multi-modal AI, live streaming, or video calls with just a few lines of code.
+
 <!--END_DESCRIPTION-->
 
 [![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Flivekit%2Fclient-sdk-swift%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/livekit/client-sdk-swift)
@@ -41,7 +43,7 @@ Add the dependency and also to your target
 let package = Package(
   ...
   dependencies: [
-    .package(name: "LiveKit", url: "https://github.com/difftim/client-sdk-swift.git", .upToNextMajor("2.7.1")),
+    .package(name: "LiveKit", url: "https://github.com/difftim/client-sdk-swift.git", .upToNextMajor("2.7.2")),
   ],
   targets: [
     .target(
@@ -133,6 +135,18 @@ extension RoomViewController: RoomDelegate {
 See [iOS Screen Sharing instructions](Docs/ios-screen-sharing.md).
 
 ## Integration Notes
+
+### Submitting to the App Store, DSYMs
+
+`LiveKitWebRTC.xcframework` binary framework, which is the main dependency of the SDK, does not contain DSYMs. Submitting the app to the App Store will result in a following warning:
+
+```
+The archive did not include a dSYM for the LiveKitWebRTC.framework with the UUIDs [...]. Ensure that the archive's dSYM folder includes a DWARF file for LiveKitWebRTC.framework with the expected UUIDs.
+```
+
+It will **not prevent** the app from being submitted to the App Store or passing the review process.
+
+If you are building a customized version of the [LiveKitWebRTC](https://github.com/webrtc-sdk/webrtc), you can use the [build script](https://github.com/webrtc-sdk/webrtc-build/blob/main/build/apple/xcframework.sh) in `DEBUG` mode to generate them locally.
 
 ### Thread safety
 
@@ -279,7 +293,9 @@ If your app is targeting macOS Catalina, make sure to do the following to avoid 
 Please join us on [Slack](https://livekit.io/join-slack) to get help from our devs / community members. We welcome your contributions(PRs) and details can be discussed there.
 
 <!--BEGIN_REPO_NAV-->
+
 <br/><table>
+
 <thead><tr><th colspan="2">LiveKit Ecosystem</th></tr></thead>
 <tbody>
 <tr><td>LiveKit SDKs</td><td><a href="https://github.com/livekit/client-sdk-js">Browser</a> · <b>iOS/macOS/visionOS</b> · <a href="https://github.com/livekit/client-sdk-android">Android</a> · <a href="https://github.com/livekit/client-sdk-flutter">Flutter</a> · <a href="https://github.com/livekit/client-sdk-react-native">React Native</a> · <a href="https://github.com/livekit/rust-sdks">Rust</a> · <a href="https://github.com/livekit/node-sdks">Node.js</a> · <a href="https://github.com/livekit/python-sdks">Python</a> · <a href="https://github.com/livekit/client-sdk-unity">Unity</a> · <a href="https://github.com/livekit/client-sdk-unity-web">Unity (WebGL)</a> · <a href="https://github.com/livekit/client-sdk-esp32">ESP32</a></td></tr><tr></tr>
