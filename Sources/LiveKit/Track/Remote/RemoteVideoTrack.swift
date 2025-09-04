@@ -18,7 +18,6 @@ internal import LiveKitWebRTC
 
 @objc
 public class RemoteVideoTrack: Track, RemoteTrack, @unchecked Sendable {
-    
     init(name: String,
          source: Track.Source,
          track: LKRTCMediaStreamTrack,
@@ -29,38 +28,9 @@ public class RemoteVideoTrack: Track, RemoteTrack, @unchecked Sendable {
                    source: source,
                    track: track,
                    reportStatistics: reportStatistics)
-        
-        log("*track: init")
-
-        guard useProxyRender else {
-            return
-        }
-        
-        guard let rtcVideoTrack = mediaTrack as? LKRTCVideoTrack else {
-            log("mediaTrack is not a RTCVideoTrack", .error)
-            return
-        }
-        
-        rtcVideoTrack.add(_proxyRender)
     }
-    
-    deinit {
-        guard useProxyRender else {
-            return
-        }
-
-        if let rtcVideoTrack = mediaTrack as? LKRTCVideoTrack {
-            let proxyRender = _proxyRender
-            let ptr = String(describing: Unmanaged.passUnretained(self as AnyObject).toOpaque())
-            Task.detached {
-                logger.log("*track: deinit beg", type: RemoteVideoTrack.self, ptr: ptr)
-                rtcVideoTrack.remove(proxyRender)
-                logger.log("*track: deinit end", type: RemoteVideoTrack.self, ptr: ptr)
-            }
-        }
-    }
-    
 }
+
 // MARK: - VideoTrack Protocol
 
 extension RemoteVideoTrack: VideoTrack {
