@@ -624,7 +624,7 @@ extension LocalParticipant {
                     let enableE2ee = room.e2eeManager?.e2eeOptions.encryptionType != .none
                     
                     populator.disableDtx = !audioPublishOptions.dtx
-                    populator.disableRed = enableE2ee || !audioPublishOptions.red
+                    populator.disableRed = enableE2ee || !(audioPublishOptions.red ?? true)
                     populator.audioFeatures = Array(audioPublishOptions.toFeatures())
 
                     if let streamName = options?.streamName {

@@ -115,8 +115,8 @@ final class WebSocket: NSObject, @unchecked Sendable, Loggable, AsyncSequence, U
             return
         }
 
-        task.receive(completionHandler: { [weak self] result in
-            guard let self, let continuation = _state.streamContinuation else {
+        task.receive(completionHandler: { [self] result in
+            guard let continuation = _state.streamContinuation else {
                 return
             }
 
