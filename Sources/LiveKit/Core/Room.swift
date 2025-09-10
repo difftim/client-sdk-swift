@@ -101,6 +101,8 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
     // MARK: - Internal
 
     public var e2eeManager: E2EEManager?
+    
+    public internal(set) var ttCallResp: Livekit_TTCallResponse?
 
     @objc
     public lazy var localParticipant: LocalParticipant = .init(room: self)

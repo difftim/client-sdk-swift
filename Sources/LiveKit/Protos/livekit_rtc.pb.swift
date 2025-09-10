@@ -301,6 +301,14 @@ struct Livekit_SignalRequest: Sendable {
     set {message = .updateVideoTrack(newValue)}
   }
 
+  var ttCallRequest: Livekit_TTCallRequest {
+    get {
+      if case .ttCallRequest(let v)? = message {return v}
+      return Livekit_TTCallRequest()
+    }
+    set {message = .ttCallRequest(newValue)}
+  }
+
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   enum OneOf_Message: Equatable, Sendable {
@@ -338,6 +346,7 @@ struct Livekit_SignalRequest: Sendable {
     case updateAudioTrack(Livekit_UpdateLocalAudioTrack)
     /// Update local video track settings
     case updateVideoTrack(Livekit_UpdateLocalVideoTrack)
+    case ttCallRequest(Livekit_TTCallRequest)
 
   }
 
@@ -871,6 +880,16 @@ struct Livekit_JoinResponse: @unchecked Sendable {
     get {return _storage._fastPublish}
     set {_uniqueStorage()._fastPublish = newValue}
   }
+
+  /// temptalk integration
+  var ttCallResponse: Livekit_TTCallResponse {
+    get {return _storage._ttCallResponse ?? Livekit_TTCallResponse()}
+    set {_uniqueStorage()._ttCallResponse = newValue}
+  }
+  /// Returns true if `ttCallResponse` has been explicitly set.
+  var hasTtCallResponse: Bool {return _storage._ttCallResponse != nil}
+  /// Clears the value of `ttCallResponse`. Subsequent reads from it will return its default value.
+  mutating func clearTtCallResponse() {_uniqueStorage()._ttCallResponse = nil}
 
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -1799,6 +1818,7 @@ extension Livekit_SignalRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageIm
     16: .standard(proto: "ping_req"),
     17: .standard(proto: "update_audio_track"),
     18: .standard(proto: "update_video_track"),
+    1001: .standard(proto: "tt_call_request"),
   ]
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -2023,6 +2043,19 @@ extension Livekit_SignalRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageIm
           self.message = .updateVideoTrack(v)
         }
       }()
+      case 1001: try {
+        var v: Livekit_TTCallRequest?
+        var hadOneofValue = false
+        if let current = self.message {
+          hadOneofValue = true
+          if case .ttCallRequest(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.message = .ttCallRequest(v)
+        }
+      }()
       default: break
       }
     }
@@ -2101,6 +2134,10 @@ extension Livekit_SignalRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageIm
     case .updateVideoTrack?: try {
       guard case .updateVideoTrack(let v)? = self.message else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 18)
+    }()
+    case .ttCallRequest?: try {
+      guard case .ttCallRequest(let v)? = self.message else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1001)
     }()
     case nil: break
     }
@@ -2886,6 +2923,7 @@ extension Livekit_JoinResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImp
     13: .standard(proto: "sif_trailer"),
     14: .standard(proto: "enabled_publish_codecs"),
     15: .standard(proto: "fast_publish"),
+    1001: .standard(proto: "tt_call_response"),
   ]
 
   fileprivate class _StorageClass {
@@ -2904,6 +2942,7 @@ extension Livekit_JoinResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImp
     var _sifTrailer: Data = Data()
     var _enabledPublishCodecs: [Livekit_Codec] = []
     var _fastPublish: Bool = false
+    var _ttCallResponse: Livekit_TTCallResponse? = nil
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -2929,6 +2968,7 @@ extension Livekit_JoinResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImp
       _sifTrailer = source._sifTrailer
       _enabledPublishCodecs = source._enabledPublishCodecs
       _fastPublish = source._fastPublish
+      _ttCallResponse = source._ttCallResponse
     }
   }
 
@@ -2962,6 +3002,7 @@ extension Livekit_JoinResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImp
         case 13: try { try decoder.decodeSingularBytesField(value: &_storage._sifTrailer) }()
         case 14: try { try decoder.decodeRepeatedMessageField(value: &_storage._enabledPublishCodecs) }()
         case 15: try { try decoder.decodeSingularBoolField(value: &_storage._fastPublish) }()
+        case 1001: try { try decoder.decodeSingularMessageField(value: &_storage._ttCallResponse) }()
         default: break
         }
       }
@@ -3019,6 +3060,9 @@ extension Livekit_JoinResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImp
       if _storage._fastPublish != false {
         try visitor.visitSingularBoolField(value: _storage._fastPublish, fieldNumber: 15)
       }
+      try { if let v = _storage._ttCallResponse {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 1001)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -3043,6 +3087,7 @@ extension Livekit_JoinResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImp
         if _storage._sifTrailer != rhs_storage._sifTrailer {return false}
         if _storage._enabledPublishCodecs != rhs_storage._enabledPublishCodecs {return false}
         if _storage._fastPublish != rhs_storage._fastPublish {return false}
+        if _storage._ttCallResponse != rhs_storage._ttCallResponse {return false}
         return true
       }
       if !storagesAreEqual {return false}

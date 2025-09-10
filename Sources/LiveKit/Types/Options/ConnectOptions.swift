@@ -80,6 +80,8 @@ public final class ConnectOptions: NSObject, Sendable {
     /// LiveKit server protocol version to use. Generally, it's not recommended to change this.
     @objc
     public let protocolVersion: ProtocolVersion
+    
+    public let ttCallRequest: Livekit_TTCallRequest?
 
     @objc
     override public init() {
@@ -94,6 +96,7 @@ public final class ConnectOptions: NSObject, Sendable {
         iceTransportPolicy = .all
         enableMicrophone = false
         protocolVersion = .v12
+        ttCallRequest = nil
     }
 
     @objc
@@ -120,6 +123,34 @@ public final class ConnectOptions: NSObject, Sendable {
         self.iceTransportPolicy = iceTransportPolicy
         self.enableMicrophone = enableMicrophone
         self.protocolVersion = protocolVersion
+        self.ttCallRequest = nil
+    }
+    
+    public init(autoSubscribe: Bool = true,
+                reconnectAttempts: Int = 10,
+                reconnectAttemptDelay: TimeInterval = .defaultReconnectDelay,
+                reconnectMaxDelay: TimeInterval = .defaultReconnectMaxDelay,
+                socketConnectTimeoutInterval: TimeInterval = .defaultSocketConnect,
+                primaryTransportConnectTimeout: TimeInterval = .defaultTransportState,
+                publisherTransportConnectTimeout: TimeInterval = .defaultTransportState,
+                iceServers: [IceServer] = [],
+                iceTransportPolicy: IceTransportPolicy = .all,
+                enableMicrophone: Bool = false,
+                protocolVersion: ProtocolVersion = .v12,
+                ttCallRequest: Livekit_TTCallRequest? = nil)
+    {
+        self.autoSubscribe = autoSubscribe
+        self.reconnectAttempts = reconnectAttempts
+        self.reconnectAttemptDelay = reconnectAttemptDelay
+        self.reconnectMaxDelay = max(reconnectMaxDelay, reconnectAttemptDelay)
+        self.socketConnectTimeoutInterval = socketConnectTimeoutInterval
+        self.primaryTransportConnectTimeout = primaryTransportConnectTimeout
+        self.publisherTransportConnectTimeout = publisherTransportConnectTimeout
+        self.iceServers = iceServers
+        self.iceTransportPolicy = iceTransportPolicy
+        self.enableMicrophone = enableMicrophone
+        self.protocolVersion = protocolVersion
+        self.ttCallRequest = ttCallRequest
     }
 
     // MARK: - Equal
@@ -136,7 +167,8 @@ public final class ConnectOptions: NSObject, Sendable {
             iceServers == other.iceServers &&
             iceTransportPolicy == other.iceTransportPolicy &&
             enableMicrophone == other.enableMicrophone &&
-            protocolVersion == other.protocolVersion
+            protocolVersion == other.protocolVersion &&
+            ttCallRequest == other.ttCallRequest
     }
 
     override public var hash: Int {

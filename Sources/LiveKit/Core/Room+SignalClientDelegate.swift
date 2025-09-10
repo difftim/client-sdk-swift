@@ -96,9 +96,31 @@ extension Room: SignalClientDelegate {
         }
     }
 
-    func signalClient(_: SignalClient, didReceiveConnectResponse connectResponse: SignalClient.ConnectResponse) async {
+    func signalClient(_ signalClient: SignalClient, didReceiveConnectResponse connectResponse: SignalClient.ConnectResponse) async {
         if case let .join(joinResponse) = connectResponse {
             log("\(joinResponse.serverInfo)", .info)
+            
+            if joinResponse.hasTtCallResponse{
+                ttCallResp = joinResponse.ttCallResponse
+                
+                if let token = ttCallResp?.body.token, !token.isEmpty {
+                    log("[startcall] onRefreshToken by joinResponse")
+                    await self.signalClient(signalClient, didUpdateToken: token)
+                }
+            }
+            
+            if ttCallResp?.hasBody == true, let body = ttCallResp?.body, let encryptor = _state.roomOptions.e2eeOptions?.ttEncryptor {
+                log("[startcall] Attempting to decrypt call key with publicKey=\(body.publicKey), emk=\(body.emk)")
+                if let mk = encryptor.decryptCallKey(eKey: body.publicKey, eMKey: body.emk) {
+                    log("[startcall] Decrypted call key successfully, setting shared key.")
+                    if e2eeManager != nil {
+                        e2eeManager?.keyProvider.setKey(key: mk)
+                    }
+                    log("[startcall] setSharedKey completed.")
+                } else {
+                    log("[startcall] Failed to decrypt call key, shared key not set.", .warning)
+                }
+            }
 
             if e2eeManager != nil, !joinResponse.sifTrailer.isEmpty {
                 e2eeManager?.keyProvider.setSifTrailer(trailer: joinResponse.sifTrailer)

@@ -47,6 +47,8 @@ actor SignalClient: Loggable {
     var connectionState: ConnectionState { _state.connectionState }
 
     var disconnectError: LiveKitError? { _state.disconnectError }
+    
+    var lastConnectionError: LiveKitError?
 
     // MARK: - Private
 
@@ -125,6 +127,7 @@ actor SignalClient: Loggable {
         }
 
         let url = try Utils.buildUrl(url,
+                                     token,
                                      connectOptions: connectOptions,
                                      reconnectMode: reconnectMode,
                                      participantSid: participantSid,
@@ -139,9 +142,16 @@ actor SignalClient: Loggable {
         _state.mutate { $0.connectionState = (reconnectMode != nil ? .reconnecting : .connecting) }
 
         do {
+            let sendAfterOpen: Data? = {
+                guard let tt = connectOptions?.ttCallRequest, token.isEmpty else { return nil }
+                let r = Livekit_SignalRequest.with { $0.ttCallRequest = tt }
+                return try? r.serializedData()
+            }()
+            
             let socket = try await WebSocket(url: url,
                                              token: token,
-                                             connectOptions: connectOptions)
+                                             connectOptions: connectOptions,
+                                             sendAfterOpen: sendAfterOpen)
 
             let task = Task.detached {
                 self.log("Did enter WebSocket message loop...")
@@ -168,6 +178,12 @@ actor SignalClient: Loggable {
             return connectResponse
         } catch {
             // Skip validation if user cancelled
+            if let error = lastConnectionError {
+                lastConnectionError = nil
+                await cleanUp(withError: error)
+                throw error
+            }
+            
             if error is CancellationError {
                 await cleanUp(withError: error)
                 throw error
@@ -183,6 +199,7 @@ actor SignalClient: Loggable {
 
             // Validate...
             let validateUrl = try Utils.buildUrl(url,
+                                                 token,
                                                  connectOptions: connectOptions,
                                                  participantSid: participantSid,
                                                  adaptiveStream: adaptiveStream,
@@ -272,6 +289,15 @@ private extension SignalClient {
 
         switch message {
         case let .join(joinResponse):
+            log("join:\(joinResponse)")
+            if joinResponse.hasTtCallResponse == true{
+                let tt = joinResponse.ttCallResponse
+                if tt.base.status != 0 {
+                    lastConnectionError = LiveKitError(.startCall, message: "[\(tt.base.status)]\(tt.base.reason)", response: tt)
+                    return
+                }
+            }
+            
             _state.mutate { $0.lastJoinResponse = joinResponse }
             _delegate.notifyDetached { await $0.signalClient(self, didReceiveConnectResponse: .join(joinResponse)) }
             _connectResponseCompleter.resume(returning: .join(joinResponse))

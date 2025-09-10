@@ -46,6 +46,11 @@ extension Livekit_Encryption.TypeEnum {
 }
 
 @objc
+public protocol TTEncryptor: Sendable {
+    func decryptCallKey(eKey: String, eMKey: String) -> Data?
+}
+
+@objc
 public final class E2EEOptions: NSObject, Sendable {
     @objc
     public let keyProvider: BaseKeyProvider
@@ -53,11 +58,16 @@ public final class E2EEOptions: NSObject, Sendable {
     @objc
     public let encryptionType: EncryptionType
 
+    @objc
+    public let ttEncryptor: TTEncryptor?
+
     public init(keyProvider: BaseKeyProvider,
-                encryptionType: EncryptionType = .gcm)
+                encryptionType: EncryptionType = .gcm,
+                ttEncryptor: TTEncryptor? = nil)
     {
         self.keyProvider = keyProvider
         self.encryptionType = encryptionType
+        self.ttEncryptor = ttEncryptor
     }
 
     // MARK: - Equal

@@ -1262,6 +1262,10 @@ struct Livekit_VideoLayer: Sendable {
 
   var ssrc: UInt32 = 0
 
+  var spatialLayer: Int32 = 0
+
+  var rid: String = String()
+
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   init() {}
@@ -1867,6 +1871,7 @@ struct Livekit_ClientInfo: Sendable {
     case unityWeb // = 11
     case node // = 12
     case unreal // = 13
+    case esp32 // = 14
     case UNRECOGNIZED(Int)
 
     init() {
@@ -1889,6 +1894,7 @@ struct Livekit_ClientInfo: Sendable {
       case 11: self = .unityWeb
       case 12: self = .node
       case 13: self = .unreal
+      case 14: self = .esp32
       default: self = .UNRECOGNIZED(rawValue)
       }
     }
@@ -1909,6 +1915,7 @@ struct Livekit_ClientInfo: Sendable {
       case .unityWeb: return 11
       case .node: return 12
       case .unreal: return 13
+      case .esp32: return 14
       case .UNRECOGNIZED(let i): return i
       }
     }
@@ -1929,6 +1936,7 @@ struct Livekit_ClientInfo: Sendable {
       .unityWeb,
       .node,
       .unreal,
+      .esp32,
     ]
 
   }
@@ -3714,6 +3722,8 @@ extension Livekit_VideoLayer: SwiftProtobuf.Message, SwiftProtobuf._MessageImple
     3: .same(proto: "height"),
     4: .same(proto: "bitrate"),
     5: .same(proto: "ssrc"),
+    6: .standard(proto: "spatial_layer"),
+    7: .same(proto: "rid"),
   ]
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -3727,6 +3737,8 @@ extension Livekit_VideoLayer: SwiftProtobuf.Message, SwiftProtobuf._MessageImple
       case 3: try { try decoder.decodeSingularUInt32Field(value: &self.height) }()
       case 4: try { try decoder.decodeSingularUInt32Field(value: &self.bitrate) }()
       case 5: try { try decoder.decodeSingularUInt32Field(value: &self.ssrc) }()
+      case 6: try { try decoder.decodeSingularInt32Field(value: &self.spatialLayer) }()
+      case 7: try { try decoder.decodeSingularStringField(value: &self.rid) }()
       default: break
       }
     }
@@ -3748,6 +3760,12 @@ extension Livekit_VideoLayer: SwiftProtobuf.Message, SwiftProtobuf._MessageImple
     if self.ssrc != 0 {
       try visitor.visitSingularUInt32Field(value: self.ssrc, fieldNumber: 5)
     }
+    if self.spatialLayer != 0 {
+      try visitor.visitSingularInt32Field(value: self.spatialLayer, fieldNumber: 6)
+    }
+    if !self.rid.isEmpty {
+      try visitor.visitSingularStringField(value: self.rid, fieldNumber: 7)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -3757,6 +3775,8 @@ extension Livekit_VideoLayer: SwiftProtobuf.Message, SwiftProtobuf._MessageImple
     if lhs.height != rhs.height {return false}
     if lhs.bitrate != rhs.bitrate {return false}
     if lhs.ssrc != rhs.ssrc {return false}
+    if lhs.spatialLayer != rhs.spatialLayer {return false}
+    if lhs.rid != rhs.rid {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -4898,6 +4918,7 @@ extension Livekit_ClientInfo.SDK: SwiftProtobuf._ProtoNameProviding {
     11: .same(proto: "UNITY_WEB"),
     12: .same(proto: "NODE"),
     13: .same(proto: "UNREAL"),
+    14: .same(proto: "ESP32"),
   ]
 }
 

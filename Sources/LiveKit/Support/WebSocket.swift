@@ -59,15 +59,20 @@ final class WebSocket: NSObject, @unchecked Sendable, Loggable, AsyncSequence, U
         }
         waitForNextValue()
     }
+    
+    private var sendAfterOpen :Data?
 
-    init(url: URL, token: String, connectOptions: ConnectOptions?) async throws {
+    init(url: URL, token: String, connectOptions: ConnectOptions?, sendAfterOpen :Data?) async throws {
         // Prepare the request
         var request = URLRequest(url: url,
                                  cachePolicy: .useProtocolCachePolicy,
                                  timeoutInterval: connectOptions?.socketConnectTimeoutInterval ?? .defaultSocketConnect)
-        // Attach token to header
-        request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        if !token.isEmpty {
+            // Attach token to header
+            request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
         self.request = request
+        self.sendAfterOpen = sendAfterOpen
 
         super.init()
 
@@ -143,6 +148,11 @@ final class WebSocket: NSObject, @unchecked Sendable, Loggable, AsyncSequence, U
     // MARK: - URLSessionWebSocketDelegate
 
     func urlSession(_: URLSession, webSocketTask _: URLSessionWebSocketTask, didOpenWithProtocol _: String?) {
+        if let data = sendAfterOpen {
+            sendAfterOpen = nil
+            Task { try await send(data: data) }
+        }
+        
         _state.mutate { state in
             state.connectContinuation?.resume()
             state.connectContinuation = nil

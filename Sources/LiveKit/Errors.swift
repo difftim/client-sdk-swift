@@ -56,6 +56,8 @@ public enum LiveKitErrorType: Int, Sendable {
     case audioSession = 802
 
     case codecNotSupported = 901
+    
+    case startCall = 1001
 }
 
 extension LiveKitErrorType: CustomStringConvertible {
@@ -105,6 +107,8 @@ extension LiveKitErrorType: CustomStringConvertible {
             "Audio Engine Error"
         case .audioSession:
             "Audio Session Error"
+        case .startCall:
+            "TT Start Call Error"
         default: "Unknown"
         }
     }
@@ -115,6 +119,7 @@ public class LiveKitError: NSError, @unchecked Sendable {
     public let type: LiveKitErrorType
     public let message: String?
     public let underlyingError: Error?
+    public let response: Livekit_TTCallResponse?
 
     override public var underlyingErrors: [Error] {
         [underlyingError].compactMap { $0 }
@@ -122,7 +127,8 @@ public class LiveKitError: NSError, @unchecked Sendable {
 
     public init(_ type: LiveKitErrorType,
                 message: String? = nil,
-                internalError: Error? = nil)
+                internalError: Error? = nil,
+                response: Livekit_TTCallResponse? = nil)
     {
         func _computeDescription() -> String {
             if let message {
@@ -134,6 +140,7 @@ public class LiveKitError: NSError, @unchecked Sendable {
         self.type = type
         self.message = message
         underlyingError = internalError
+        self.response = response
         super.init(domain: "io.livekit.swift-sdk",
                    code: type.rawValue,
                    userInfo: [NSLocalizedDescriptionKey: _computeDescription()])
