@@ -71,6 +71,9 @@ final class WebSocket: NSObject, @unchecked Sendable, Loggable, AsyncSequence, U
             // Attach token to header
             request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
+        if let userAgent = connectOptions?.userAgent, !userAgent.isEmpty {
+            request.addValue(userAgent, forHTTPHeaderField: "User-Agent")
+        }
         self.request = request
         self.sendAfterOpen = sendAfterOpen
 

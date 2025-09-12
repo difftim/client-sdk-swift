@@ -84,6 +84,9 @@ public final class ConnectOptions: NSObject, Sendable {
     public let ttCallRequest: Livekit_TTCallRequest?
 
     @objc
+    public let userAgent: String?
+
+    @objc
     override public init() {
         autoSubscribe = true
         reconnectAttempts = 10
@@ -97,6 +100,7 @@ public final class ConnectOptions: NSObject, Sendable {
         enableMicrophone = false
         protocolVersion = .v12
         ttCallRequest = nil
+        userAgent = nil
     }
 
     @objc
@@ -110,7 +114,8 @@ public final class ConnectOptions: NSObject, Sendable {
                 iceServers: [IceServer] = [],
                 iceTransportPolicy: IceTransportPolicy = .all,
                 enableMicrophone: Bool = false,
-                protocolVersion: ProtocolVersion = .v12)
+                protocolVersion: ProtocolVersion = .v12,
+                userAgent: String? = nil)
     {
         self.autoSubscribe = autoSubscribe
         self.reconnectAttempts = reconnectAttempts
@@ -124,6 +129,7 @@ public final class ConnectOptions: NSObject, Sendable {
         self.enableMicrophone = enableMicrophone
         self.protocolVersion = protocolVersion
         self.ttCallRequest = nil
+        self.userAgent = userAgent
     }
     
     public init(autoSubscribe: Bool = true,
@@ -137,7 +143,8 @@ public final class ConnectOptions: NSObject, Sendable {
                 iceTransportPolicy: IceTransportPolicy = .all,
                 enableMicrophone: Bool = false,
                 protocolVersion: ProtocolVersion = .v12,
-                ttCallRequest: Livekit_TTCallRequest? = nil)
+                ttCallRequest: Livekit_TTCallRequest? = nil,
+                userAgent: String? = nil)
     {
         self.autoSubscribe = autoSubscribe
         self.reconnectAttempts = reconnectAttempts
@@ -151,6 +158,7 @@ public final class ConnectOptions: NSObject, Sendable {
         self.enableMicrophone = enableMicrophone
         self.protocolVersion = protocolVersion
         self.ttCallRequest = ttCallRequest
+        self.userAgent = userAgent
     }
 
     // MARK: - Equal
@@ -168,7 +176,8 @@ public final class ConnectOptions: NSObject, Sendable {
             iceTransportPolicy == other.iceTransportPolicy &&
             enableMicrophone == other.enableMicrophone &&
             protocolVersion == other.protocolVersion &&
-            ttCallRequest == other.ttCallRequest
+            ttCallRequest == other.ttCallRequest &&
+            userAgent == other.userAgent
     }
 
     override public var hash: Int {

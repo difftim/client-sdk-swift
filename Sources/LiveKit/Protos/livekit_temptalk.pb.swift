@@ -333,6 +333,8 @@ public struct Livekit_TTCallRequest: Sendable {
   /// Clears the value of `startCall`. Subsequent reads from it will return its default value.
   public mutating func clearStartCall() {self._startCall = nil}
 
+  public var userAgent: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -955,6 +957,7 @@ extension Livekit_TTCallRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageIm
   public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .same(proto: "token"),
     2: .same(proto: "startCall"),
+    3: .same(proto: "userAgent"),
   ]
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -965,6 +968,7 @@ extension Livekit_TTCallRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageIm
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.token) }()
       case 2: try { try decoder.decodeSingularMessageField(value: &self._startCall) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.userAgent) }()
       default: break
       }
     }
@@ -981,12 +985,16 @@ extension Livekit_TTCallRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageIm
     try { if let v = self._startCall {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
     } }()
+    if !self.userAgent.isEmpty {
+      try visitor.visitSingularStringField(value: self.userAgent, fieldNumber: 3)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Livekit_TTCallRequest, rhs: Livekit_TTCallRequest) -> Bool {
     if lhs.token != rhs.token {return false}
     if lhs._startCall != rhs._startCall {return false}
+    if lhs.userAgent != rhs.userAgent {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
