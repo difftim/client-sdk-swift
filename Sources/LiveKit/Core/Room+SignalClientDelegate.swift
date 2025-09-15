@@ -52,8 +52,13 @@ extension Room: SignalClientDelegate {
             // force .full for next reconnect
             _state.mutate { $0.nextReconnectMode = .full }
         case .disconnect:
-            _state.mutate { $0.serverNotifyDisconnect = true }
-            fallthrough
+            if canReconnect {
+                // force .full for next reconnect
+                _state.mutate { $0.nextReconnectMode = .full }
+            } else {
+                _state.mutate { $0.serverNotifyDisconnect = true }
+                fallthrough
+            }
         default:
             // Server indicates it's not recoverable
             await cleanUp(withError: LiveKitError.from(reason: reason))

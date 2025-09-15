@@ -280,7 +280,7 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
             }
 
             if (newState.connectionState != oldState.connectionState) || (newState.isReconnectingWithMode != oldState.isReconnectingWithMode) {
-                log("connectionState: \(oldState.connectionState) -> \(newState.connectionState), reconnectMode: \(String(describing: newState.isReconnectingWithMode))")
+                log("connectionState: \(oldState.connectionState) -> \(newState.connectionState), reconnectMode: \(String(describing: oldState.isReconnectingWithMode)) -> \(String(describing: newState.isReconnectingWithMode))")
             }
 
             engine(self, didMutateState: newState, oldState: oldState)
