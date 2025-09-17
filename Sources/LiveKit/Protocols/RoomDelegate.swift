@@ -40,6 +40,9 @@ public protocol RoomDelegate: AnyObject, Sendable {
     @objc optional
     func room(_ room: Room, didUpdateConnectionState connectionState: ConnectionState, from oldConnectionState: ConnectionState)
 
+    @objc optional
+    func roomDidSignalConnect(_ room: Room)
+
     /// Successfully connected to the room.
     @objc optional
     func roomDidConnect(_ room: Room)

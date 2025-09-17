@@ -158,6 +158,8 @@ extension Room: SignalClientDelegate {
                     }
                 }
             }
+
+            delegates.notify { $0.roomDidSignalConnect?(self) }
         }
     }
 
