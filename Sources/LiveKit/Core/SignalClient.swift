@@ -188,6 +188,11 @@ actor SignalClient: Loggable {
                 await cleanUp(withError: error)
                 throw error
             }
+            
+            if let lkError = error as? LiveKitError, lkError.type == .timedOut {
+                await cleanUp(withError: error)
+                throw error
+            }
 
             // Skip validation if reconnect mode
             if reconnectMode != nil {

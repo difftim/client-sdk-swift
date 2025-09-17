@@ -167,7 +167,14 @@ final class WebSocket: NSObject, @unchecked Sendable, Loggable, AsyncSequence, U
 
         _state.mutate { state in
             if let error {
-                let lkError = LiveKitError.from(error: error) ?? LiveKitError(.unknown)
+                let lkError: LiveKitError
+                if let nsError = error as? NSError,
+                   nsError.domain == NSURLErrorDomain,
+                   nsError.code == NSURLErrorTimedOut {
+                    lkError = LiveKitError(.timedOut, message: nsError.localizedDescription, internalError: error)
+                } else {
+                    lkError = LiveKitError.from(error: error) ?? LiveKitError(.unknown)
+                }
                 state.connectContinuation?.resume(throwing: lkError)
                 state.streamContinuation?.finish(throwing: lkError)
             } else {

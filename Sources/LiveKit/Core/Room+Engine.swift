@@ -415,7 +415,7 @@ extension Room {
                     self.log("[Connect] Reconnect mode: \(mode) failed with error: \(error)", .error)
                     // throw
                     if let err = error as? LiveKitError {
-                        throw LiveKitError(.reconnectFailure, message: err.message, internalError: err.underlyingError)
+                        throw LiveKitError(.reconnectFailure, message: err.message, internalError: err.internalError)
                     }else{
                         throw LiveKitError(.reconnectFailure, message: "mode: \(mode)", internalError: error)
                     }
