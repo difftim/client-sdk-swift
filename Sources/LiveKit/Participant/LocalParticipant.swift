@@ -708,7 +708,10 @@ extension LocalParticipant {
             if let track = track as? LocalAudioTrack {
                 log("[publish] Waiting for audio frame...")
                 if !publishMuted {
-                    try await track.startWaitingForFrames()
+                    // Only wait for frames if audio engine is allowed to start
+                    if AudioManager.shared.engineAvailability.isInputAvailable {
+                        try await track.startWaitingForFrames()
+                    }
                 } else {
                     log("[publish] Skipping waiting for audio frame since track is muted")
                 }

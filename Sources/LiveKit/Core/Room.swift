@@ -169,6 +169,7 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
         var nextReconnectMode: ReconnectMode?
         var isReconnectingWithMode: ReconnectMode?
         var connectionState: ConnectionState = .disconnected
+        var reconnectTask: Task<Void, Error>?
         var disconnectError: LiveKitError?
         var connectStopwatch = Stopwatch(label: "connect")
         var hasPublished: Bool = false
@@ -419,8 +420,18 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
 
     @objc
     public func disconnect() async {
-        // Return if already disconnected state
-        if case .disconnected = connectionState { return }
+        let shouldDisconnect = _state.mutate {
+            switch $0.connectionState {
+            case .disconnecting, .disconnected:
+                return false
+            default:
+                $0.connectionState = .disconnecting
+                return true
+            }
+        }
+        guard shouldDisconnect else { return }
+
+        cancelReconnect()
 
         do {
             try await signalClient.sendLeave()
@@ -428,7 +439,19 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
             log("Failed to send leave with error: \(error)")
         }
 
+        cancelReconnect()
+
         await cleanUp()
+
+        cancelReconnect()
+    }
+
+    private func cancelReconnect() {
+        _state.mutate {
+            log("Cancelling reconnect task: \(String(describing: $0.reconnectTask))")
+            $0.reconnectTask?.cancel()
+            $0.reconnectTask = nil
+        }
     }
 }
 
@@ -440,6 +463,7 @@ extension Room {
                  isFullReconnect: Bool = false,
                  removePar: Bool = true) async
     {
+        guard !Task.isCancelled else { return }
         log("withError: \(String(describing: disconnectError)), isFullReconnect: \(isFullReconnect), removePar: \(removePar)")
 
         // Reset completers
@@ -472,11 +496,13 @@ extension Room {
                 isReconnectingWithMode: $0.isReconnectingWithMode,
                 connectionState: $0.connectionState,
                 disconnectError: LiveKitError.from(error: disconnectError)
+                reconnectTask: $0.reconnectTask
             ) : State(
                 connectOptions: $0.connectOptions,
                 roomOptions: $0.roomOptions,
                 //remoteParticipants: removePar ? [:] : $0.remoteParticipants,
                 connectionState: .disconnected,
+                reconnectTask: $0.reconnectTask,
                 disconnectError: LiveKitError.from(error: disconnectError)
             )
         }
