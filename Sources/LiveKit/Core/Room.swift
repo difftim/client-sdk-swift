@@ -169,7 +169,7 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
         var nextReconnectMode: ReconnectMode?
         var isReconnectingWithMode: ReconnectMode?
         var connectionState: ConnectionState = .disconnected
-        var reconnectTask: Task<Void, Error>?
+        var reconnectTask: Task<Result<Void, LiveKitError>, Error>?
         var disconnectError: LiveKitError?
         var connectStopwatch = Stopwatch(label: "connect")
         var hasPublished: Bool = false
@@ -495,8 +495,8 @@ extension Room {
                 nextReconnectMode: $0.nextReconnectMode,
                 isReconnectingWithMode: $0.isReconnectingWithMode,
                 connectionState: $0.connectionState,
+                reconnectTask: $0.reconnectTask,
                 disconnectError: LiveKitError.from(error: disconnectError)
-                reconnectTask: $0.reconnectTask
             ) : State(
                 connectOptions: $0.connectOptions,
                 roomOptions: $0.roomOptions,
