@@ -43,7 +43,7 @@ Add the dependency and also to your target
 let package = Package(
   ...
   dependencies: [
-    .package(name: "LiveKit", url: "https://github.com/difftim/client-sdk-swift.git", .upToNextMajor("2.7.2")),
+    .package(name: "LiveKit", url: "https://github.com/difftim/client-sdk-swift.git", .upToNextMajor("2.8.1")),
   ],
   targets: [
     .target(

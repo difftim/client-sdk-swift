@@ -56,8 +56,12 @@ public enum LiveKitErrorType: Int, Sendable {
     case audioSession = 802
 
     case codecNotSupported = 901
-    
-    case startCall = 1001
+
+    // Encryption
+    case encryptionFailed = 1001
+    case decryptionFailed = 1002
+
+    case startCall = 2001
 }
 
 extension LiveKitErrorType: CustomStringConvertible {
@@ -107,6 +111,12 @@ extension LiveKitErrorType: CustomStringConvertible {
             "Audio Engine Error"
         case .audioSession:
             "Audio Session Error"
+        case .codecNotSupported:
+            "Codec not supported"
+        case .encryptionFailed:
+            "Encryption failed"
+        case .decryptionFailed:
+            "Decryption failed"
         case .startCall:
             "TT Start Call Error"
         default: "Unknown"

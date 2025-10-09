@@ -647,7 +647,7 @@ extension LocalParticipant {
                                                          name: addTrackName,
                                                          type: track.kind.toPBType(),
                                                          source: track.source.toPBType(),
-                                                         encryption: room.e2eeManager?.e2eeOptions.encryptionType.toPBType() ?? .none,
+                                                         encryption: room.e2eeManager?.frameEncryptionType.toPBType() ?? .none,
                                                          populatorFunc,
                                                          mute: track.isMuted)
             }
