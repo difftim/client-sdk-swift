@@ -2077,26 +2077,7 @@ extension Livekit_CandidateProtocol: SwiftProtobuf._ProtoNameProviding {
 
 extension Livekit_SignalRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = _protobuf_package + ".SignalRequest"
-  static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    1: .same(proto: "offer"),
-    2: .same(proto: "answer"),
-    3: .same(proto: "trickle"),
-    4: .standard(proto: "add_track"),
-    5: .same(proto: "mute"),
-    6: .same(proto: "subscription"),
-    7: .standard(proto: "track_setting"),
-    8: .same(proto: "leave"),
-    10: .standard(proto: "update_layers"),
-    11: .standard(proto: "subscription_permission"),
-    12: .standard(proto: "sync_state"),
-    13: .same(proto: "simulate"),
-    14: .same(proto: "ping"),
-    15: .standard(proto: "update_metadata"),
-    16: .standard(proto: "ping_req"),
-    17: .standard(proto: "update_audio_track"),
-    18: .standard(proto: "update_video_track"),
-    1001: .standard(proto: "tt_call_request"),
-  ]
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}offer\0\u{1}answer\0\u{1}trickle\0\u{3}add_track\0\u{1}mute\0\u{1}subscription\0\u{3}track_setting\0\u{1}leave\0\u{4}\u{2}update_layers\0\u{3}subscription_permission\0\u{3}sync_state\0\u{1}simulate\0\u{1}ping\0\u{3}update_metadata\0\u{3}ping_req\0\u{3}update_audio_track\0\u{3}update_video_track\0\u{4}W\u{f}tt_call_request\0")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -3176,24 +3157,7 @@ extension Livekit_MuteTrackRequest: SwiftProtobuf.Message, SwiftProtobuf._Messag
 
 extension Livekit_JoinResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = _protobuf_package + ".JoinResponse"
-  static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    1: .same(proto: "room"),
-    2: .same(proto: "participant"),
-    3: .standard(proto: "other_participants"),
-    4: .standard(proto: "server_version"),
-    5: .standard(proto: "ice_servers"),
-    6: .standard(proto: "subscriber_primary"),
-    7: .standard(proto: "alternative_url"),
-    8: .standard(proto: "client_configuration"),
-    9: .standard(proto: "server_region"),
-    10: .standard(proto: "ping_timeout"),
-    11: .standard(proto: "ping_interval"),
-    12: .standard(proto: "server_info"),
-    13: .standard(proto: "sif_trailer"),
-    14: .standard(proto: "enabled_publish_codecs"),
-    15: .standard(proto: "fast_publish"),
-    1001: .standard(proto: "tt_call_response"),
-  ]
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}room\0\u{1}participant\0\u{3}other_participants\0\u{3}server_version\0\u{3}ice_servers\0\u{3}subscriber_primary\0\u{3}alternative_url\0\u{3}client_configuration\0\u{3}server_region\0\u{3}ping_timeout\0\u{3}ping_interval\0\u{3}server_info\0\u{3}sif_trailer\0\u{3}enabled_publish_codecs\0\u{3}fast_publish\0\u{4}Z\u{f}tt_call_response\0")
 
   fileprivate class _StorageClass {
     var _room: Livekit_Room? = nil

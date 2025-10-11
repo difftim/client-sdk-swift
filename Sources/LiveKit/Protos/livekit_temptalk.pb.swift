@@ -348,10 +348,7 @@ fileprivate let _protobuf_package = "livekit"
 
 extension Livekit_TTCaller: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TTCaller"
-  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    1: .same(proto: "uid"),
-    2: .same(proto: "did"),
-  ]
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}uid\0\u{1}did\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -386,11 +383,7 @@ extension Livekit_TTCaller: SwiftProtobuf.Message, SwiftProtobuf._MessageImpleme
 
 extension Livekit_TTExceptionRecipient: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TTExceptionRecipient"
-  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    1: .same(proto: "uid"),
-    2: .same(proto: "registrationId"),
-    3: .same(proto: "identityKey"),
-  ]
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}uid\0\u{1}registrationId\0\u{1}identityKey\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -430,11 +423,7 @@ extension Livekit_TTExceptionRecipient: SwiftProtobuf.Message, SwiftProtobuf._Me
 
 extension Livekit_TTBaseResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TTBaseResponse"
-  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    1: .same(proto: "ver"),
-    2: .same(proto: "status"),
-    3: .same(proto: "reason"),
-  ]
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}ver\0\u{1}status\0\u{1}reason\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -474,24 +463,7 @@ extension Livekit_TTBaseResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageI
 
 extension Livekit_TTCallResponseBody: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TTCallResponseBody"
-  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    1: .same(proto: "needsSync"),
-    2: .same(proto: "invalidUids"),
-    3: .same(proto: "stale"),
-    4: .same(proto: "missing"),
-    5: .same(proto: "extra"),
-    6: .same(proto: "encMeta"),
-    7: .same(proto: "roomId"),
-    8: .same(proto: "createdAt"),
-    9: .same(proto: "serviceUrl"),
-    10: .same(proto: "token"),
-    11: .same(proto: "caller"),
-    12: .same(proto: "version"),
-    13: .same(proto: "emk"),
-    14: .same(proto: "publicKey"),
-    15: .same(proto: "serviceUrls"),
-    16: .same(proto: "systemShowTimestamp"),
-  ]
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}needsSync\0\u{1}invalidUids\0\u{1}stale\0\u{1}missing\0\u{1}extra\0\u{1}encMeta\0\u{1}roomId\0\u{1}createdAt\0\u{1}serviceUrl\0\u{1}token\0\u{1}caller\0\u{1}version\0\u{1}emk\0\u{1}publicKey\0\u{1}serviceUrls\0\u{1}systemShowTimestamp\0")
 
   fileprivate class _StorageClass {
     var _needsSync: Bool = false
@@ -666,10 +638,7 @@ extension Livekit_TTCallResponseBody: SwiftProtobuf.Message, SwiftProtobuf._Mess
 
 extension Livekit_TTCallResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TTCallResponse"
-  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    1: .same(proto: "base"),
-    2: .same(proto: "body"),
-  ]
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}base\0\u{1}body\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -708,11 +677,7 @@ extension Livekit_TTCallResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageI
 
 extension Livekit_TTCipherMessages: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TTCipherMessages"
-  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    1: .same(proto: "content"),
-    2: .same(proto: "uid"),
-    3: .same(proto: "registrationId"),
-  ]
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}content\0\u{1}uid\0\u{1}registrationId\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -752,10 +717,7 @@ extension Livekit_TTCipherMessages: SwiftProtobuf.Message, SwiftProtobuf._Messag
 
 extension Livekit_TTEncInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TTEncInfo"
-  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    1: .same(proto: "uid"),
-    2: .same(proto: "emk"),
-  ]
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}uid\0\u{1}emk\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -790,10 +752,7 @@ extension Livekit_TTEncInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplem
 
 extension Livekit_TTNotification: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TTNotification"
-  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    1: .same(proto: "type"),
-    2: .same(proto: "args"),
-  ]
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}type\0\u{1}args\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -832,9 +791,7 @@ extension Livekit_TTNotification: SwiftProtobuf.Message, SwiftProtobuf._MessageI
 
 extension Livekit_TTNotification.TTArgs: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = Livekit_TTNotification.protoMessageName + ".TTArgs"
-  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    1: .same(proto: "collapseId"),
-  ]
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}collapseId\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -864,18 +821,7 @@ extension Livekit_TTNotification.TTArgs: SwiftProtobuf.Message, SwiftProtobuf._M
 
 extension Livekit_TTStartCall: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TTStartCall"
-  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    1: .same(proto: "type"),
-    2: .same(proto: "version"),
-    3: .same(proto: "roomId"),
-    4: .same(proto: "conversationId"),
-    5: .same(proto: "publicKey"),
-    6: .same(proto: "encInfos"),
-    7: .same(proto: "encMeta"),
-    8: .same(proto: "timestamp"),
-    9: .same(proto: "notification"),
-    10: .same(proto: "cipherMessages"),
-  ]
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}type\0\u{1}version\0\u{1}roomId\0\u{1}conversationId\0\u{1}publicKey\0\u{1}encInfos\0\u{1}encMeta\0\u{1}timestamp\0\u{1}notification\0\u{1}cipherMessages\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -954,11 +900,7 @@ extension Livekit_TTStartCall: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
 
 extension Livekit_TTCallRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TTCallRequest"
-  public static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
-    1: .same(proto: "token"),
-    2: .same(proto: "startCall"),
-    3: .same(proto: "userAgent"),
-  ]
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}token\0\u{1}startCall\0\u{1}userAgent\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
