@@ -125,7 +125,7 @@ extension LiveKitErrorType: CustomStringConvertible {
 }
 
 @objc
-public class LiveKitError: NSError, @unchecked Sendable {
+public class LiveKitError: NSError, @unchecked Sendable, Loggable {
     public let type: LiveKitErrorType
     public let message: String?
     public let internalError: Error?
@@ -177,7 +177,7 @@ extension LiveKitError {
         }
 
         // TODO: Identify more network error types
-        logger.log("Uncategorized error for: \(String(describing: error))", type: LiveKitError.self)
+        log("Uncategorized error for: \(String(describing: error))")
         return LiveKitError(.unknown)
     }
 
