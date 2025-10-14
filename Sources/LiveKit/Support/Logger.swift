@@ -31,7 +31,8 @@ public protocol Logger: Sendable {
         type: Any.Type,
         function: StaticString,
         line: UInt,
-        metaData: ScopedMetadataContainer
+        metaData: ScopedMetadataContainer,
+        ptr: String?
     )
 }
 
@@ -45,9 +46,11 @@ public extension Logger {
         type: Any.Type,
         function: StaticString = #function,
         line: UInt = #line,
-        metaData: ScopedMetadataContainer = ScopedMetadataContainer()
+        metaData: ScopedMetadataContainer = ScopedMetadataContainer(),
+        ptr: String? = nil
     ) {
-        log(message(), level, source: source(), file: file, type: type, function: function, line: line, metaData: metaData)
+        let ptr = ptr ?? String(describing: Unmanaged.passUnretained(self as AnyObject).toOpaque())
+        log(message(), level, source: source(), file: file, type: type, function: function, line: line, metaData: metaData, ptr: ptr)
     }
 }
 
@@ -62,7 +65,8 @@ public struct DisabledLogger: Logger {
         type _: Any.Type,
         function _: StaticString,
         line _: UInt,
-        metaData _: ScopedMetadataContainer
+        metaData _: ScopedMetadataContainer,
+        ptr: String?
     ) {}
 }
 
@@ -103,7 +107,8 @@ open class OSLogger: Logger, @unchecked Sendable {
         type: Any.Type,
         function: StaticString,
         line _: UInt,
-        metaData: ScopedMetadataContainer
+        metaData: ScopedMetadataContainer,
+        ptr: String? = nil
     ) {
         guard level >= minLevel else { return }
 
@@ -115,6 +120,7 @@ open class OSLogger: Logger, @unchecked Sendable {
         }
 
         let metadata = buildScopedMetadataString()
+        let ptr = ptr ?? String(describing: Unmanaged.passUnretained(self as AnyObject).toOpaque())
 
         queue.async {
             func getOSLog(for type: Any.Type) -> OSLog {
@@ -129,7 +135,7 @@ open class OSLogger: Logger, @unchecked Sendable {
                 return newLog
             }
 
-            os_log("%{public}@", log: getOSLog(for: type), type: level.osLogType, "\(type).\(function) \(message)\(metadata)")
+            os_log("%{public}@", log: getOSLog(for: type), type: level.osLogType, "\(type).\(function) [\(ptr)] \(message)\(metadata)")
         }
     }
 }
@@ -144,27 +150,31 @@ extension Loggable {
              _ level: LogLevel = .debug,
              file: StaticString = #fileID,
              function: StaticString = #function,
-             line: UInt = #line)
+             line: UInt = #line,
+             ptr: String? = nil)
     {
         Self.log(message ?? "",
                  level,
                  file: file,
                  function: function,
-                 line: line)
+                 line: line,
+                 ptr: ptr)
     }
 
     static func log(_ message: CustomStringConvertible? = nil,
                     _ level: LogLevel = .debug,
                     file: StaticString = #fileID,
                     function: StaticString = #function,
-                    line: UInt = #line)
+                    line: UInt = #line,
+                    ptr: String? = nil)
     {
         sharedLogger.log(message ?? "",
                          level,
                          file: file,
                          type: Self.self,
                          function: function,
-                         line: line)
+                         line: line,
+                         ptr: ptr)
     }
 }
 
