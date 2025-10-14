@@ -34,7 +34,7 @@ extension Room: SignalClientDelegate {
         {
             Task.detached {
                 do {
-                    try await self.startReconnect(reason: .websocket/*, nextReconnectMode: .full*/)
+                    try await self.startReconnect(reason: .websocket /* , nextReconnectMode: .full */ )
                 } catch {
                     self.log("Failed calling startReconnect, error: \(error)", .error)
                 }
@@ -44,7 +44,7 @@ extension Room: SignalClientDelegate {
 
     func signalClient(_: SignalClient, didReceiveLeave canReconnect: Bool, reason: Livekit_DisconnectReason, action: Livekit_LeaveRequest.Action) async {
         log("canReconnect: \(canReconnect), reason: \(reason), action: \(action)")
-        
+
         switch action {
         case .resume:
             _state.mutate { $0.nextReconnectMode = .quick }
@@ -104,16 +104,16 @@ extension Room: SignalClientDelegate {
     func signalClient(_ signalClient: SignalClient, didReceiveConnectResponse connectResponse: SignalClient.ConnectResponse) async {
         if case let .join(joinResponse) = connectResponse {
             log("\(joinResponse.serverInfo)", .info)
-            
-            if joinResponse.hasTtCallResponse{
+
+            if joinResponse.hasTtCallResponse {
                 ttCallResp = joinResponse.ttCallResponse
-                
+
                 if let token = ttCallResp?.body.token, !token.isEmpty {
                     log("[startcall] onRefreshToken by joinResponse")
                     await self.signalClient(signalClient, didUpdateToken: token)
                 }
             }
-            
+
             if ttCallResp?.hasBody == true, let body = ttCallResp?.body, let encryptor = _state.roomOptions.e2eeOptions?.ttEncryptor {
                 log("[startcall] Attempting to decrypt call key with publicKey=\(body.publicKey), emk=\(body.emk)")
                 if let mk = encryptor.decryptCallKey(eKey: body.publicKey, eMKey: body.emk) {
@@ -183,7 +183,7 @@ extension Room: SignalClientDelegate {
 
                 participant._state.mutate {
                     $0.audioLevel = speaker.level
-                    if !$0.isSpeaking && speaker.active {
+                    if !$0.isSpeaking, speaker.active {
                         $0.lastSpokeAt = Int64(Date().timeIntervalSince1970 * 1000)
                     }
                     $0.isSpeaking = speaker.active
@@ -366,7 +366,7 @@ extension Room: SignalClientDelegate {
     func signalClient(_ signalClient: SignalClient, didReceiveOffer offer: LKRTCSessionDescription) async {
         let startTime = Date()
         log("ENTER - Received offer, creating & sending answer...", .info)
-        
+
         defer {
             log("EXIT - Received offer, duration: \(String(format: "%.3f", Date().timeIntervalSince(startTime)))s", .info)
         }

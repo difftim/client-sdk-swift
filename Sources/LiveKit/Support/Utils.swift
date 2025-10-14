@@ -201,7 +201,7 @@ class Utils: Loggable {
 
         queryItems.append(URLQueryItem(name: "auto_subscribe", value: connectOptions.autoSubscribe ? "1" : "0"))
         queryItems.append(URLQueryItem(name: "adaptive_stream", value: adaptiveStream ? "1" : "0"))
-        
+
         if let tt = connectOptions.ttCallRequest, token.isEmpty {
             queryItems.append(URLQueryItem(name: "tt_version", value: "1"))
         }

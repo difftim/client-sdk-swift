@@ -622,7 +622,7 @@ extension LocalParticipant {
 
                 populatorFunc = { populator in
                     let enableE2ee = room.e2eeManager?.frameEncryptionType != EncryptionType.none
-                    
+
                     populator.disableDtx = !audioPublishOptions.dtx
                     populator.disableRed = enableE2ee || !(audioPublishOptions.red ?? true)
                     populator.audioFeatures = Array(audioPublishOptions.toFeatures())

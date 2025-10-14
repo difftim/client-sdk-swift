@@ -15,7 +15,7 @@ let package = Package(
         .library(
             name: "LiveKit",
             targets: ["LiveKit"]
-        )
+        ),
     ],
     dependencies: [
         // LK-Prefixed Dynamic WebRTC XCFramework
@@ -42,13 +42,13 @@ let package = Package(
                 "LKObjCHelpers",
             ],
             exclude: [
-                "Broadcast/NOTICE"
+                "Broadcast/NOTICE",
             ],
             resources: [
-                .process("PrivacyInfo.xcprivacy")
+                .process("PrivacyInfo.xcprivacy"),
             ],
             swiftSettings: [
-                .enableExperimentalFeature("AccessLevelOnImport")
+                .enableExperimentalFeature("AccessLevelOnImport"),
             ]
         ),
         .target(
@@ -82,6 +82,6 @@ let package = Package(
         ),
     ],
     swiftLanguageVersions: [
-        .v5
+        .v5,
     ]
 )

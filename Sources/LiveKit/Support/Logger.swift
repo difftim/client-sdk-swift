@@ -66,7 +66,7 @@ public struct DisabledLogger: Logger {
         function _: StaticString,
         line _: UInt,
         metaData _: ScopedMetadataContainer,
-        ptr: String?
+        ptr _: String?
     ) {}
 }
 

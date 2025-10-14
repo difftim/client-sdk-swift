@@ -80,7 +80,7 @@ public final class ConnectOptions: NSObject, Sendable {
     /// LiveKit server protocol version to use. Generally, it's not recommended to change this.
     @objc
     public let protocolVersion: ProtocolVersion
-    
+
     public let ttCallRequest: Livekit_TTCallRequest?
 
     @objc
@@ -128,10 +128,10 @@ public final class ConnectOptions: NSObject, Sendable {
         self.iceTransportPolicy = iceTransportPolicy
         self.enableMicrophone = enableMicrophone
         self.protocolVersion = protocolVersion
-        self.ttCallRequest = nil
+        ttCallRequest = nil
         self.userAgent = userAgent
     }
-    
+
     public init(autoSubscribe: Bool = true,
                 reconnectAttempts: Int = 10,
                 reconnectAttemptDelay: TimeInterval = .defaultReconnectDelay,

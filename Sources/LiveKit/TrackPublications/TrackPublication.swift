@@ -185,7 +185,7 @@ public class TrackPublication: NSObject, @unchecked Sendable, ObservableObject, 
         return oldValue
     }
 
-    func cleanUp () {
+    func cleanUp() {
         track?.remove(delegate: self)
     }
 

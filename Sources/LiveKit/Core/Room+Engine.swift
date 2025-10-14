@@ -344,7 +344,7 @@ extension Room {
                 $0.connectionState = .reconnecting
             }
 
-            await cleanUp(isFullReconnect: true, removePar:false)
+            await cleanUp(isFullReconnect: true, removePar: false)
 
             guard let url = _state.url,
                   let token = _state.token
@@ -382,7 +382,7 @@ extension Room {
 
                 // Full reconnect failed, give up
                 // guard currentMode != .full else { return }
-                guard currentAttempt <= totalAttempts else { 
+                guard currentAttempt <= totalAttempts else {
                     self.log("[Connect] Reconnect attempts exhausted, giving up.", .error)
 
                     return .failure(LiveKitError(.reconnectFailure, message: "Reconnect attempts(\(totalAttempts)) exhausted"))
@@ -391,7 +391,7 @@ extension Room {
                 self.log("[Connect] currentMode:\(currentMode) Retry in \(self._state.connectOptions.reconnectAttemptDelay) seconds, \(currentAttempt)/\(totalAttempts) tries left.")
 
                 // Try full reconnect for the final attempt
-                if (totalAttempts == currentAttempt || currentAttempt > 3), self._state.nextReconnectMode == nil {
+                if totalAttempts == currentAttempt || currentAttempt > 3, self._state.nextReconnectMode == nil {
                     self._state.mutate { $0.nextReconnectMode = .full }
                 }
 
@@ -416,10 +416,9 @@ extension Room {
                     // throw
                     if let err = error as? LiveKitError {
                         throw LiveKitError(.reconnectFailure, message: err.message, internalError: err.internalError)
-                    }else{
+                    } else {
                         throw LiveKitError(.reconnectFailure, message: "mode: \(mode)", internalError: error)
                     }
-                    
                 }
             }
 
@@ -430,10 +429,10 @@ extension Room {
             let result = try await reconnectTask.value
 
             switch result {
-                case .success:
-                    break // 成功，继续执行
-                case .failure(let error):
-                    throw error
+            case .success:
+                break
+            case let .failure(error):
+                throw error
             }
 
             // Re-connect sequence successful

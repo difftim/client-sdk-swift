@@ -186,22 +186,22 @@ extension Room {
         await publication.set(track: nil)
     }
 
-    func engine(_ engine: Room, didReceiveUserPacket packet: Livekit_UserPacket, encryptionType: EncryptionType) {
+    func engine(_: Room, didReceiveUserPacket packet: Livekit_UserPacket, encryptionType: EncryptionType) {
         // participant could be null if data broadcasted from server
         let identity = Participant.Identity(from: packet.participantIdentity)
         let participant = _state.remoteParticipants[identity]
 
         // if case .connected = engine._state.connectionState {
-            delegates.notify(label: { "room.didReceive data: \(packet.payload)" }) {
-                $0.room?(self, participant: participant, didReceiveData: packet.payload, forTopic: packet.topic, encryptionType: encryptionType)
-            }
+        delegates.notify(label: { "room.didReceive data: \(packet.payload)" }) {
+            $0.room?(self, participant: participant, didReceiveData: packet.payload, forTopic: packet.topic, encryptionType: encryptionType)
+        }
 
-            if let participant {
-                participant.delegates.notify(label: { "participant.didReceive data: \(packet.payload)" }) { [weak participant] delegate in
-                    guard let participant else { return }
-                    delegate.participant?(participant, didReceiveData: packet.payload, forTopic: packet.topic, encryptionType: encryptionType)
-                }
+        if let participant {
+            participant.delegates.notify(label: { "participant.didReceive data: \(packet.payload)" }) { [weak participant] delegate in
+                guard let participant else { return }
+                delegate.participant?(participant, didReceiveData: packet.payload, forTopic: packet.topic, encryptionType: encryptionType)
             }
+        }
         // }
     }
 

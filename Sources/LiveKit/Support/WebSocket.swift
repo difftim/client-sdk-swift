@@ -59,10 +59,10 @@ final class WebSocket: NSObject, @unchecked Sendable, Loggable, AsyncSequence, U
         }
         waitForNextValue()
     }
-    
-    private var sendAfterOpen :Data?
 
-    init(url: URL, token: String, connectOptions: ConnectOptions?, sendAfterOpen :Data?) async throws {
+    private var sendAfterOpen: Data?
+
+    init(url: URL, token: String, connectOptions: ConnectOptions?, sendAfterOpen: Data?) async throws {
         // Prepare the request
         var request = URLRequest(url: url,
                                  cachePolicy: .useProtocolCachePolicy,
@@ -155,7 +155,7 @@ final class WebSocket: NSObject, @unchecked Sendable, Loggable, AsyncSequence, U
             sendAfterOpen = nil
             Task { try await send(data: data) }
         }
-        
+
         _state.mutate { state in
             state.connectContinuation?.resume()
             state.connectContinuation = nil
@@ -167,13 +167,13 @@ final class WebSocket: NSObject, @unchecked Sendable, Loggable, AsyncSequence, U
 
         _state.mutate { state in
             if let error {
-                let lkError: LiveKitError
-                if let nsError = error as? NSError,
-                   nsError.domain == NSURLErrorDomain,
-                   nsError.code == NSURLErrorTimedOut {
-                    lkError = LiveKitError(.timedOut, message: nsError.localizedDescription, internalError: error)
+                let lkError = if let nsError = error as? NSError,
+                                 nsError.domain == NSURLErrorDomain,
+                                 nsError.code == NSURLErrorTimedOut
+                {
+                    LiveKitError(.timedOut, message: nsError.localizedDescription, internalError: error)
                 } else {
-                    lkError = LiveKitError.from(error: error) ?? LiveKitError(.unknown)
+                    LiveKitError.from(error: error) ?? LiveKitError(.unknown)
                 }
                 state.connectContinuation?.resume(throwing: lkError)
                 state.streamContinuation?.finish(throwing: lkError)
