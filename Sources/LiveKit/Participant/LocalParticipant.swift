@@ -710,7 +710,7 @@ extension LocalParticipant {
                 if !publishMuted {
                     // Only wait for frames if audio engine is allowed to start
                     if AudioManager.shared.engineAvailability.isInputAvailable {
-                        try await track.startWaitingForFrames()
+                        // try await track.startWaitingForFrames()
                     }
                 } else {
                     log("[publish] Skipping waiting for audio frame since track is muted")
