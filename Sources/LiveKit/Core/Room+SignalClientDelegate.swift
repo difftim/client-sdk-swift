@@ -105,7 +105,7 @@ extension Room: SignalClientDelegate {
         if case let .join(joinResponse) = connectResponse {
             log("\(joinResponse.serverInfo)", .info)
 
-            let ttCallRespTmp: Livekit_TtCallResponse?
+            var ttCallRespTmp: Livekit_TTCallResponse?
             if joinResponse.hasTtCallResponse {
                 ttCallResp = joinResponse.ttCallResponse
                 ttCallRespTmp = joinResponse.ttCallResponse
