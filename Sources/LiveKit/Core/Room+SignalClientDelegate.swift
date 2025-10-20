@@ -105,8 +105,10 @@ extension Room: SignalClientDelegate {
         if case let .join(joinResponse) = connectResponse {
             log("\(joinResponse.serverInfo)", .info)
 
+            let ttCallRespTmp: Livekit_TtCallResponse?
             if joinResponse.hasTtCallResponse {
                 ttCallResp = joinResponse.ttCallResponse
+                ttCallRespTmp = joinResponse.ttCallResponse
 
                 if let token = ttCallResp?.body.token, !token.isEmpty {
                     log("[startcall] onRefreshToken by joinResponse")
@@ -114,7 +116,7 @@ extension Room: SignalClientDelegate {
                 }
             }
 
-            if ttCallResp?.hasBody == true, let body = ttCallResp?.body, let encryptor = _state.roomOptions.e2eeOptions?.ttEncryptor {
+            if ttCallRespTmp?.hasBody == true, let body = ttCallRespTmp?.body, let encryptor = _state.roomOptions.e2eeOptions?.ttEncryptor {
                 log("[startcall] Attempting to decrypt call key with publicKey=\(body.publicKey), emk=\(body.emk)")
                 if let mk = encryptor.decryptCallKey(eKey: body.publicKey, eMKey: body.emk) {
                     log("[startcall] Decrypted call key successfully, setting shared key.")
