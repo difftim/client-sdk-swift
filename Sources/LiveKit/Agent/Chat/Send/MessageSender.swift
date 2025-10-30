@@ -16,20 +16,10 @@
 
 import Foundation
 
-public func XCTAssertThrowsErrorAsync(_ expression: @autoclosure () async throws -> some Any) async {
-    do {
-        _ = try await expression()
-        XCTFail("No error was thrown.")
-    } catch {
-        // Pass
-    }
-}
-
-public extension LKTestCase {
-    func noLeaks(of instance: AnyObject & Sendable, file: StaticString = #filePath, line: UInt = #line) {
-        addTeardownBlock { [weak instance] in
-            try await Task.sleep(nanoseconds: NSEC_PER_SEC)
-            XCTAssertNil(instance, "Leaked object: \(String(describing: instance))", file: file, line: line)
-        }
-    }
+/// A protocol that defines a message sender.
+///
+/// A message sender is responsible for sending messages to the agent.
+/// It is used to send messages to the agent and update the message feed.
+public protocol MessageSender: Sendable {
+    func send(_ message: SentMessage) async throws
 }
