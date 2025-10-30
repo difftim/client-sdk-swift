@@ -189,8 +189,13 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
         @discardableResult
         mutating func updateRemoteParticipant(info: Livekit_ParticipantInfo, room: Room) -> RemoteParticipant {
             let identity = Participant.Identity(from: info.identity)
+
             // Check if RemoteParticipant with same identity exists...
-            if let participant = remoteParticipants[identity] { return participant }
+            if let participant = remoteParticipants[identity] {
+                participant.set(info: info, connectionState: connectionState)
+                return participant
+            }
+
             // Create new RemoteParticipant...
             let participant = RemoteParticipant(info: info, room: room, connectionState: connectionState)
             remoteParticipants[identity] = participant

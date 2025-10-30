@@ -239,7 +239,15 @@ public class Participant: NSObject, @unchecked Sendable, ObservableObject, Logga
         _state.mutate { $0.trackPublications[publication.sid] = publication }
     }
 
-    func set(info: Livekit_ParticipantInfo, connectionState _: ConnectionState) {
+    @discardableResult
+    func set(info: Livekit_ParticipantInfo, connectionState _: ConnectionState) -> Bool {
+        if let current = self.info,
+           current.sid == info.sid,
+           current.version > info.version
+        {
+            return false
+        }
+
         _state.mutate {
             $0.sid = Sid(from: info.sid)
             $0.identity = Identity(from: info.identity)
@@ -260,6 +268,8 @@ public class Participant: NSObject, @unchecked Sendable, ObservableObject, Logga
 
         self.info = info
         set(permissions: info.permission.toLKType())
+
+        return true
     }
 
     func set(enabledPublishCodecs codecs: [Livekit_Codec]) {

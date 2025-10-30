@@ -23,8 +23,11 @@ public class RemoteParticipant: Participant, @unchecked Sendable {
         set(info: info, connectionState: connectionState)
     }
 
-    override func set(info: Livekit_ParticipantInfo, connectionState: ConnectionState) {
-        super.set(info: info, connectionState: connectionState)
+    @discardableResult
+    override func set(info: Livekit_ParticipantInfo, connectionState: ConnectionState) -> Bool {
+        guard super.set(info: info, connectionState: connectionState) else {
+            return false
+        }
 
         var validTrackPublications = [Track.Sid: RemoteTrackPublication]()
         var newTrackPublications = [Track.Sid: RemoteTrackPublication]()
@@ -44,7 +47,7 @@ public class RemoteParticipant: Participant, @unchecked Sendable {
 
         guard let room = _room else {
             log("_room is nil", .error)
-            return
+            return true
         }
 
         if case .connected = connectionState {
@@ -71,6 +74,8 @@ public class RemoteParticipant: Participant, @unchecked Sendable {
                 }
             }
         }
+
+        return true
     }
 
     func addSubscribedMediaTrack(rtcTrack: LKRTCMediaStreamTrack, rtpReceiver: LKRTCRtpReceiver, trackSid: Track.Sid) async throws {
