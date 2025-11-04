@@ -79,11 +79,14 @@ public class VideoCapturer: NSObject, @unchecked Sendable, Loggable, VideoCaptur
         var dimensions: Dimensions?
         weak var processor: VideoProcessor?
         var isFrameProcessingBusy: Bool = false
+        var orientation: UIInterfaceOrientation?
     }
 
     let _state: StateSync<State>
 
     public var dimensions: Dimensions? { _state.dimensions }
+
+    public var orientation: UIInterfaceOrientation? { _state.orientation }
 
     public weak var processor: VideoProcessor? {
         get { _state.processor }
@@ -130,6 +133,11 @@ public class VideoCapturer: NSObject, @unchecked Sendable, Loggable, VideoCaptur
         if captureState != .stopped {
             log("captureState is not .stopped, capturer must be stopped before deinit.", .error)
         }
+    }
+
+    public func set(orientation newOrientation: UIInterfaceOrientation?) {
+        log("set orientation to: \(newOrientation?.rawValue)")
+        _state.mutate { $0.orientation = newOrientation }
     }
 
     /// Requests video capturer to start generating frames. ``Track/start()-dk8x`` calls this automatically.
@@ -307,7 +315,16 @@ extension VideoCapturer {
             }
 
             var rtcFrame: LKRTCVideoFrame = frame
-            guard var lkFrame: VideoFrame = frame.toLKType() else {
+
+            let overrideRotation = getFrameRotation(device: device, orientation: _state.orientation)
+
+            if let overrideRotation {
+                rtcFrame = LKRTCVideoFrame(buffer: rtcFrame.buffer,
+                                           rotation: overrideRotation.toRTCType(),
+                                           timeStampNs: rtcFrame.timeStampNs)
+            }
+
+            guard var lkFrame: VideoFrame = rtcFrame.toLKType() else {
                 log("Failed to convert a RTCVideoFrame to VideoFrame.", .error)
                 return
             }
@@ -333,6 +350,29 @@ extension VideoCapturer {
                     renderer.render?(frame: lkFrame, captureDevice: device, captureOptions: options)
                 }
             }
+        }
+    }
+
+    private func getFrameRotation(device: AVCaptureDevice?, orientation: UIInterfaceOrientation?) -> VideoRotation? {
+        guard let orientation else {
+            return nil
+        }
+
+        let usingFrontCamera = device?.position == .front
+
+        switch orientation {
+        case .portrait:
+            return ._90
+        case .portraitUpsideDown:
+            return ._270
+        case .landscapeLeft:
+            return usingFrontCamera ? ._0 : ._180
+        case .landscapeRight:
+            return usingFrontCamera ? ._180 : ._0
+        case .unknown:
+            return ._0
+        @unknown default:
+            return ._0
         }
     }
 }
