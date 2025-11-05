@@ -16,6 +16,9 @@
 
 import Combine
 import Foundation
+#if canImport(UIKit)
+import UIKit
+#endif
 
 internal import LiveKitWebRTC
 
@@ -26,6 +29,16 @@ public class LocalParticipant: Participant, @unchecked Sendable {
 
     @objc
     public var localVideoTracks: [LocalTrackPublication] { videoTracks.compactMap { $0 as? LocalTrackPublication } }
+
+    #if canImport(UIKit)
+    struct LocalState {
+        var orientation: UIInterfaceOrientation?
+    }
+
+    let _localState = StateSync(LocalState())
+
+    public var orientation: UIInterfaceOrientation? { _localState.orientation }
+    #endif
 
     private var allParticipantsAllowed: Bool = true
 
@@ -357,6 +370,11 @@ public extension LocalParticipant {
             if let publication = self.getTrackPublication(source: source) as? LocalTrackPublication {
                 if enabled {
                     try await publication.unmute()
+                    #if canImport(UIKit)
+                    if source == .camera, let track = publication.track as? LocalVideoTrack {
+                        track.capturer.set(orientation: self._localState.orientation)
+                    }
+                    #endif
                     return publication
                 } else {
                     if source == .camera || source == .microphone {
@@ -371,6 +389,9 @@ public extension LocalParticipant {
                 if source == .camera {
                     let localTrack = LocalVideoTrack.createCameraTrack(options: (captureOptions as? CameraCaptureOptions) ?? room._state.roomOptions.defaultCameraCaptureOptions,
                                                                        reportStatistics: room._state.roomOptions.reportRemoteTrackStatistics)
+                    #if canImport(UIKit)
+                    localTrack.capturer.set(orientation: self._localState.orientation)
+                    #endif
                     return try await self._publish(track: localTrack, options: publishOptions)
                 } else if source == .microphone {
                     let localTrack = LocalAudioTrack.createTrack(options: (captureOptions as? AudioCaptureOptions) ?? room._state.roomOptions.defaultAudioCaptureOptions,
@@ -416,6 +437,18 @@ public extension LocalParticipant {
             return nil
         }
     }
+
+    #if canImport(UIKit)
+    func set(orientation newOrientation: UIInterfaceOrientation?) {
+        log("set orientation to: \(newOrientation?.rawValue)")
+        _localState.mutate {
+            $0.orientation = newOrientation
+            if let track = firstCameraVideoTrack as? LocalVideoTrack {
+                track.capturer.set(orientation: newOrientation)
+            }
+        }
+    }
+    #endif
 }
 
 // MARK: - Simulcast codecs

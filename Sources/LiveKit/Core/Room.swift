@@ -187,12 +187,14 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
         var transcriptionReceivedTimes: [String: Date] = [:]
 
         @discardableResult
-        mutating func updateRemoteParticipant(info: Livekit_ParticipantInfo, room: Room) -> RemoteParticipant {
+        mutating func updateRemoteParticipant(info: Livekit_ParticipantInfo, room: Room, ignoreUpdate: Bool = false) -> RemoteParticipant {
             let identity = Participant.Identity(from: info.identity)
 
             // Check if RemoteParticipant with same identity exists...
             if let participant = remoteParticipants[identity] {
-                participant.set(info: info, connectionState: connectionState)
+                if !ignoreUpdate {
+                    participant.set(info: info, connectionState: connectionState)
+                }
                 return participant
             }
 

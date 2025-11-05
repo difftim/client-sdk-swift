@@ -156,7 +156,7 @@ extension Room: SignalClientDelegate {
 
                 if !joinResponse.otherParticipants.isEmpty {
                     for otherParticipant in joinResponse.otherParticipants {
-                        $0.updateRemoteParticipant(info: otherParticipant, room: self)
+                        $0.updateRemoteParticipant(info: otherParticipant, room: self, ignoreUpdate: false)
                     }
                 }
             }
@@ -291,7 +291,7 @@ extension Room: SignalClientDelegate {
                     disconnectedParticipantIdentities.append(infoIdentity)
                 } else {
                     let isNewParticipant = $0.remoteParticipants[infoIdentity] == nil
-                    let participant = $0.updateRemoteParticipant(info: info, room: self)
+                    let participant = $0.updateRemoteParticipant(info: info, room: self, ignoreUpdate: true)
 
                     if isNewParticipant {
                         newParticipants.append(participant)

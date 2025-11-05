@@ -79,14 +79,18 @@ public class VideoCapturer: NSObject, @unchecked Sendable, Loggable, VideoCaptur
         var dimensions: Dimensions?
         weak var processor: VideoProcessor?
         var isFrameProcessingBusy: Bool = false
+        #if canImport(UIKit)
         var orientation: UIInterfaceOrientation?
+        #endif
     }
 
     let _state: StateSync<State>
 
     public var dimensions: Dimensions? { _state.dimensions }
 
+    #if canImport(UIKit)
     public var orientation: UIInterfaceOrientation? { _state.orientation }
+    #endif
 
     public weak var processor: VideoProcessor? {
         get { _state.processor }
@@ -135,10 +139,12 @@ public class VideoCapturer: NSObject, @unchecked Sendable, Loggable, VideoCaptur
         }
     }
 
+    #if canImport(UIKit)
     public func set(orientation newOrientation: UIInterfaceOrientation?) {
         log("set orientation to: \(newOrientation?.rawValue)")
         _state.mutate { $0.orientation = newOrientation }
     }
+    #endif
 
     /// Requests video capturer to start generating frames. ``Track/start()-dk8x`` calls this automatically.
     ///
@@ -316,13 +322,15 @@ extension VideoCapturer {
 
             var rtcFrame: LKRTCVideoFrame = frame
 
+            #if canImport(UIKit)
             let overrideRotation = getFrameRotation(device: device, orientation: _state.orientation)
 
-            if let overrideRotation {
+            if let overrideRotation = overrideRotation?.toRTCType(), overrideRotation != rtcFrame.rotation {
                 rtcFrame = LKRTCVideoFrame(buffer: rtcFrame.buffer,
-                                           rotation: overrideRotation.toRTCType(),
+                                           rotation: overrideRotation,
                                            timeStampNs: rtcFrame.timeStampNs)
             }
+            #endif
 
             guard var lkFrame: VideoFrame = rtcFrame.toLKType() else {
                 log("Failed to convert a RTCVideoFrame to VideoFrame.", .error)
@@ -353,6 +361,7 @@ extension VideoCapturer {
         }
     }
 
+    #if canImport(UIKit)
     private func getFrameRotation(device: AVCaptureDevice?, orientation: UIInterfaceOrientation?) -> VideoRotation? {
         guard let orientation else {
             return nil
@@ -375,4 +384,5 @@ extension VideoCapturer {
             return ._0
         }
     }
+    #endif
 }
