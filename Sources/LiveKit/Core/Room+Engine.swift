@@ -134,6 +134,8 @@ extension Room {
                 rtcConfiguration.iceTransportPolicy = connectOptions.iceTransportPolicy.toRTCType()
             }
 
+            rtcConfiguration.tcpCandidatePolicy = .disabled
+
             return rtcConfiguration
         }
 

@@ -142,7 +142,7 @@ public class RemoteTrackPublication: TrackPublication, @unchecked Sendable {
 
     @discardableResult
     override func set(track newValue: Track?) async -> Track? {
-        log("RemoteTrackPublication set track: \(String(describing: newValue))")
+        log("RemoteTrackPublication set track(pubSid:\(sid)): \(String(describing: newValue))")
 
         let oldValue = await super.set(track: newValue)
         if newValue != oldValue {

@@ -363,7 +363,8 @@ public extension LocalParticipant {
              publishOptions: TrackPublishOptions? = nil,
              publishMuted: Bool = false) async throws -> LocalTrackPublication?
     {
-        try await _publishSerialRunner.run {
+        log("set source(\(source)): \(enabled)")
+        return try await _publishSerialRunner.run {
             let room = try self.requireRoom()
 
             // Try to get existing publication
@@ -440,7 +441,7 @@ public extension LocalParticipant {
 
     #if canImport(UIKit)
     func set(orientation newOrientation: UIInterfaceOrientation?) {
-        log("set orientation to: \(newOrientation?.rawValue)")
+        log("set orientation to: \(String(describing: newOrientation?.rawValue))")
         _localState.mutate {
             $0.orientation = newOrientation
             if let track = firstCameraVideoTrack as? LocalVideoTrack {
@@ -744,6 +745,8 @@ extension LocalParticipant {
                     // Only wait for frames if audio engine is allowed to start
                     if AudioManager.shared.engineAvailability.isInputAvailable {
                         try await track.startWaitingForFrames()
+                    } else {
+                        log("[publish] Skipping waiting for audio frame since audio engine input is not available")
                     }
                 } else {
                     log("[publish] Skipping waiting for audio frame since track is muted")

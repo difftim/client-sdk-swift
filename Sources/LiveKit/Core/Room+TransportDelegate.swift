@@ -67,7 +67,7 @@ extension Room: TransportDelegate {
     func transport(_ transport: Transport, didGenerateIceCandidate iceCandidate: IceCandidate) {
         Task {
             do {
-                log("sending iceCandidate")
+                log("Transport(\(transport.target)) sending iceCandidate: \(iceCandidate)")
                 try await signalClient.sendCandidate(candidate: iceCandidate, target: transport.target)
             } catch {
                 log("Failed to send iceCandidate, error: \(error)", .error)

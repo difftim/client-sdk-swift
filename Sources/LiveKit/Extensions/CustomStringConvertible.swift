@@ -81,6 +81,12 @@ extension Livekit_ServerInfo: CustomStringConvertible {
     }
 }
 
+extension Livekit_SubscriptionPermissionUpdate: CustomStringConvertible {
+    public var description: String {
+        "SubscriptionPermissionUpdate(participant_sid: \(participantSid), track_sid: \(trackSid), allowed: \(allowed))"
+    }
+}
+
 // MARK: - NSObject
 
 public extension Room {
@@ -109,6 +115,16 @@ extension Track.Source: CustomStringConvertible {
         case .microphone: "microphone"
         case .screenShareVideo: "screenShareVideo"
         case .screenShareAudio: "screenShareAudio"
+        }
+    }
+}
+
+extension Track.Kind: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .audio: "audio"
+        case .video: "video"
+        case .none: "none"
         }
     }
 }
