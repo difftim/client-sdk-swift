@@ -167,10 +167,9 @@ final class WebSocket: NSObject, @unchecked Sendable, Loggable, AsyncSequence, U
 
         _state.mutate { state in
             if let error {
-                let lkError = if let nsError = error as? NSError,
-                                 nsError.domain == NSURLErrorDomain,
-                                 nsError.code == NSURLErrorTimedOut
-                {
+                // NSError bridging always succeeds for Swift Error; avoid conditional cast warning
+                let nsError = error as NSError
+                let lkError = if nsError.domain == NSURLErrorDomain, nsError.code == NSURLErrorTimedOut {
                     LiveKitError(.timedOut, message: nsError.localizedDescription, internalError: error)
                 } else {
                     LiveKitError.from(error: error) ?? LiveKitError(.unknown)

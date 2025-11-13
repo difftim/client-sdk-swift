@@ -45,7 +45,6 @@ extension Livekit_Encryption.TypeEnum {
     }
 }
 
-@available(*, deprecated, message: "Migrate to 'EncryptionOptions' instead. Important: It will enable data channel encryption by default (requires support from all platforms).")
 @objc
 public protocol TTEncryptor: Sendable {
     func decryptCallKey(eKey: String, eMKey: String) -> Data?

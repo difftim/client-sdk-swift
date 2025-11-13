@@ -66,8 +66,8 @@ actor SignalClient: Loggable {
                 throw LiveKitError(.failedToConvertData, message: "Failed to convert data")
             }
 
-            let webSocket = try await requireWebSocket()
-            try await webSocket.send(data: data)
+            let transport = try await requireTransport()
+            try await transport.send(data: data)
 
         } catch {
             log("Failed to send queued request \(request) with error: \(error)", .warning)
@@ -88,7 +88,7 @@ actor SignalClient: Loggable {
     struct State {
         var connectionState: ConnectionState = .disconnected
         var disconnectError: LiveKitError?
-        var socket: WebSocket?
+        var transport: SignalTransport?
         var messageLoopTask: Task<Void, Never>?
         var lastJoinResponse: Livekit_JoinResponse?
         var rtt: Int64 = 0
@@ -144,16 +144,20 @@ actor SignalClient: Loggable {
                 return try? r.serializedData()
             }()
 
-            let socket = try await WebSocket(url: url,
-                                             token: token,
-                                             connectOptions: connectOptions,
-                                             sendAfterOpen: sendAfterOpen)
+            let selectedKind = connectOptions?.transportKind ?? .websocket
+            log("Selected signaling transport: \(selectedKind)")
+
+            let transport = try await SignalTransportFactory.create(kind: selectedKind,
+                                                                    url: url,
+                                                                    token: token,
+                                                                    options: connectOptions,
+                                                                    sendAfterOpen: sendAfterOpen)
 
             let task = Task.detached {
-                self.log("Did enter WebSocket message loop...")
+                self.log("Did enter signaling transport message loop...")
                 do {
-                    for try await message in socket {
-                        await self._onWebSocketMessage(message: message)
+                    for try await message in transport {
+                        await self._onTransportMessage(message: message)
                     }
                 } catch {
                     await self.cleanUp(withError: error)
@@ -167,7 +171,7 @@ actor SignalClient: Loggable {
 
             // Successfully connected
             _state.mutate {
-                $0.socket = socket
+                $0.transport = transport
                 $0.connectionState = .connected
             }
 
@@ -224,8 +228,8 @@ actor SignalClient: Loggable {
         _state.mutate {
             $0.messageLoopTask?.cancel()
             $0.messageLoopTask = nil
-            $0.socket?.close()
-            $0.socket = nil
+            $0.transport?.close()
+            $0.transport = nil
             $0.lastJoinResponse = nil
         }
 
@@ -255,7 +259,7 @@ private extension SignalClient {
         await _requestQueue.processIfResumed(request, elseEnqueue: request.canBeQueued())
     }
 
-    func _onWebSocketMessage(message: URLSessionWebSocketTask.Message) async {
+    func _onTransportMessage(message: URLSessionWebSocketTask.Message) async {
         let response: Livekit_SignalResponse? = switch message {
         case let .data(data): try? Livekit_SignalResponse(serializedBytes: data)
         case let .string(string): try? Livekit_SignalResponse(jsonString: string)
@@ -705,10 +709,10 @@ extension Livekit_SignalRequest {
 }
 
 private extension SignalClient {
-    func requireWebSocket() async throws -> WebSocket {
-        guard let result = _state.socket else {
-            log("WebSocket is nil", .error)
-            throw LiveKitError(.invalidState, message: "WebSocket is nil")
+    func requireTransport() async throws -> SignalTransport {
+        guard let result = _state.transport else {
+            log("Signal transport is nil", .error)
+            throw LiveKitError(.invalidState, message: "Signal transport is nil")
         }
 
         return result

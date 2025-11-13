@@ -170,6 +170,15 @@ extension Livekit_SignalResponse: CustomStringConvertible {
     }
 }
 
+extension TransportKind: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .websocket: ".websocket"
+        case .quic: ".quic"
+        }
+    }
+}
+
 // MARK: - NativeView
 
 public extension VideoView {

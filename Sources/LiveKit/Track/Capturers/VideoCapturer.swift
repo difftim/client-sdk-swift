@@ -141,7 +141,7 @@ public class VideoCapturer: NSObject, @unchecked Sendable, Loggable, VideoCaptur
 
     #if canImport(UIKit)
     public func set(orientation newOrientation: UIInterfaceOrientation?) {
-        log("set orientation to: \(newOrientation?.rawValue)")
+        log("set orientation to: \(String(describing: newOrientation?.rawValue))")
         _state.mutate { $0.orientation = newOrientation }
     }
     #endif

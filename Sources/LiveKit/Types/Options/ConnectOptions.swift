@@ -86,6 +86,15 @@ public final class ConnectOptions: NSObject, Sendable {
     @objc
     public let userAgent: String?
 
+    // MARK: - Transport Selection
+
+    /// The signaling transport to use when establishing the connection.
+    /// Defaults to `.websocket`.
+    ///
+    /// QUIC is experimental and may not be available on all platforms or build configurations.
+    /// When set to `.quic` but unsupported, the SDK will gracefully fall back to `.websocket`.
+    public let transportKind: TransportKind
+
     @objc
     override public init() {
         autoSubscribe = true
@@ -101,6 +110,7 @@ public final class ConnectOptions: NSObject, Sendable {
         protocolVersion = .v12
         ttCallRequest = nil
         userAgent = nil
+        transportKind = .websocket
     }
 
     @objc
@@ -115,7 +125,8 @@ public final class ConnectOptions: NSObject, Sendable {
                 iceTransportPolicy: IceTransportPolicy = .all,
                 enableMicrophone: Bool = false,
                 protocolVersion: ProtocolVersion = .v12,
-                userAgent: String? = nil)
+                userAgent: String? = nil,
+                transportKind: TransportKind = .websocket)
     {
         self.autoSubscribe = autoSubscribe
         self.reconnectAttempts = reconnectAttempts
@@ -130,6 +141,7 @@ public final class ConnectOptions: NSObject, Sendable {
         self.protocolVersion = protocolVersion
         ttCallRequest = nil
         self.userAgent = userAgent
+        self.transportKind = transportKind
     }
 
     public init(autoSubscribe: Bool = true,
@@ -144,7 +156,8 @@ public final class ConnectOptions: NSObject, Sendable {
                 enableMicrophone: Bool = false,
                 protocolVersion: ProtocolVersion = .v12,
                 ttCallRequest: Livekit_TTCallRequest? = nil,
-                userAgent: String? = nil)
+                userAgent: String? = nil,
+                transportKind: TransportKind = .websocket)
     {
         self.autoSubscribe = autoSubscribe
         self.reconnectAttempts = reconnectAttempts
@@ -159,6 +172,7 @@ public final class ConnectOptions: NSObject, Sendable {
         self.protocolVersion = protocolVersion
         self.ttCallRequest = ttCallRequest
         self.userAgent = userAgent
+        self.transportKind = transportKind
     }
 
     // MARK: - Equal
@@ -177,7 +191,8 @@ public final class ConnectOptions: NSObject, Sendable {
             enableMicrophone == other.enableMicrophone &&
             protocolVersion == other.protocolVersion &&
             ttCallRequest == other.ttCallRequest &&
-            userAgent == other.userAgent
+            userAgent == other.userAgent &&
+            transportKind == other.transportKind
     }
 
     override public var hash: Int {
@@ -193,6 +208,25 @@ public final class ConnectOptions: NSObject, Sendable {
         hasher.combine(iceTransportPolicy)
         hasher.combine(enableMicrophone)
         hasher.combine(protocolVersion)
+        hasher.combine(transportKind)
         return hasher.finalize()
+    }
+}
+
+// MARK: - TransportKind
+
+/// Signaling transport kinds supported by the Swift SDK.
+/// WebSocket is the stable default; QUIC is experimental.
+@objc
+public enum TransportKind: Int, Sendable {
+    case websocket
+    case quic
+
+    /// Returns true if this kind requires runtime OS features only available iOS 15+/macOS 12+.
+    public var requiresModernOS: Bool {
+        switch self {
+        case .websocket: false
+        case .quic: true
+        }
     }
 }
