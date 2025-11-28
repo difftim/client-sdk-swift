@@ -169,8 +169,8 @@ struct WTMessage {
             }
 
             // 4. 保存原始缓冲区和消息体数据
-//            self.raw = buf // 保存原始数据
-//            self.data = buf.subdata(in: WTMessageHeaderSize..<fullSize) // 提取消息体
+            //    self.raw = buf // 保存原始数据
+            //    self.data = buf.subdata(in: WTMessageHeaderSize..<fullSize) // 提取消息体
             data = Data(bytes: header + WTMessageHeaderSize, count: Int(length))
         }
     }
@@ -267,7 +267,9 @@ class QUICClient: NSObject, Loggable, @unchecked Sendable {
 
     private let KEEP_ALIVE_INTERVAL: TimeInterval = 10
     // Dedicated queue for NWConnection callbacks and QUIC processing (avoid main queue)
-    private let connectionQueue = DispatchQueue(label: "io.livekit.quic.connection", qos: .userInitiated)
+    private let connectionQueue = DispatchQueue(
+        label: "io.livekit.quic.connection", qos: .userInitiated
+    )
     private var stream: NWConnection?
     private var nextTransId: UInt32 = 1
     var delegate: WTMessageDelegate?
@@ -296,7 +298,7 @@ class QUICClient: NSObject, Loggable, @unchecked Sendable {
         let path = u.path.isEmpty ? "/" : u.path
         let query = u.query ?? ""
 
-//        log("解析后的URL组件: scheme=\(scheme), host=\(host), port=\(port), path=\(path)")
+        //        log("解析后的URL组件: scheme=\(scheme), host=\(host), port=\(port), path=\(path)")
 
         var props = [String: Any]()
 
@@ -321,7 +323,9 @@ class QUICClient: NSObject, Loggable, @unchecked Sendable {
 
         // 2. 使用属性存储，确保强引用
         let nwport = NWEndpoint.Port(rawValue: port)!
-        let stream = NWConnection(to: .hostPort(host: NWEndpoint.Host(host), port: nwport), using: parameters)
+        let stream = NWConnection(
+            to: .hostPort(host: NWEndpoint.Host(host), port: nwport), using: parameters
+        )
         self.stream = stream
 
         // 4. 设置 Group 状态更新（在自定义队列上回调）
@@ -345,17 +349,19 @@ class QUICClient: NSObject, Loggable, @unchecked Sendable {
         var message = WTMessage(messageType: .binary, transId: 0)
         message.encode(with: data)
         let context = NWConnection.ContentContext(identifier: "send", isFinal: false)
-        stream.send(content: message.raw,
-                    contentContext: context,
-                    isComplete: false, // 控制流通常保持打开状态
-                    completion: .contentProcessed { [weak self] error in
-                        guard let self else { return }
-                        if let error {
-                            delegate?.quicClient(self, didFailWithError: error)
-                        } else {
-                            delegate?.quicClientDidSend(self, size: data.count)
-                        }
-                    })
+
+        stream.send(
+            content: message.raw,
+            contentContext: context,
+            isComplete: true, // 控制流通常保持打开状态
+            completion: .contentProcessed { error in
+                if let error {
+                    self.delegate?.quicClient(self, didFailWithError: error)
+                } else {
+                    self.delegate?.quicClientDidSend(self, size: data.count)
+                }
+            }
+        )
         return 0
     }
 
@@ -375,17 +381,18 @@ class QUICClient: NSObject, Loggable, @unchecked Sendable {
             var message = WTMessage(messageType: .cmd, transId: transId)
             message.encode(with: cmdPkg)
             let context = NWConnection.ContentContext(identifier: "send", isFinal: false)
-            stream.send(content: message.raw,
-                        contentContext: context,
-                        isComplete: false, // 控制流通常保持打开状态
-                        completion: .contentProcessed { [weak self] error in
-                            guard let self else { return }
-                            if let error {
-                                delegate?.quicClient(self, didFailWithError: error)
-                            } else {
-                                delegate?.quicClientDidSend(self, size: cmdPkg.count)
-                            }
-                        })
+            stream.send(
+                content: message.raw,
+                contentContext: context,
+                isComplete: true, // 控制流通常保持打开状态
+                completion: .contentProcessed { error in
+                    if let error {
+                        self.delegate?.quicClient(self, didFailWithError: error)
+                    } else {
+                        self.delegate?.quicClientDidSend(self, size: cmdPkg.count)
+                    }
+                }
+            )
             return 0
         }
         return -1
@@ -411,15 +418,16 @@ class QUICClient: NSObject, Loggable, @unchecked Sendable {
         nextTransId += 1
         message.encode(with: Data())
         let context = NWConnection.ContentContext(identifier: "send", isFinal: false)
-        stream.send(content: message.raw,
-                    contentContext: context,
-                    isComplete: false, // 控制流通常保持打开状态
-                    completion: .contentProcessed { [weak self] error in
-                        guard let self else { return }
-                        if let error {
-                            delegate?.quicClient(self, didFailWithError: error)
-                        }
-                    })
+        stream.send(
+            content: message.raw,
+            contentContext: context,
+            isComplete: true, // 控制流通常保持打开状态
+            completion: .contentProcessed { error in
+                if let error {
+                    self.delegate?.quicClient(self, didFailWithError: error)
+                }
+            }
+        )
     }
 
     private func sendPong(transId: UInt32) {
@@ -432,15 +440,16 @@ class QUICClient: NSObject, Loggable, @unchecked Sendable {
         var message = WTMessage(messageType: .pong, transId: transId)
         message.encode(with: Data())
         let context = NWConnection.ContentContext(identifier: "send", isFinal: false)
-        stream.send(content: message.raw,
-                    contentContext: context,
-                    isComplete: false, // 控制流通常保持打开状态
-                    completion: .contentProcessed { [weak self] error in
-                        guard let self else { return }
-                        if let error {
-                            delegate?.quicClient(self, didFailWithError: error)
-                        }
-                    })
+        stream.send(
+            content: message.raw,
+            contentContext: context,
+            isComplete: true, // 控制流通常保持打开状态
+            completion: .contentProcessed { error in
+                if let error {
+                    self.delegate?.quicClient(self, didFailWithError: error)
+                }
+            }
+        )
     }
 
     private func onRecvMessage(_ message: inout WTMessage) {
@@ -554,45 +563,63 @@ class QUICClient: NSObject, Loggable, @unchecked Sendable {
 
     // 接收数据的函数
     private func receiveDataOnStream(stream: NWConnection) {
-        stream.receive(minimumIncompleteLength: 1, maximumLength: 65535) { [weak self] data, _, isComplete, error in
-            guard let self else { return }
+        stream.receive(minimumIncompleteLength: 1, maximumLength: 65535) {
+            data, _, isComplete, error in
             if isComplete {
-                log("Raw QUIC Client数据传输管道关闭。")
+                self.log("Raw QUIC Client数据传输管道关闭。")
                 return
             }
             if let error {
-                log("Raw QUIC Client接收错误: \(error)")
+                self.log("Raw QUIC Client接收错误: \(error)")
                 return
             }
             guard let data, !data.isEmpty else { return }
 
             // 1. 缓存数据到buffer中
-            buffer.append(data)
+            self.buffer.append(data)
 
-            // 2. 循环解码数据
+            // 2. 循环解码数据，使用 do-catch 结构来区分错误类型
             var message = WTMessage()
-            decodeLoop: while true {
+            var continueDecoding = true
+
+            while continueDecoding {
                 do {
-                    let undecoded = try WTMessage.decode(data: buffer, to: &message)
-                    onRecvMessage(&message)
-                    buffer = undecoded
-                    if buffer.isEmpty { break decodeLoop }
-                } catch let err as WTMessageError {
-                    switch err {
+                    let undecodedData = try WTMessage.decode(data: self.buffer, to: &message)
+
+                    // 解码成功
+                    self.onRecvMessage(&message)
+
+                    // 更新 buffer 为剩余数据
+                    self.buffer = undecodedData
+
+                    // 如果 buffer 为空，可以停止循环，等待下一个 receiveData
+                    if self.buffer.isEmpty {
+                        continueDecoding = false
+                    }
+
+                } catch let error as WTMessageError {
+                    switch error {
                     case .unexpectedHeaderEOF, .bufferTooSmall:
-                        break decodeLoop // 等待更多数据
+                        // 预期错误：数据不足以构成完整消息。
+                        // 此时 self.buffer 中保留了部分数据，退出循环，等待下一批数据。
+//                            print("等待更多数据以完成解码: \(error)")
+                        continueDecoding = false
+
                     case .decodeToNilMessage:
-                        self.handleDecodingFatalError(error: err)
-                        break decodeLoop
+                        // 致命错误：不应该发生，除非调用错误
+                        //    print("FATAL DECODE ERROR: Decoding to nil message.")
+                        // 考虑取消连接
+                        self.handleDecodingFatalError(error: error)
+                        continueDecoding = false
                     }
                 } catch {
-                    handleDecodingFatalError(error: error)
-                    break decodeLoop
+                    self.handleDecodingFatalError(error: error)
+                    continueDecoding = false
                 }
             }
 
-            // 继续监听后续数据
-            receiveDataOnStream(stream: stream)
+            // 3. 继续递归调用 receive 以接收后续数据
+            self.receiveDataOnStream(stream: stream)
         }
     }
 
@@ -601,14 +628,16 @@ class QUICClient: NSObject, Loggable, @unchecked Sendable {
         close()
     }
 
-    private func createQUICParametersWithCustomVerification(quicOptions: NWProtocolQUIC.Options) -> NWParameters {
+    private func createQUICParametersWithCustomVerification(quicOptions: NWProtocolQUIC.Options)
+        -> NWParameters
+    {
         // 1. 获取底层的安全协议选项 (sec_protocol_options_t)
         let securityOptions: sec_protocol_options_t = quicOptions.securityProtocolOptions
 
         // 2. 定义自定义验证闭包 (sec_protocol_verify_t)
         // 这个闭包会在证书链验证期间被系统调用
         let customVerifyBlock: sec_protocol_verify_t = { _, _, completionHandler in
-//            log("证书验证成功: 允许连接")
+            //            log("证书验证成功: 允许连接")
             completionHandler(true) // 允许连接
         }
 
