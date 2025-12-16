@@ -213,6 +213,7 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
     let _state: StateSync<State>
 
     private let _sidCompleter = AsyncCompleter<Sid>(label: "sid", defaultTimeout: .resolveSid)
+    private let _disconnectCompleter = AsyncCompleter<Void>(label: "disconnect", defaultTimeout: .defaultTransportState * 10)
 
     // MARK: Objective-C Support
 
@@ -437,23 +438,55 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
 
     @objc
     public func disconnect() async {
-        let shouldDisconnect = _state.mutate {
-            switch $0.connectionState {
-            case .disconnecting, .disconnected:
-                return false
+        let disconnectId = UUID().uuidString
+        log("[freeze]\(disconnectId): in", .info)
+        enum DisconnectIntent {
+            case start
+            case wait
+            case noOp
+        }
+
+        let intent = _state.mutate { state -> DisconnectIntent in
+            switch state.connectionState {
+            case .disconnecting:
+                return .wait
+            case .disconnected:
+                return .noOp
             default:
-                $0.connectionState = .disconnecting
-                return true
+                state.connectionState = .disconnecting
+                return .start
             }
         }
-        guard shouldDisconnect else { return }
+
+        switch intent {
+        case .wait:
+            log("[freeze]\(disconnectId): disconnect already in progress, waiting for completion", .info)
+            do {
+                try await _disconnectCompleter.wait()
+            } catch {
+                log("[freeze]\(disconnectId): disconnect wait failed with error: \(error)", .warning)
+            }
+            log("[freeze]\(disconnectId): waiting for completion success", .info)
+            return
+        case .noOp:
+            log("[freeze]\(disconnectId): disconnect skipped (already disconnected)", .info)
+            return
+        case .start:
+            break
+        }
+
+        _disconnectCompleter.reset()
+
+        defer {
+            _disconnectCompleter.resume(returning: ())
+        }
 
         cancelReconnect()
 
         do {
             try await signalClient.sendLeave()
         } catch {
-            log("Failed to send leave with error: \(error)")
+            log("[freeze]\(disconnectId): Failed to send leave with error: \(error)")
         }
 
         cancelReconnect()
@@ -461,6 +494,8 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
         await cleanUp()
 
         cancelReconnect()
+
+        log("[freeze]\(disconnectId): out", .info)
     }
 
     private func cancelReconnect() {
