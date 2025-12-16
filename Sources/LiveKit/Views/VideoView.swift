@@ -327,6 +327,13 @@ public class VideoView: NativeView, Loggable {
                 }
             }
 
+            if newState.didRenderFirstFrame != oldState.didRenderFirstFrame {
+                log("didRenderFirstFrame \(oldState.didRenderFirstFrame) -> \(newState.didRenderFirstFrame)")
+                delegates.notify(label: { "videoView.didUpdate didRenderFirstFrame: \(newState.didRenderFirstFrame)" }) {
+                    $0.videoView?(self, didUpdateDidRenderFirstFrame: newState.didRenderFirstFrame)
+                }
+            }
+
             // viewSize updated
             if newState.viewSize != oldState.viewSize {
                 delegates.notify {

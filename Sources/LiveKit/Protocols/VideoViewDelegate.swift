@@ -26,4 +26,7 @@ public protocol VideoViewDelegate: AnyObject, Sendable {
     /// VideoView updated the isRendering property
     @objc(videoView:didUpdateIsRendering:) optional
     func videoView(_ videoView: VideoView, didUpdate isRendering: Bool)
+    /// VideoView updated the didRenderFirstFrame flag
+    @objc(videoView:didUpdateDidRenderFirstFrame:) optional
+    func videoView(_ videoView: VideoView, didUpdateDidRenderFirstFrame didRenderFirstFrame: Bool)
 }

@@ -40,7 +40,8 @@ public struct SwiftUIVideoView: NativeViewRepresentable {
                 rotationOverride: VideoRotation? = nil,
                 pinchToZoomOptions: VideoView.PinchToZoomOptions = [],
                 isDebugMode: Bool = false,
-                isRendering: Binding<Bool>? = nil)
+                isRendering: Binding<Bool>? = nil,
+                didRenderFirstFrame: Binding<Bool>? = nil)
     {
         self.track = track
         self.layoutMode = layoutMode
@@ -50,7 +51,8 @@ public struct SwiftUIVideoView: NativeViewRepresentable {
         self.isDebugMode = isDebugMode
         self.pinchToZoomOptions = pinchToZoomOptions
 
-        videoViewDelegateReceiver = VideoViewDelegateReceiver(isRendering: isRendering)
+        videoViewDelegateReceiver = VideoViewDelegateReceiver(isRendering: isRendering,
+                                                              didRenderFirstFrame: didRenderFirstFrame)
     }
 
     public func makeView(context: Context) -> VideoView {
@@ -71,6 +73,7 @@ public struct SwiftUIVideoView: NativeViewRepresentable {
         Task { @MainActor in
             videoView.add(delegate: videoViewDelegateReceiver)
             videoViewDelegateReceiver.isRendering = videoView.isRendering
+            videoViewDelegateReceiver.didRenderFirstFrame = videoView.didRenderFirstFrame
         }
     }
 
@@ -83,18 +86,31 @@ public struct SwiftUIVideoView: NativeViewRepresentable {
 @MainActor
 class VideoViewDelegateReceiver: VideoViewDelegate, Loggable {
     @Binding var isRendering: Bool
+    @Binding var didRenderFirstFrame: Bool
 
-    init(isRendering: Binding<Bool>?) {
+    init(isRendering: Binding<Bool>?, didRenderFirstFrame: Binding<Bool>?) {
         if let isRendering {
             _isRendering = isRendering
         } else {
             _isRendering = .constant(false)
+        }
+
+        if let didRenderFirstFrame {
+            _didRenderFirstFrame = didRenderFirstFrame
+        } else {
+            _didRenderFirstFrame = .constant(false)
         }
     }
 
     nonisolated func videoView(_: VideoView, didUpdate isRendering: Bool) {
         DispatchQueue.main.async {
             self.isRendering = isRendering
+        }
+    }
+
+    nonisolated func videoView(_: VideoView, didUpdateDidRenderFirstFrame didRenderFirstFrame: Bool) {
+        DispatchQueue.main.async {
+            self.didRenderFirstFrame = didRenderFirstFrame
         }
     }
 }
