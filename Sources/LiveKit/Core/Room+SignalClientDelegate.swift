@@ -116,7 +116,11 @@ extension Room: SignalClientDelegate {
                 }
             }
 
-            if ttCallRespTmp?.hasBody == true, let body = ttCallRespTmp?.body, let encryptor = _state.roomOptions.e2eeOptions?.ttEncryptor {
+            if ttCallRespTmp?.hasBody == true,
+               let body = ttCallRespTmp?.body,
+               let encryptor = _state.roomOptions.e2eeOptions?.ttEncryptor,
+               !_state.connectionState.isDisconnectingOrDisconnected
+            {
                 log("[startcall] Attempting to decrypt call key with publicKey=\(body.publicKey), emk=\(body.emk)")
                 if let mk = encryptor.decryptCallKey(eKey: body.publicKey, eMKey: body.emk) {
                     log("[startcall] Decrypted call key successfully, setting shared key.")
@@ -127,6 +131,8 @@ extension Room: SignalClientDelegate {
                 } else {
                     log("[startcall] Failed to decrypt call key, shared key not set.", .warning)
                 }
+            } else {
+                log("[startcall] No TTCallResponse body or encryptor not available, skipping decryption. connectionState: \(_state.connectionState)")
             }
 
             if e2eeManager != nil, !joinResponse.sifTrailer.isEmpty {
@@ -161,7 +167,17 @@ extension Room: SignalClientDelegate {
                 }
             }
 
-            delegates.notify { $0.roomDidSignalConnect?(self) }
+            if !_state.connectionState.isDisconnectingOrDisconnected {
+                delegates.notify {
+                    if !self._state.connectionState.isDisconnectingOrDisconnected {
+                        $0.roomDidSignalConnect?(self)
+                    } else {
+                        self.log("ignore roomDidSignalConnect callback, connectionState: \(self._state.connectionState)")
+                    }
+                }
+            } else {
+                log("ignore roomDidSignalConnect callback, connectionState: \(_state.connectionState)")
+            }
         }
     }
 

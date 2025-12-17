@@ -43,3 +43,14 @@ extension ConnectionState: Identifiable {
         rawValue
     }
 }
+
+extension ConnectionState {
+    var isDisconnectingOrDisconnected: Bool {
+        switch self {
+        case .disconnecting, .disconnected:
+            true
+        default:
+            false
+        }
+    }
+}
