@@ -192,6 +192,7 @@ extension Loggable {
              line: UInt = #line,
              ptr: String? = nil)
     {
+        let ptr = ptr ?? String(describing: Unmanaged.passUnretained(self as AnyObject).toOpaque())
         Self.log(message ?? "",
                  level,
                  file: file,
