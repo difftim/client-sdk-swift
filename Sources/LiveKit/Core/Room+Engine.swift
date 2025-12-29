@@ -262,6 +262,7 @@ extension Room {
         // Resume after configuring transports...
         await signalClient.resumeQueues()
 
+        log("[Connect] Waiting for subscriber to connect...")
         // Wait for transport...
         try await primaryTransportConnectedCompleter.wait(timeout: _state.connectOptions.primaryTransportConnectTimeout)
         try Task.checkCancellation()
@@ -415,6 +416,11 @@ extension Room {
                     return .success(())
                 } catch {
                     self.log("[Connect] Reconnect mode: \(mode) failed with error: \(error)", .error)
+
+                    // If the subscriber transport times out during reconnect and the old transport isn’t torn down immediately, the next attempt can overlap with that stale session,
+                    // leaving partially decrypted tracks that produce noise. Cleaning up right after a failed reconnect guarantees the next cycle starts from a clean slate.
+                    self.log("immediately cleaning up after failed reconnect...")
+                    await cleanUp(isFullReconnect: true, removePar: false)
                     // throw
                     if let err = error as? LiveKitError {
                         throw LiveKitError(.reconnectFailure, message: err.message, internalError: err.internalError)

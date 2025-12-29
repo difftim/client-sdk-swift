@@ -48,6 +48,8 @@ actor Transport: NSObject, Loggable {
         _pc.signalingState
     }
 
+    let id = UUID().uuidString
+
     // MARK: - Private
 
     private let _delegate = MulticastDelegate<TransportDelegate>(label: "TransportDelegate")
@@ -86,7 +88,7 @@ actor Transport: NSObject, Loggable {
         _pc = pc
 
         super.init()
-        log()
+        log("target:\(target), isPrimary:\(isPrimary), id:\(id)")
 
         _pc.delegate = self
         _delegate.add(delegate: delegate)

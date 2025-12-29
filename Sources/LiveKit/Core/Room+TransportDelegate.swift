@@ -81,15 +81,27 @@ extension Room: TransportDelegate {
             return
         }
 
+        let currentTransportId = transport.id
+
         if transport.target == .subscriber {
             // execute block when connected
-            execute(when: { state, _ in state.connectionState == .connected },
+            execute(when: { state, _ in
+                        state.connectionState == .connected
+                    },
                     // always remove this block when disconnected
-                    removeWhen: { state, _ in state.connectionState == .disconnected })
-            { [weak self] in
+                    removeWhen: { state, _ in
+                        if state.connectionState == .disconnected {
+                            return true
+                        } else if currentTransportId != state.subscriber?.id {
+                            self.log("removeWhen: oldId=\(currentTransportId), newId=\(state.subscriber?.id)", .warning)
+                            return true
+                        } else {
+                            return false
+                        }
+                    }) { [weak self] in
                 guard let self else { return }
                 Task {
-                    await self.engine(self, didAddTrack: track, rtpReceiver: rtpReceiver, stream: streams.first!)
+                    await self.engine(self, didAddTrack: track, rtpReceiver: rtpReceiver, stream: streams.first!, subscriberId: currentTransportId)
                 }
             }
         }

@@ -171,12 +171,20 @@ extension Room {
         }
     }
 
-    func engine(_: Room, didAddTrack track: LKRTCMediaStreamTrack, rtpReceiver: LKRTCRtpReceiver, stream: LKRTCMediaStream) async {
+    func engine(_: Room, didAddTrack track: LKRTCMediaStreamTrack, rtpReceiver: LKRTCRtpReceiver, stream: LKRTCMediaStream, subscriberId: String) async {
         let parseResult = parse(streamId: stream.streamId)
         let trackId = parseResult.trackId ?? Track.Sid(from: track.trackId)
 
-        let participant = _state.read {
-            $0.remoteParticipants.values.first { $0.sid == parseResult.participantSid }
+        let (participant, currentSubscriberId): (RemoteParticipant?, String) = _state.read { state in
+            let participant = state.remoteParticipants.values.first { $0.sid == parseResult.participantSid }
+            let currentSubscriberId = state.subscriber?.id ?? ""
+
+            return (participant, currentSubscriberId)
+        }
+
+        guard subscriberId == currentSubscriberId else {
+            log("*enc: [fixbug] subscriberId mismatch: old(\(subscriberId)) != new(\(currentSubscriberId))", .warning)
+            return
         }
 
         guard let participant else {
