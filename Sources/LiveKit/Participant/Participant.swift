@@ -226,8 +226,13 @@ public class Participant: NSObject, @unchecked Sendable, ObservableObject, Logga
             }
         }
 
-        // Reset state
-        _state.mutate { $0 = State() }
+        // Reset state, keeping sid and identity for participant
+        _state.mutate {
+            $0 = State(
+                sid: $0.sid,
+                identity: $0.identity
+            )
+        }
     }
 
     func unpublishAll(notify _: Bool = true) async {
