@@ -491,7 +491,8 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
 
         cancelReconnect()
 
-        await cleanUp()
+        // must clean local info
+        await cleanUp(stopTrackCaptureImmediately: true)
 
         cancelReconnect()
 
@@ -513,10 +514,10 @@ extension Room {
     // Resets state of Room
     func cleanUp(withError disconnectError: Error? = nil,
                  isFullReconnect: Bool = false,
-                 removePar: Bool = true) async
+                 stopTrackCaptureImmediately: Bool = false) async
     {
         guard !Task.isCancelled else { return }
-        log("withError: \(String(describing: disconnectError)), isFullReconnect: \(isFullReconnect), removePar: \(removePar)")
+        log("withError: \(String(describing: disconnectError)), isFullReconnect: \(isFullReconnect), stopTrackCaptureImmediately: \(stopTrackCaptureImmediately)")
 
         // Reset completers
         _sidCompleter.reset()
@@ -524,11 +525,17 @@ extension Room {
         publisherTransportConnectedCompleter.reset()
 
         await signalClient.cleanUp(withError: disconnectError)
+        // stop local track capture before cleaning up RTC, speeds up clean rtc process
+        if stopTrackCaptureImmediately {
+            do {
+                try await localParticipant.stopAllTrackCapture()
+            } catch {
+                log("Failed to stop all track capture: \(error)", .error)
+            }
+        }
         await cleanUpRTC()
 
-        // if removePar {
         await cleanUpParticipants(isFullReconnect: isFullReconnect)
-        // }
 
         // Cleanup for E2EE
         if let e2eeManager {

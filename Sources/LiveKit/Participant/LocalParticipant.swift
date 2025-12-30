@@ -542,6 +542,23 @@ extension [Livekit_SubscribedQuality] {
     }
 }
 
+// MARK: - stop track before disconnect
+
+public extension LocalParticipant {
+    func stopAllTrackCapture() async {
+        let publications = _state.trackPublications.values.compactMap { $0 as? LocalTrackPublication }
+        for publication in publications {
+            if let track = publication.track as? LocalTrack {
+                do {
+                    try await track.stopCapture()
+                } catch {
+                    log("Failed to stop capture for track \(publication.sid): \(error)", .error)
+                }
+            }
+        }
+    }
+}
+
 // MARK: - Private
 
 extension LocalParticipant {

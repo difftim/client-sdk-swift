@@ -347,7 +347,7 @@ extension Room {
                 $0.connectionState = .reconnecting
             }
 
-            await cleanUp(isFullReconnect: true, removePar: false)
+            await cleanUp(isFullReconnect: true)
 
             guard let url = _state.url,
                   let token = _state.token
@@ -420,7 +420,7 @@ extension Room {
                     // If the subscriber transport times out during reconnect and the old transport isn’t torn down immediately, the next attempt can overlap with that stale session,
                     // leaving partially decrypted tracks that produce noise. Cleaning up right after a failed reconnect guarantees the next cycle starts from a clean slate.
                     self.log("immediately cleaning up after failed reconnect...")
-                    await cleanUp(isFullReconnect: true, removePar: false)
+                    await cleanUp(isFullReconnect: true)
                     // throw
                     if let err = error as? LiveKitError {
                         throw LiveKitError(.reconnectFailure, message: err.message, internalError: err.internalError)
