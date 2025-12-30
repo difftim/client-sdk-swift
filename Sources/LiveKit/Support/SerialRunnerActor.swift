@@ -17,14 +17,19 @@
 import Foundation
 
 actor SerialRunnerActor<Value: Sendable> {
-    private var previousTask: Task<Value, Error>?
+    private var previous: (id: UInt64, task: Task<Value, Error>)?
+    private var nextId: UInt64 = 0
 
     func run(block: @Sendable @escaping () async throws -> Value) async throws -> Value {
-        let task = Task { [previousTask] in
+        let prevTask = previous?.task
+
+        nextId &+= 1
+        let id = nextId
+
+        let task = Task { [prevTask] in
             // Always wait for the previous task to maintain serial ordering
-            if let previousTask {
-                // If previous task is still running, wait for it
-                _ = try? await previousTask.value
+            if let prevTask {
+                _ = try? await prevTask.value
             }
 
             // Check for cancellation before running the block
@@ -34,14 +39,25 @@ actor SerialRunnerActor<Value: Sendable> {
             return try await block()
         }
 
-        previousTask = task
+        previous = (id, task)
 
-        return try await withTaskCancellationHandler {
-            // Await the current task's result
-            try await task.value
-        } onCancel: {
-            // Ensure the task is canceled when requested
-            task.cancel()
+        do {
+            let ret = try await withTaskCancellationHandler {
+                try await task.value
+            } onCancel: {
+                task.cancel()
+            }
+
+            // Only clear if we are still the latest task
+            if previous?.id == id {
+                previous = nil
+            }
+            return ret
+        } catch {
+            if previous?.id == id {
+                previous = nil
+            }
+            throw error
         }
     }
 }
