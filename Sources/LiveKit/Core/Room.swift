@@ -525,6 +525,7 @@ extension Room {
         publisherTransportConnectedCompleter.reset()
 
         await signalClient.cleanUp(withError: disconnectError)
+
         // stop local track capture before cleaning up RTC, speeds up clean rtc process
         if stopTrackCaptureImmediately {
             do {
@@ -533,9 +534,12 @@ extension Room {
                 log("Failed to stop all track capture: \(error)", .error)
             }
         }
-        await cleanUpRTC()
 
+        // Clean up sender-related resources (incl. encryption state) before tearing down RTC.
+        // During reconnect local capture may still produce frames; tearing down RTC/cryptors first can cause callbacks to touch released objects and crash.
         await cleanUpParticipants(isFullReconnect: isFullReconnect)
+
+        await cleanUpRTC()
 
         // Cleanup for E2EE
         if let e2eeManager {
