@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 LiveKit
+ * Copyright 2026 LiveKit
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+// swiftlint:disable file_length
 
 import Combine
 import Foundation
@@ -357,6 +359,7 @@ public extension LocalParticipant {
 
     @objc
     @discardableResult
+    // swiftlint:disable:next cyclomatic_complexity function_body_length
     func set(source: Track.Source,
              enabled: Bool,
              captureOptions: CaptureOptions? = nil,
@@ -563,6 +566,7 @@ public extension LocalParticipant {
 
 extension LocalParticipant {
     @discardableResult
+    // swiftlint:disable:next cyclomatic_complexity function_body_length
     func _publish(track: LocalTrack, options: TrackPublishOptions? = nil, publishMuted: Bool = false) async throws -> LocalTrackPublication {
         log("[publish] \(track) options: \(String(describing: options ?? nil))...", .info)
 
@@ -590,7 +594,7 @@ extension LocalParticipant {
 
         do {
             var dimensions: Dimensions? // Only for Video
-            var publishName: String? = nil
+            var publishName: String?
 
             var sendEncodings: [LKRTCRtpEncodingParameters]?
             var populatorFunc: SignalClient.AddTrackRequestPopulator?
@@ -675,7 +679,7 @@ extension LocalParticipant {
                     let enableE2ee = room.e2eeManager?.frameEncryptionType != EncryptionType.none
 
                     populator.disableDtx = !audioPublishOptions.dtx
-                    populator.disableRed = enableE2ee || !(audioPublishOptions.red ?? true)
+                    populator.disableRed = enableE2ee || !(audioPublishOptions.red)
                     populator.audioFeatures = Array(audioPublishOptions.toFeatures())
 
                     if let streamName = options?.streamName {

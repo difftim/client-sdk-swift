@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 LiveKit
+ * Copyright 2026 LiveKit
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -141,7 +141,7 @@ public class VideoCapturer: NSObject, @unchecked Sendable, Loggable, VideoCaptur
 
     #if canImport(UIKit)
     public func set(orientation newOrientation: UIInterfaceOrientation?) {
-        log("set orientation to: \(newOrientation?.rawValue)")
+        log("set orientation to: \(String(describing: newOrientation?.rawValue))")
         _state.mutate { $0.orientation = newOrientation }
     }
     #endif

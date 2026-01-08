@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 LiveKit
+ * Copyright 2026 LiveKit
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -93,7 +93,7 @@ extension Room: TransportDelegate {
                         if state.connectionState == .disconnected {
                             return true
                         } else if currentTransportId != state.subscriber?.id {
-                            self.log("removeWhen: oldId=\(currentTransportId), newId=\(state.subscriber?.id)", .warning)
+                            self.log("removeWhen: oldId=\(currentTransportId), newId=\(String(describing: state.subscriber?.id))", .warning)
                             return true
                         } else {
                             return false
@@ -120,8 +120,8 @@ extension Room: TransportDelegate {
 
         if _state.isSubscriberPrimary, transport.target == .subscriber {
             switch dataChannel.label {
-            case LKRTCDataChannel.labels.reliable: subscriberDataChannel.set(reliable: dataChannel)
-            case LKRTCDataChannel.labels.lossy: subscriberDataChannel.set(lossy: dataChannel)
+            case LKRTCDataChannel.Labels.reliable: subscriberDataChannel.set(reliable: dataChannel)
+            case LKRTCDataChannel.Labels.lossy: subscriberDataChannel.set(lossy: dataChannel)
             default: log("Unknown data channel label \(dataChannel.label)", .warning)
             }
         }

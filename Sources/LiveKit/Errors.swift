@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 LiveKit
+ * Copyright 2026 LiveKit
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ public enum LiveKitErrorType: Int, Sendable {
     case webRTC = 201
 
     case network // Network issue
+    case validation // Validation issue
     case reconnectFailure // Network issue
 
     // Server
@@ -83,6 +84,8 @@ extension LiveKitErrorType: CustomStringConvertible {
             "WebRTC error"
         case .network:
             "Network error"
+        case .validation:
+            "Validation error"
         case .reconnectFailure:
             "Reconnect failure"
         case .duplicateIdentity:
@@ -131,6 +134,9 @@ public class LiveKitError: NSError, @unchecked Sendable, Loggable {
     public let internalError: Error?
     public let response: Livekit_TTCallResponse?
 
+    @available(*, deprecated, renamed: "internalError")
+    public var underlyingError: Error? { internalError }
+
     override public var underlyingErrors: [Error] {
         [internalError].compactMap { $0 }
     }
@@ -154,9 +160,14 @@ public class LiveKitError: NSError, @unchecked Sendable, Loggable {
         self.message = message
         self.internalError = internalError
         self.response = response
+
+        var userInfo: [String: Any] = [NSLocalizedDescriptionKey: _computeDescription()]
+        if let internalError {
+            userInfo[NSUnderlyingErrorKey] = internalError as NSError
+        }
         super.init(domain: "io.livekit.swift-sdk",
                    code: type.rawValue,
-                   userInfo: [NSLocalizedDescriptionKey: _computeDescription()])
+                   userInfo: userInfo)
     }
 
     @available(*, unavailable)

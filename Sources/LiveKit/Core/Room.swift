@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 LiveKit
+ * Copyright 2026 LiveKit
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+// swiftlint:disable file_length
+
 import Combine
 import Foundation
 
@@ -22,6 +24,7 @@ import Network
 #endif
 
 @objc
+// swiftlint:disable:next type_body_length
 public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
     // MARK: - MulticastDelegate
 
@@ -29,7 +32,7 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
 
     // MARK: - Metrics
 
-    private lazy var metricsManager = MetricsManager()
+    lazy var metricsManager = MetricsManager()
 
     // MARK: - Public
 
@@ -172,7 +175,8 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
         var nextReconnectMode: ReconnectMode?
         var isReconnectingWithMode: ReconnectMode?
         var connectionState: ConnectionState = .disconnected
-        var reconnectTask: Task<Result<Void, LiveKitError>, Error>?
+        // var reconnectTask: Task<Result<Void, LiveKitError>, Error>?
+        var reconnectTask: AnyTaskCancellable?
         var disconnectError: LiveKitError?
         var connectStopwatch = Stopwatch(label: "connect")
         var hasPublished: Bool = false
@@ -225,6 +229,7 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
     }
 
     @objc
+    // swiftlint:disable:next cyclomatic_complexity function_body_length
     public init(delegate: RoomDelegate? = nil,
                 connectOptions: ConnectOptions? = nil,
                 roomOptions: RoomOptions? = nil)
@@ -238,7 +243,7 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
 
         super.init()
         // log sdk & os versions
-        log("sdk: \(LiveKitSDK.version), os: \(String(describing: Utils.os()))(\(Utils.osVersionString())), modelId: \(String(describing: Utils.modelIdentifier() ?? "unknown"))")
+        log("sdk: \(LiveKitSDK.version), ffi: \(LiveKitSDK.ffiVersion), os: \(String(describing: Utils.os()))(\(Utils.osVersionString())), modelId: \(String(describing: Utils.modelIdentifier() ?? "unknown"))")
 
         signalClient._delegate.set(delegate: self)
 
@@ -324,6 +329,7 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
     }
 
     @objc
+    // swiftlint:disable:next function_body_length
     public func connect(url: String,
                         token: String,
                         connectOptions: ConnectOptions? = nil,
@@ -501,8 +507,6 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
 
     private func cancelReconnect() {
         _state.mutate {
-            log("Cancelling reconnect task: \(String(describing: $0.reconnectTask))")
-            $0.reconnectTask?.cancel()
             $0.reconnectTask = nil
         }
     }
@@ -528,11 +532,7 @@ extension Room {
 
         // stop local track capture before cleaning up RTC, speeds up clean rtc process
         if stopTrackCaptureImmediately {
-            do {
-                try await localParticipant.stopAllTrackCapture()
-            } catch {
-                log("Failed to stop all track capture: \(error)", .error)
-            }
+            await localParticipant.stopAllTrackCapture()
         }
 
         // Clean up sender-related resources (incl. encryption state) before tearing down RTC.
