@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 LiveKit
+ * Copyright 2026 LiveKit
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,12 +46,12 @@ extension Livekit_Encryption.TypeEnum {
 }
 
 @objc
-public protocol TTEncryptor: Sendable {
+public protocol TTEncryptor: AnyObject, Sendable {
     func decryptCallKey(eKey: String, eMKey: String) -> Data?
 }
 
 @objc
-public final class E2EEOptions: NSObject, Sendable {
+public final class E2EEOptions: NSObject, @unchecked Sendable {
     @objc
     public let keyProvider: BaseKeyProvider
 
@@ -59,7 +59,7 @@ public final class E2EEOptions: NSObject, Sendable {
     public let encryptionType: EncryptionType
 
     @objc
-    public let ttEncryptor: TTEncryptor?
+    public weak var ttEncryptor: TTEncryptor?
 
     public init(keyProvider: BaseKeyProvider,
                 encryptionType: EncryptionType = .gcm,

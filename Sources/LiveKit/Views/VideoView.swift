@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 LiveKit
+ * Copyright 2026 LiveKit
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+// swiftlint:disable file_length
+
 @preconcurrency import AVFoundation
 import MetalKit
 
@@ -23,6 +25,7 @@ internal import LiveKitWebRTC
 typealias NativeRendererView = LKRTCVideoRenderer & Mirrorable & NativeViewType
 
 @objc
+// swiftlint:disable:next type_body_length
 public class VideoView: NativeView, Loggable {
     // MARK: - MulticastDelegate
 
@@ -142,13 +145,29 @@ public class VideoView: NativeView, Loggable {
     @objc
     public nonisolated var isPinchToZoomEnabled: Bool {
         get { _state.pinchToZoomOptions.isEnabled }
-        set { _state.mutate { $0.pinchToZoomOptions.insert(.zoomIn) } }
+        set {
+            _state.mutate {
+                if newValue {
+                    $0.pinchToZoomOptions.insert(.zoomIn)
+                } else {
+                    $0.pinchToZoomOptions.remove(.zoomIn)
+                }
+            }
+        }
     }
 
     @objc
     public nonisolated var isAutoZoomResetEnabled: Bool {
         get { _state.pinchToZoomOptions.contains(.resetOnRelease) }
-        set { _state.mutate { $0.pinchToZoomOptions.insert(.resetOnRelease) } }
+        set {
+            _state.mutate {
+                if newValue {
+                    $0.pinchToZoomOptions.insert(.resetOnRelease)
+                } else {
+                    $0.pinchToZoomOptions.remove(.resetOnRelease)
+                }
+            }
+        }
     }
 
     public nonisolated var pinchToZoomOptions: PinchToZoomOptions {
@@ -249,6 +268,7 @@ public class VideoView: NativeView, Loggable {
     var _pinchStartZoomFactor: CGFloat = 0.0
     #endif
 
+    // swiftlint:disable:next cyclomatic_complexity function_body_length
     override public init(frame: CGRect = .zero) {
         // initial state
         _state = StateSync(State(viewSize: frame.size))
@@ -324,6 +344,13 @@ public class VideoView: NativeView, Loggable {
                 log("isRendering \(oldState.isRendering) -> \(newState.isRendering)")
                 delegates.notify(label: { "videoView.didUpdate isRendering: \(newState.isRendering)" }) {
                     $0.videoView?(self, didUpdate: newState.isRendering)
+                }
+            }
+
+            if newState.didRenderFirstFrame != oldState.didRenderFirstFrame {
+                log("didRenderFirstFrame \(oldState.didRenderFirstFrame) -> \(newState.didRenderFirstFrame)")
+                delegates.notify(label: { "videoView.didUpdate didRenderFirstFrame: \(newState.didRenderFirstFrame)" }) {
+                    $0.videoView?(self, didUpdateDidRenderFirstFrame: newState.didRenderFirstFrame)
                 }
             }
 
@@ -408,6 +435,7 @@ public class VideoView: NativeView, Loggable {
         fatalError("init(coder:) has not been implemented")
     }
 
+    // swiftlint:disable:next cyclomatic_complexity function_body_length
     override public func performLayout() {
         super.performLayout()
 
@@ -469,7 +497,7 @@ public class VideoView: NativeView, Loggable {
         let hRatio = size.height / hDim
         let ratioDiff = abs(hRatio - wRatio)
 
-        if ratioDiff < CGFloat.aspectRatioTolerance {
+        if !ratioDiff.isFinite || ratioDiff < CGFloat.aspectRatioTolerance {
             // no-op
         } else if state.layoutMode == .fill ? hRatio > wRatio : hRatio < wRatio {
             size.width = size.height / hDim * wDim
@@ -596,6 +624,7 @@ extension VideoView: VideoRenderer {
         }
     }
 
+    // swiftlint:disable:next function_body_length
     public func render(frame: VideoFrame, captureDevice: AVCaptureDevice?, captureOptions: VideoCaptureOptions?) {
         let state = _state.copy()
 

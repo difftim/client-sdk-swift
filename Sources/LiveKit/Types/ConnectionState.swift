@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 LiveKit
+ * Copyright 2026 LiveKit
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,5 +41,16 @@ public enum ConnectionState: Int, Sendable {
 extension ConnectionState: Identifiable {
     public var id: Int {
         rawValue
+    }
+}
+
+extension ConnectionState {
+    var isDisconnectingOrDisconnected: Bool {
+        switch self {
+        case .disconnecting, .disconnected:
+            true
+        default:
+            false
+        }
     }
 }

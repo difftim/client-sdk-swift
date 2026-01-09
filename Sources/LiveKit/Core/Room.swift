@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 LiveKit
+ * Copyright 2026 LiveKit
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+// swiftlint:disable file_length
+
 import Combine
 import Foundation
 
@@ -22,6 +24,7 @@ import Network
 #endif
 
 @objc
+// swiftlint:disable:next type_body_length
 public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
     // MARK: - MulticastDelegate
 
@@ -29,7 +32,7 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
 
     // MARK: - Metrics
 
-    private lazy var metricsManager = MetricsManager()
+    lazy var metricsManager = MetricsManager()
 
     // MARK: - Public
 
@@ -172,7 +175,8 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
         var nextReconnectMode: ReconnectMode?
         var isReconnectingWithMode: ReconnectMode?
         var connectionState: ConnectionState = .disconnected
-        var reconnectTask: Task<Result<Void, LiveKitError>, Error>?
+        // var reconnectTask: Task<Result<Void, LiveKitError>, Error>?
+        var reconnectTask: AnyTaskCancellable?
         var disconnectError: LiveKitError?
         var connectStopwatch = Stopwatch(label: "connect")
         var hasPublished: Bool = false
@@ -213,6 +217,7 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
     let _state: StateSync<State>
 
     private let _sidCompleter = AsyncCompleter<Sid>(label: "sid", defaultTimeout: .resolveSid)
+    private let _disconnectCompleter = AsyncCompleter<Void>(label: "disconnect", defaultTimeout: .defaultTransportState * 10)
 
     // MARK: Objective-C Support
 
@@ -224,6 +229,7 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
     }
 
     @objc
+    // swiftlint:disable:next cyclomatic_complexity function_body_length
     public init(delegate: RoomDelegate? = nil,
                 connectOptions: ConnectOptions? = nil,
                 roomOptions: RoomOptions? = nil)
@@ -237,7 +243,7 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
 
         super.init()
         // log sdk & os versions
-        log("sdk: \(LiveKitSDK.version), os: \(String(describing: Utils.os()))(\(Utils.osVersionString())), modelId: \(String(describing: Utils.modelIdentifier() ?? "unknown"))")
+        log("sdk: \(LiveKitSDK.version), ffi: \(LiveKitSDK.ffiVersion), os: \(String(describing: Utils.os()))(\(Utils.osVersionString())), modelId: \(String(describing: Utils.modelIdentifier() ?? "unknown"))")
 
         signalClient._delegate.set(delegate: self)
 
@@ -323,6 +329,7 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
     }
 
     @objc
+    // swiftlint:disable:next function_body_length
     public func connect(url: String,
                         token: String,
                         connectOptions: ConnectOptions? = nil,
@@ -437,36 +444,69 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
 
     @objc
     public func disconnect() async {
-        let shouldDisconnect = _state.mutate {
-            switch $0.connectionState {
-            case .disconnecting, .disconnected:
-                return false
+        let disconnectId = UUID().uuidString
+        log("[freeze]\(disconnectId): in", .info)
+        enum DisconnectIntent {
+            case start
+            case wait
+            case noOp
+        }
+
+        let intent = _state.mutate { state -> DisconnectIntent in
+            switch state.connectionState {
+            case .disconnecting:
+                return .wait
+            case .disconnected:
+                return .noOp
             default:
-                $0.connectionState = .disconnecting
-                return true
+                state.connectionState = .disconnecting
+                return .start
             }
         }
-        guard shouldDisconnect else { return }
+
+        switch intent {
+        case .wait:
+            log("[freeze]\(disconnectId): disconnect already in progress, waiting for completion", .info)
+            do {
+                try await _disconnectCompleter.wait()
+            } catch {
+                log("[freeze]\(disconnectId): disconnect wait failed with error: \(error)", .warning)
+            }
+            log("[freeze]\(disconnectId): waiting for completion success", .info)
+            return
+        case .noOp:
+            log("[freeze]\(disconnectId): disconnect skipped (already disconnected)", .info)
+            return
+        case .start:
+            break
+        }
+
+        _disconnectCompleter.reset()
+
+        defer {
+            _disconnectCompleter.resume(returning: ())
+        }
 
         cancelReconnect()
 
         do {
             try await signalClient.sendLeave()
         } catch {
-            log("Failed to send leave with error: \(error)")
+            log("[freeze]\(disconnectId): Failed to send leave with error: \(error)")
         }
 
         cancelReconnect()
 
-        await cleanUp()
+        // must clean local info
+        await cleanUp(stopTrackCaptureImmediately: true)
 
         cancelReconnect()
+
+        log("[freeze]\(disconnectId): out", .info)
     }
 
     private func cancelReconnect() {
         _state.mutate {
-            log("Cancelling reconnect task: \(String(describing: $0.reconnectTask))")
-            $0.reconnectTask?.cancel()
             $0.reconnectTask = nil
         }
     }
@@ -478,10 +518,10 @@ extension Room {
     // Resets state of Room
     func cleanUp(withError disconnectError: Error? = nil,
                  isFullReconnect: Bool = false,
-                 removePar: Bool = true) async
+                 stopTrackCaptureImmediately: Bool = false) async
     {
         guard !Task.isCancelled else { return }
-        log("withError: \(String(describing: disconnectError)), isFullReconnect: \(isFullReconnect), removePar: \(removePar)")
+        log("withError: \(String(describing: disconnectError)), isFullReconnect: \(isFullReconnect), stopTrackCaptureImmediately: \(stopTrackCaptureImmediately)")
 
         // Reset completers
         _sidCompleter.reset()
@@ -489,11 +529,17 @@ extension Room {
         publisherTransportConnectedCompleter.reset()
 
         await signalClient.cleanUp(withError: disconnectError)
-        await cleanUpRTC()
 
-        // if removePar {
+        // stop local track capture before cleaning up RTC, speeds up clean rtc process
+        if stopTrackCaptureImmediately {
+            await localParticipant.stopAllTrackCapture()
+        }
+
+        // Clean up sender-related resources (incl. encryption state) before tearing down RTC.
+        // During reconnect local capture may still produce frames; tearing down RTC/cryptors first can cause callbacks to touch released objects and crash.
         await cleanUpParticipants(isFullReconnect: isFullReconnect)
-        // }
+
+        await cleanUpRTC()
 
         // Cleanup for E2EE
         if let e2eeManager {

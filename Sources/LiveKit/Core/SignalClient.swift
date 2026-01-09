@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 LiveKit
+ * Copyright 2026 LiveKit
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+// swiftlint:disable file_length
 
 import Foundation
 
@@ -89,7 +91,7 @@ actor SignalClient: Loggable {
         var connectionState: ConnectionState = .disconnected
         var disconnectError: LiveKitError?
         var transport: SignalTransport?
-        var messageLoopTask: Task<Void, Never>?
+        var messageLoopTask: AnyTaskCancellable?
         var lastJoinResponse: Livekit_JoinResponse?
         var rtt: Int64 = 0
     }
@@ -109,6 +111,7 @@ actor SignalClient: Loggable {
     }
 
     @discardableResult
+    // swiftlint:disable:next function_body_length
     func connect(_ url: URL,
                  _ token: String,
                  connectOptions: ConnectOptions? = nil,
@@ -153,17 +156,12 @@ actor SignalClient: Loggable {
                                                                     options: connectOptions,
                                                                     sendAfterOpen: sendAfterOpen)
 
-            let task = Task.detached {
-                self.log("Did enter signaling transport message loop...")
-                do {
-                    for try await message in transport {
-                        await self._onTransportMessage(message: message)
-                    }
-                } catch {
-                    await self.cleanUp(withError: error)
-                }
+            let messageLoopTask = socket.subscribe(self) { observer, message in
+                await observer.onTransportMessage(message)
+            } onFailure: { observer, error in
+                await observer.cleanUp(withError: error)
             }
-            _state.mutate { $0.messageLoopTask = task }
+            _state.mutate { $0.messageLoopTask = messageLoopTask }
 
             let connectResponse = try await _connectResponseCompleter.wait()
             // Check cancellation after received join response
@@ -176,7 +174,7 @@ actor SignalClient: Loggable {
             }
 
             return connectResponse
-        } catch {
+        } catch let connectionError {
             // Skip validation if user cancelled
             if let error = lastConnectionError {
                 lastConnectionError = nil
@@ -184,41 +182,57 @@ actor SignalClient: Loggable {
                 throw error
             }
 
-            if error is CancellationError {
-                await cleanUp(withError: error)
-                throw error
+            if connectionError is CancellationError {
+                await cleanUp(withError: connectionError)
+                throw connectionError
             }
 
-            if let lkError = error as? LiveKitError, lkError.type == .timedOut {
-                await cleanUp(withError: error)
-                throw error
+            if let lkError = connectionError as? LiveKitError, lkError.type == .timedOut {
+                await cleanUp(withError: connectionError)
+                throw connectionError
             }
 
             // Skip validation if reconnect mode
             if reconnectMode != nil {
-                await cleanUp(withError: error)
-                throw error
+                await cleanUp(withError: connectionError)
+                throw LiveKitError(.network, internalError: connectionError)
             }
 
-            await cleanUp(withError: error)
+            await cleanUp(withError: connectionError)
 
-            // Validate...
+            // Attempt to validate with server
             let validateUrl = try Utils.buildUrl(url,
                                                  token,
                                                  connectOptions: connectOptions,
                                                  participantSid: participantSid,
                                                  adaptiveStream: adaptiveStream,
                                                  validate: true)
-
             log("Validating with url: \(validateUrl)...")
-            let validationResponse = try await HTTP.requestValidation(from: validateUrl, token: token)
-            log("Validate response: \(validationResponse)")
-            // re-throw with validation response
-            throw LiveKitError(.network, message: "Validation response: \"\(validationResponse)\"")
+            do {
+                try await HTTP.requestValidation(from: validateUrl, token: token)
+                // Re-throw original error since validation passed
+                throw LiveKitError(.network, internalError: connectionError)
+            } catch let validationError as LiveKitError where validationError.type == .validation {
+                // Re-throw validation error
+                throw validationError
+            } catch {
+                let validationMessage = if let liveKitError = error as? LiveKitError {
+                    liveKitError.message ?? liveKitError.localizedDescription
+                } else {
+                    error.localizedDescription
+                }
+
+                // Preserve validation request failure details while keeping the original connection error.
+                throw LiveKitError(.network,
+                                   message: "Validation request failed: \(validationMessage)",
+                                   internalError: connectionError)
+            }
         }
     }
 
     func cleanUp(withError disconnectError: Error? = nil) async {
+        if Task.isCancelled { return }
+
         log("withError: \(String(describing: disconnectError))")
 
         // Cancel ping/pong timers immediately to prevent stale timers from affecting future connections
@@ -226,7 +240,6 @@ actor SignalClient: Loggable {
         _pingTimeoutTimer.cancel()
 
         _state.mutate {
-            $0.messageLoopTask?.cancel()
             $0.messageLoopTask = nil
             $0.transport?.close()
             $0.transport = nil
@@ -259,7 +272,7 @@ private extension SignalClient {
         await _requestQueue.processIfResumed(request, elseEnqueue: request.canBeQueued())
     }
 
-    func _onTransportMessage(message: URLSessionWebSocketTask.Message) async {
+    func onTransportMessage(_ message: URLSessionWebSocketTask.Message) async {
         let response: Livekit_SignalResponse? = switch message {
         case let .data(data): try? Livekit_SignalResponse(serializedBytes: data)
         case let .string(string): try? Livekit_SignalResponse(jsonString: string)
@@ -281,6 +294,7 @@ private extension SignalClient {
         }
     }
 
+    // swiftlint:disable:next cyclomatic_complexity function_body_length
     func _process(signalResponse: Livekit_SignalResponse) async {
         guard connectionState != .disconnected else {
             log("connectionState is .disconnected", .error)

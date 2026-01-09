@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 LiveKit
+ * Copyright 2026 LiveKit
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,6 +48,8 @@ actor Transport: NSObject, Loggable {
         _pc.signalingState
     }
 
+    let id = UUID().uuidString
+
     // MARK: - Private
 
     private let _delegate = MulticastDelegate<TransportDelegate>(label: "TransportDelegate")
@@ -86,7 +88,7 @@ actor Transport: NSObject, Loggable {
         _pc = pc
 
         super.init()
-        log()
+        log("target:\(target), isPrimary:\(isPrimary), id:\(id)")
 
         _pc.delegate = self
         _delegate.add(delegate: delegate)
@@ -229,6 +231,12 @@ extension Transport: LKRTCPeerConnectionDelegate {
         }
 
         log("type: \(type(of: track)), track.id: \(track.trackId), streams: \(streams.map { "Stream(hash: \($0.hash), id: \($0.streamId), videoTracks: \($0.videoTracks.count), audioTracks: \($0.audioTracks.count))" })")
+
+        if track.kind == "audio" {
+            track.isEnabled = false
+            log("[delay] Disabling audio track \"\(track.trackId)\" until set e2ee or disable e2ee", .warning)
+        }
+
         _delegate.notify { $0.transport(self, didAddTrack: track, rtpReceiver: rtpReceiver, streams: streams) }
     }
 

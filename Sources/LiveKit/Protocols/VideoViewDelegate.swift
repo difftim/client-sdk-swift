@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 LiveKit
+ * Copyright 2026 LiveKit
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,4 +26,7 @@ public protocol VideoViewDelegate: AnyObject, Sendable {
     /// VideoView updated the isRendering property
     @objc(videoView:didUpdateIsRendering:) optional
     func videoView(_ videoView: VideoView, didUpdate isRendering: Bool)
+    /// VideoView updated the didRenderFirstFrame flag
+    @objc(videoView:didUpdateDidRenderFirstFrame:) optional
+    func videoView(_ videoView: VideoView, didUpdateDidRenderFirstFrame didRenderFirstFrame: Bool)
 }

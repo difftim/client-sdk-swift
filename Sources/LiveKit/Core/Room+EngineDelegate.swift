@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 LiveKit
+ * Copyright 2026 LiveKit
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ import Foundation
 internal import LiveKitWebRTC
 
 extension Room {
+    // swiftlint:disable:next cyclomatic_complexity function_body_length
     func engine(_: Room, didMutateState state: Room.State, oldState: Room.State) {
         if state.connectionState != oldState.connectionState {
             // connectionState did update
@@ -171,12 +172,20 @@ extension Room {
         }
     }
 
-    func engine(_: Room, didAddTrack track: LKRTCMediaStreamTrack, rtpReceiver: LKRTCRtpReceiver, stream: LKRTCMediaStream) async {
+    func engine(_: Room, didAddTrack track: LKRTCMediaStreamTrack, rtpReceiver: LKRTCRtpReceiver, stream: LKRTCMediaStream, subscriberId: String) async {
         let parseResult = parse(streamId: stream.streamId)
         let trackId = parseResult.trackId ?? Track.Sid(from: track.trackId)
 
-        let participant = _state.read {
-            $0.remoteParticipants.values.first { $0.sid == parseResult.participantSid }
+        let (participant, currentSubscriberId): (RemoteParticipant?, String) = _state.read { state in
+            let participant = state.remoteParticipants.values.first { $0.sid == parseResult.participantSid }
+            let currentSubscriberId = state.subscriber?.id ?? ""
+
+            return (participant, currentSubscriberId)
+        }
+
+        guard subscriberId == currentSubscriberId else {
+            log("*enc: [fixbug] subscriberId mismatch: old(\(subscriberId)) != new(\(currentSubscriberId))", .warning)
+            return
         }
 
         guard let participant else {
