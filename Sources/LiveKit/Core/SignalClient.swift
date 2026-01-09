@@ -156,7 +156,7 @@ actor SignalClient: Loggable {
                                                                     options: connectOptions,
                                                                     sendAfterOpen: sendAfterOpen)
 
-            let messageLoopTask = socket.subscribe(self) { observer, message in
+            let messageLoopTask = transport.subscribe(self) { observer, message in
                 await observer.onTransportMessage(message)
             } onFailure: { observer, error in
                 await observer.cleanUp(withError: error)

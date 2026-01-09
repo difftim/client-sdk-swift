@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 LiveKit
+ * Copyright 2026 LiveKit
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,24 +47,34 @@ class SignalTransport: NSObject, @unchecked Sendable, Loggable, AsyncSequence {
 }
 
 /// Factory for creating transports based on ConnectOptions.TransportKind.
-enum SignalTransportFactory {
+enum SignalTransportFactory: Loggable {
     static func create(kind: TransportKind,
                        url: URL,
                        token: String,
                        options: ConnectOptions?,
                        sendAfterOpen: Data?) async throws -> SignalTransport
     {
-        switch kind {
-        case .websocket:
-            return try await WebSocketSignalTransport(url: url, token: token, connectOptions: options, sendAfterOpen: sendAfterOpen)
-        case .quic:
+        var transport: SignalTransport?
+
+        if kind == .quic {
             // Try QUIC if available on this OS version, otherwise gracefully fall back to WebSocket
             if #available(iOS 15.0, macOS 12.0, tvOS 15.0, *) {
-                if let quic = try await QUICSignalTransport.maybeCreate(url: url, token: token, connectOptions: options, sendAfterOpen: sendAfterOpen) {
-                    return quic
-                }
+                log("use QUIC transport")
+                transport = try await QUICSignalTransport.maybeCreate(url: url, token: token, connectOptions: options, sendAfterOpen: sendAfterOpen)
+            } else {
+                log("fall back to WebSocket transport: QUIC not available on this OS version")
             }
-            return try await WebSocketSignalTransport(url: url, token: token, connectOptions: options, sendAfterOpen: sendAfterOpen)
+        }
+
+        if transport == nil {
+            log("use WebSocket transport")
+            transport = try await WebSocketSignalTransport(url: url, token: token, connectOptions: options, sendAfterOpen: sendAfterOpen)
+        }
+
+        if let transport {
+            return transport
+        } else {
+            throw LiveKitError(.network)
         }
     }
 }
