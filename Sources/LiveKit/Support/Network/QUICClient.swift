@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 LiveKit
+ * Copyright 2026 LiveKit
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -365,6 +365,38 @@ class QUICClient: NSObject, Loggable, @unchecked Sendable {
         return 0
     }
 
+    /// Async variant of `sendData(data:)` that completes when Network.framework reports the send
+    /// as processed, and throws on failure (similar to `WebSocket.send(data:)`).
+    func send(data: Data) async throws {
+        guard state == .CONNECTED else {
+            throw LiveKitError(.invalidState, message: "QUIC is not connected")
+        }
+        guard let stream else {
+            throw LiveKitError(.invalidState, message: "QUIC stream is nil")
+        }
+
+        var message = WTMessage(messageType: .binary, transId: 0)
+        message.encode(with: data)
+        let context = NWConnection.ContentContext(identifier: "send", isFinal: false)
+
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            stream.send(
+                content: message.raw,
+                contentContext: context,
+                isComplete: true,
+                completion: .contentProcessed { error in
+                    if let error {
+                        self.delegate?.quicClient(self, didFailWithError: error)
+                        continuation.resume(throwing: error)
+                    } else {
+                        self.delegate?.quicClientDidSend(self, size: data.count)
+                        continuation.resume()
+                    }
+                }
+            )
+        }
+    }
+
     func sendCmd(name: String, transId: UInt32, args: [String: Any]) -> Int32 {
         if state != .CONNECTED, name != "connect", nextTransId != 1 {
             return -1
@@ -399,6 +431,7 @@ class QUICClient: NSObject, Loggable, @unchecked Sendable {
     }
 
     func close() {
+        log("Closing QUIC Client connection")
         if let stream {
             stream.cancel()
             self.stream = nil
@@ -513,6 +546,9 @@ class QUICClient: NSObject, Loggable, @unchecked Sendable {
         case let .waiting(error):
             // 捕获 waiting 状态下的错误
             log("Raw QUIC Client连接正在等待网络路径，遇到错误: \(error.localizedDescription)")
+            state = .CLOSED
+            delegate?.quicClient(self, didFailWithError: error)
+            stopPingTimer()
 
         case .preparing:
             log("Raw QUIC Client连接正在准备中...")

@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 LiveKit
+ * Copyright 2026 LiveKit
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -108,10 +108,7 @@ final class QUICSignalTransport: SignalTransport, WTMessageDelegate, @unchecked 
     // MARK: - SignalTransport
 
     override func send(data: Data) async throws {
-        let ret = client.sendData(data: data)
-        if ret != 0 {
-            throw LiveKitError(.network, message: "QUIC send failed with code \(ret)")
-        }
+        try await client.send(data: data)
     }
 
     override func close() {
