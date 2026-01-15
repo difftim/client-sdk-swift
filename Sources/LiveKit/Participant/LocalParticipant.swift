@@ -307,8 +307,8 @@ extension LocalParticipant {
 
         for mediaTrack in mediaTracks {
             // Don't re-publish muted tracks
-            if mediaTrack.isMuted { continue }
-            try await _publish(track: mediaTrack, options: mediaTrack.publishOptions)
+            if mediaTrack.isMuted, mediaTrack.source != .microphone { continue }
+            try await _publish(track: mediaTrack, options: mediaTrack.publishOptions, publishMuted: mediaTrack.isMuted)
         }
     }
 }
@@ -568,7 +568,7 @@ extension LocalParticipant {
     @discardableResult
     // swiftlint:disable:next cyclomatic_complexity function_body_length
     func _publish(track: LocalTrack, options: TrackPublishOptions? = nil, publishMuted: Bool = false) async throws -> LocalTrackPublication {
-        log("[publish] \(track) options: \(String(describing: options ?? nil))...", .info)
+        log("[publish] \(track) options: \(String(describing: options ?? nil)), publishMuted: \(publishMuted)...", .info)
 
         try checkPermissions(toPublish: track)
 
