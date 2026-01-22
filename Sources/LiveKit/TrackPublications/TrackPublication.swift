@@ -190,9 +190,9 @@ public class TrackPublication: NSObject, @unchecked Sendable, ObservableObject, 
         track?.remove(delegate: self)
     }
 
-    deinit {
-        cleanUp()
-    }
+//    deinit {
+//        cleanUp()
+//    }
 }
 
 // MARK: - TrackDelegate
