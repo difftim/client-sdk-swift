@@ -178,6 +178,18 @@ public struct Livekit_TTCallResponseBody: @unchecked Sendable {
   fileprivate var _storage = _StorageClass.defaultInstance
 }
 
+public struct Livekit_TTCallOptions: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var publishSilenceAudio: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 public struct Livekit_TTCallResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -201,12 +213,22 @@ public struct Livekit_TTCallResponse: Sendable {
   /// Clears the value of `body`. Subsequent reads from it will return its default value.
   public mutating func clearBody() {self._body = nil}
 
+  public var callOptions: Livekit_TTCallOptions {
+    get {return _callOptions ?? Livekit_TTCallOptions()}
+    set {_callOptions = newValue}
+  }
+  /// Returns true if `callOptions` has been explicitly set.
+  public var hasCallOptions: Bool {return self._callOptions != nil}
+  /// Clears the value of `callOptions`. Subsequent reads from it will return its default value.
+  public mutating func clearCallOptions() {self._callOptions = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _base: Livekit_TTBaseResponse? = nil
   fileprivate var _body: Livekit_TTCallResponseBody? = nil
+  fileprivate var _callOptions: Livekit_TTCallOptions? = nil
 }
 
 public struct Livekit_TTCipherMessages: Sendable {
@@ -636,9 +658,39 @@ extension Livekit_TTCallResponseBody: SwiftProtobuf.Message, SwiftProtobuf._Mess
   }
 }
 
+extension Livekit_TTCallOptions: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".TTCallOptions"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}publish_silence_audio\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBoolField(value: &self.publishSilenceAudio) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.publishSilenceAudio != false {
+      try visitor.visitSingularBoolField(value: self.publishSilenceAudio, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Livekit_TTCallOptions, rhs: Livekit_TTCallOptions) -> Bool {
+    if lhs.publishSilenceAudio != rhs.publishSilenceAudio {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 extension Livekit_TTCallResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TTCallResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}base\0\u{1}body\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}base\0\u{1}body\0\u{4}b\u{1}call_options\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -648,6 +700,7 @@ extension Livekit_TTCallResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageI
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularMessageField(value: &self._base) }()
       case 2: try { try decoder.decodeSingularMessageField(value: &self._body) }()
+      case 100: try { try decoder.decodeSingularMessageField(value: &self._callOptions) }()
       default: break
       }
     }
@@ -664,12 +717,16 @@ extension Livekit_TTCallResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageI
     try { if let v = self._body {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
     } }()
+    try { if let v = self._callOptions {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 100)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Livekit_TTCallResponse, rhs: Livekit_TTCallResponse) -> Bool {
     if lhs._base != rhs._base {return false}
     if lhs._body != rhs._body {return false}
+    if lhs._callOptions != rhs._callOptions {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

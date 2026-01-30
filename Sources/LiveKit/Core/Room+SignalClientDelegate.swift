@@ -116,6 +116,8 @@ extension Room: SignalClientDelegate {
                 }
             }
 
+            log("[startcall] publishSilenceAudio=\(ttCallRespTmp?.callOptions.publishSilenceAudio ?? false)")
+
             if ttCallRespTmp?.hasBody == true,
                let body = ttCallRespTmp?.body,
                let encryptor = _state.roomOptions.e2eeOptions?.ttEncryptor,
