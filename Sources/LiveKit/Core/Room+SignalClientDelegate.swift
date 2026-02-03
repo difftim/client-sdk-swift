@@ -116,7 +116,7 @@ extension Room: SignalClientDelegate {
                 }
             }
 
-            log("[startcall] publishSilenceAudio=\(ttCallRespTmp?.callOptions.publishSilenceAudio ?? false)")
+            log("[startcall] callOptions=\(String(describing: ttCallRespTmp?.callOptions))")
 
             if ttCallRespTmp?.hasBody == true,
                let body = ttCallRespTmp?.body,
