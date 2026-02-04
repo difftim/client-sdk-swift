@@ -183,7 +183,16 @@ public struct Livekit_TTCallOptions: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var publishSilenceAudio: Bool = false
+  /// If true, the SDK automatically publishes a silent (muted) audio track
+  /// right after the room is connected.
+  public var autoPublishSilenceAudio: Bool = false
+
+  /// Controls whether the SDK publishes a silent audio track when the user raises hand.
+  ///
+  /// Effective only when `auto_publish_silence_audio` is false:
+  /// - true:  do NOT publish a silent track on raise-hand.
+  /// - false: publish a silent track on raise-hand.
+  public var disableSilenceOnRaiseHand: Bool = false
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -660,7 +669,7 @@ extension Livekit_TTCallResponseBody: SwiftProtobuf.Message, SwiftProtobuf._Mess
 
 extension Livekit_TTCallOptions: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TTCallOptions"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}publish_silence_audio\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}auto_publish_silence_audio\0\u{3}disable_silence_on_raise_hand\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -668,21 +677,26 @@ extension Livekit_TTCallOptions: SwiftProtobuf.Message, SwiftProtobuf._MessageIm
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeSingularBoolField(value: &self.publishSilenceAudio) }()
+      case 1: try { try decoder.decodeSingularBoolField(value: &self.autoPublishSilenceAudio) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self.disableSilenceOnRaiseHand) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if self.publishSilenceAudio != false {
-      try visitor.visitSingularBoolField(value: self.publishSilenceAudio, fieldNumber: 1)
+    if self.autoPublishSilenceAudio != false {
+      try visitor.visitSingularBoolField(value: self.autoPublishSilenceAudio, fieldNumber: 1)
+    }
+    if self.disableSilenceOnRaiseHand != false {
+      try visitor.visitSingularBoolField(value: self.disableSilenceOnRaiseHand, fieldNumber: 2)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Livekit_TTCallOptions, rhs: Livekit_TTCallOptions) -> Bool {
-    if lhs.publishSilenceAudio != rhs.publishSilenceAudio {return false}
+    if lhs.autoPublishSilenceAudio != rhs.autoPublishSilenceAudio {return false}
+    if lhs.disableSilenceOnRaiseHand != rhs.disableSilenceOnRaiseHand {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
