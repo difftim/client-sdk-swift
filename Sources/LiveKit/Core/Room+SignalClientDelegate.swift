@@ -123,7 +123,6 @@ extension Room: SignalClientDelegate {
                let encryptor = _state.roomOptions.e2eeOptions?.ttEncryptor,
                !_state.connectionState.isDisconnectingOrDisconnected
             {
-                log("[startcall] Attempting to decrypt call key with publicKey=\(body.publicKey), emk=\(body.emk)")
                 if let mk = encryptor.decryptCallKey(eKey: body.publicKey, eMKey: body.emk) {
                     log("[startcall] Decrypted call key successfully, setting shared key.")
                     if e2eeManager != nil {
