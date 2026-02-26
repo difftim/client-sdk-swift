@@ -87,6 +87,14 @@ extension Livekit_SubscriptionPermissionUpdate: CustomStringConvertible {
     }
 }
 
+#if !DEBUG
+extension Livekit_JoinResponse: CustomStringConvertible {
+    public var description: String {
+        "join(room[sid: \(room.sid), name:\(room.name)], pa[sid: \(participant.sid), identity: \(participant.identity)])"
+    }
+}
+#endif // !DEBUG
+
 // MARK: - NSObject
 
 public extension Room {
