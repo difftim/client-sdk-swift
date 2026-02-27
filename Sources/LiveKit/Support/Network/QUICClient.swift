@@ -280,6 +280,12 @@ class QUICClient: NSObject, Loggable, @unchecked Sendable {
 
     override init() {
         super.init()
+
+        log("Raw QUIC Client initialized...")
+    }
+
+    deinit {
+        log("Raw QUIC Client deinitialized...")
     }
 
     func setDelegate(delegate: WTMessageDelegate) {
