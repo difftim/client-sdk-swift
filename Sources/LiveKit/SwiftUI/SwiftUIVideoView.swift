@@ -27,6 +27,7 @@ public struct SwiftUIVideoView: NativeViewRepresentable {
     let layoutMode: VideoView.LayoutMode
     let mirrorMode: VideoView.MirrorMode
     let renderMode: VideoView.RenderMode
+    let isAutoPauseResumeSampleBuffer: Bool
     let rotationOverride: VideoRotation?
     let pinchToZoomOptions: VideoView.PinchToZoomOptions
     let isDebugMode: Bool
@@ -37,6 +38,7 @@ public struct SwiftUIVideoView: NativeViewRepresentable {
                 layoutMode: VideoView.LayoutMode = .fill,
                 mirrorMode: VideoView.MirrorMode = .auto,
                 renderMode: VideoView.RenderMode = .auto,
+                isAutoPauseResumeSampleBuffer: Bool = false,
                 rotationOverride: VideoRotation? = nil,
                 pinchToZoomOptions: VideoView.PinchToZoomOptions = [],
                 isDebugMode: Bool = false,
@@ -47,6 +49,7 @@ public struct SwiftUIVideoView: NativeViewRepresentable {
         self.layoutMode = layoutMode
         self.mirrorMode = mirrorMode
         self.renderMode = renderMode
+        self.isAutoPauseResumeSampleBuffer = isAutoPauseResumeSampleBuffer
         self.rotationOverride = rotationOverride
         self.isDebugMode = isDebugMode
         self.pinchToZoomOptions = pinchToZoomOptions
@@ -65,6 +68,7 @@ public struct SwiftUIVideoView: NativeViewRepresentable {
         videoView.track = track
         videoView.layoutMode = layoutMode
         videoView.mirrorMode = mirrorMode
+        videoView.isAutoPauseResumeSampleBuffer = isAutoPauseResumeSampleBuffer
         videoView.renderMode = renderMode
         videoView.rotationOverride = rotationOverride
         videoView.pinchToZoomOptions = pinchToZoomOptions

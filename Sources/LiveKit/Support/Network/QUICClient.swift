@@ -325,7 +325,7 @@ class QUICClient: NSObject, Loggable, @unchecked Sendable {
         }
         quicOptions.direction = .bidirectional
 
-        let parameters = createQUICParametersWithCustomVerification(quicOptions: quicOptions) // 假设这个函数返回 NWParameters
+        let parameters = createQUICParametersWithCustomVerification(quicOptions: quicOptions, host: host)
 
         // 2. 使用属性存储，确保强引用
         let nwport = NWEndpoint.Port(rawValue: port)!
@@ -670,30 +670,29 @@ class QUICClient: NSObject, Loggable, @unchecked Sendable {
         close()
     }
 
-    private func createQUICParametersWithCustomVerification(quicOptions: NWProtocolQUIC.Options)
+    private func createQUICParametersWithCustomVerification(quicOptions: NWProtocolQUIC.Options, host: String)
         -> NWParameters
     {
-        // 1. 获取底层的安全协议选项 (sec_protocol_options_t)
         let securityOptions: sec_protocol_options_t = quicOptions.securityProtocolOptions
 
-        // 2. 定义自定义验证闭包 (sec_protocol_verify_t)
-        // 这个闭包会在证书链验证期间被系统调用
-        let customVerifyBlock: sec_protocol_verify_t = { _, _, completionHandler in
-            //            log("证书验证成功: 允许连接")
-            completionHandler(true) // 允许连接
+        let customVerifyBlock: sec_protocol_verify_t = { [weak self] _, trust, completionHandler in
+            let secTrust = sec_trust_copy_ref(trust).takeRetainedValue()
+            SecTrustEvaluateAsyncWithError(secTrust, DispatchQueue.global(qos: .userInitiated)) { _, result, error in
+                if !result {
+                    self?.log("TLS certificate verification failed for host \"\(host)\": \(error?.localizedDescription ?? "unknown error")", .error)
+                }
+                completionHandler(result)
+            }
         }
 
-        // 3. 将自定义验证闭包注入到安全选项中
-        // 注意：验证闭包必须在一个安全的 DispatchQueue 上执行
         sec_protocol_options_set_verify_block(
             securityOptions,
             customVerifyBlock,
             DispatchQueue.global(qos: .userInitiated)
         )
 
-        sec_protocol_options_set_tls_server_name(securityOptions, "localhost")
+        sec_protocol_options_set_tls_server_name(securityOptions, host)
 
-        // 4. 创建包含配置的 NWParameters
         let parameters = NWParameters(quic: quicOptions)
 
         return parameters

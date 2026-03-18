@@ -87,6 +87,14 @@ public class VideoView: NativeView, Loggable {
         set { _state.mutate { $0.renderMode = newValue } }
     }
 
+    /// When `true` and ``renderMode`` is `.sampleBuffer`, the renderer automatically
+    /// pauses frame enqueue on background and flushes + resumes on foreground.
+    /// Prevents `AVSampleBufferDisplayLayer` from going black after extended backgrounding.
+    public nonisolated var isAutoPauseResumeSampleBuffer: Bool {
+        get { _state.isAutoPauseResumeSampleBuffer }
+        set { _state.mutate { $0.isAutoPauseResumeSampleBuffer = newValue } }
+    }
+
     /// Force video to be rotated to preferred ``VideoRotation``.
     public nonisolated var rotationOverride: VideoRotation? {
         get { _state.rotationOverride }
@@ -214,6 +222,7 @@ public class VideoView: NativeView, Loggable {
         var layoutMode: LayoutMode = .fill
         var mirrorMode: MirrorMode = .auto
         var renderMode: RenderMode = .auto
+        var isAutoPauseResumeSampleBuffer: Bool = false
         var rotationOverride: VideoRotation?
 
         var isDebugMode: Bool = false
@@ -322,7 +331,7 @@ public class VideoView: NativeView, Loggable {
 
                         // Set up new renderer if needed
                         if let track = newState.track as? VideoTrack, newState.shouldRender {
-                            let nr = self.recreatePrimaryRenderer(for: newState.renderMode)
+                            let nr = self.recreatePrimaryRenderer(for: newState.renderMode, isAutoPauseResumeSampleBuffer: newState.isAutoPauseResumeSampleBuffer)
                             didReCreateNativeRenderer = true
 
                             if let frame = track._state.videoFrame {
@@ -334,7 +343,7 @@ public class VideoView: NativeView, Loggable {
                     }
 
                     if renderModeDidUpdate, !didReCreateNativeRenderer {
-                        self.recreatePrimaryRenderer(for: newState.renderMode)
+                        self.recreatePrimaryRenderer(for: newState.renderMode, isAutoPauseResumeSampleBuffer: newState.isAutoPauseResumeSampleBuffer)
                     }
                 }
             }
@@ -551,11 +560,11 @@ private extension VideoView {
     }
 
     @discardableResult
-    func recreatePrimaryRenderer(for renderMode: VideoView.RenderMode) -> NativeRendererView {
+    func recreatePrimaryRenderer(for renderMode: VideoView.RenderMode, isAutoPauseResumeSampleBuffer: Bool = false) -> NativeRendererView {
         if !Thread.current.isMainThread { log("Must be called on main thread", .error) }
 
         // create a new rendererView
-        let newView = VideoView.createNativeRendererView(for: renderMode)
+        let newView = VideoView.createNativeRendererView(for: renderMode, isAutoPauseResumeSampleBuffer: isAutoPauseResumeSampleBuffer)
         addSubview(newView)
 
         // keep the old rendererView
@@ -585,8 +594,8 @@ private extension VideoView {
         // Primary is required
         guard let _primaryRenderer else { return nil }
 
-        // Create renderer blow primary
-        let newView = VideoView.createNativeRendererView(for: _state.renderMode)
+        // Create renderer below primary
+        let newView = VideoView.createNativeRendererView(for: _state.renderMode, isAutoPauseResumeSampleBuffer: _state.isAutoPauseResumeSampleBuffer)
         insertSubview(newView, belowSubview: _primaryRenderer)
 
         // Copy frame from primary renderer
@@ -783,11 +792,11 @@ extension VideoView {
         #endif
     }
 
-    static func createNativeRendererView(for renderMode: VideoView.RenderMode) -> NativeRendererView {
+    static func createNativeRendererView(for renderMode: VideoView.RenderMode, isAutoPauseResumeSampleBuffer: Bool = false) -> NativeRendererView {
         #if os(iOS) || os(macOS)
         if case .sampleBuffer = renderMode {
             log("Using AVSampleBufferDisplayLayer for VideoView's Renderer")
-            return SampleBufferVideoRenderer()
+            return SampleBufferVideoRenderer(isAutoPauseResumeEnabled: isAutoPauseResumeSampleBuffer)
         } else {
             log("Using RTCMTLVideoView for VideoView's Renderer")
             let result = LKRTCMTLVideoView()

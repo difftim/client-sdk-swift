@@ -22,11 +22,14 @@ class SampleBufferVideoRenderer: NativeView, Loggable {
     private struct State {
         var isMirrored: Bool = false
         var videoRotation: VideoRotation = ._0
+        var isPaused: Bool = false
     }
 
     private let _state = StateSync(State())
+    private let _isAutoPauseResumeEnabled: Bool
 
-    override init(frame: CGRect) {
+    init(frame: CGRect = .zero, isAutoPauseResumeEnabled: Bool = false) {
+        _isAutoPauseResumeEnabled = isAutoPauseResumeEnabled
         sampleBufferDisplayLayer = AVSampleBufferDisplayLayer()
         super.init(frame: frame)
         sampleBufferDisplayLayer.videoGravity = .resizeAspectFill
@@ -39,6 +42,12 @@ class SampleBufferVideoRenderer: NativeView, Loggable {
         #else
         fatalError("Unimplemented")
         #endif
+
+        if _isAutoPauseResumeEnabled {
+            Task { @MainActor in
+                AppStateListener.shared.delegates.add(delegate: self)
+            }
+        }
     }
 
     @available(*, unavailable)
@@ -62,6 +71,8 @@ extension SampleBufferVideoRenderer: LKRTCVideoRenderer {
 
     nonisolated func renderFrame(_ frame: LKRTCVideoFrame?) {
         guard let frame else { return }
+
+        guard !_state.read({ $0.isPaused }) else { return }
 
         var pixelBuffer: CVPixelBuffer?
 
@@ -95,6 +106,30 @@ extension SampleBufferVideoRenderer: LKRTCVideoRenderer {
             }
         }
     }
+}
+
+// MARK: - AppStateDelegate
+
+extension SampleBufferVideoRenderer: AppStateDelegate {
+    nonisolated func appDidEnterBackground() {
+        _state.mutate { $0.isPaused = true }
+        log("Paused: app entered background")
+    }
+
+    nonisolated func appWillEnterForeground() {
+        _state.mutate { $0.isPaused = false }
+        log("Resumed: app entering foreground")
+        Task { @MainActor in
+            if self.sampleBufferDisplayLayer.status == .failed {
+                self.log("Recovering layer after background (reason: \(self.sampleBufferDisplayLayer.error?.localizedDescription ?? "unknown"))")
+                self.sampleBufferDisplayLayer.flush()
+            }
+        }
+    }
+
+    nonisolated func appWillTerminate() {}
+    nonisolated func appWillSleep() {}
+    nonisolated func appDidWake() {}
 }
 
 extension SampleBufferVideoRenderer: Mirrorable {
