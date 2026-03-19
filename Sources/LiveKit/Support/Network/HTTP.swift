@@ -16,22 +16,34 @@
 
 import Foundation
 
-class HTTP: NSObject {
+final class HTTP: NSObject, @unchecked Sendable, URLSessionDelegate, Loggable {
     private static let operationQueue = OperationQueue()
 
-    private static let session: URLSession = .init(configuration: .default,
-                                                   delegate: nil,
-                                                   delegateQueue: operationQueue)
+    private let customCACertificates: [Data]
 
-    static func requestValidation(from url: URL, token: String) async throws {
+    private init(customCACertificates: [Data]) {
+        self.customCACertificates = customCACertificates
+        super.init()
+    }
+
+    private lazy var session: URLSession = .init(
+        configuration: .default,
+        delegate: customCACertificates.isEmpty ? nil : self,
+        delegateQueue: Self.operationQueue
+    )
+
+    static func requestValidation(from url: URL, token: String, customCACertificates: [Data] = []) async throws {
+        let http = HTTP(customCACertificates: customCACertificates)
+
         var request = URLRequest(url: url,
                                  cachePolicy: .reloadIgnoringLocalAndRemoteCacheData,
                                  timeoutInterval: .defaultHTTPConnect)
-        // Attach token to header
         request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
 
-        // Make the data request
-        let (data, response) = try await session.data(for: request)
+        // Break URLSession → delegate retain cycle when done
+        defer { http.session.finishTasksAndInvalidate() }
+
+        let (data, response) = try await http.session.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw URLError(.badServerResponse)
@@ -50,13 +62,39 @@ class HTTP: NSObject {
 
             let details = "HTTP \(statusCode): \(body)"
 
-            // Treat request/token/permissions issues as validation errors.
             if (400 ..< 500).contains(statusCode), statusCode != 429 {
                 throw LiveKitError(.validation, message: details)
             }
 
-            // Treat server/rate-limit issues as network errors.
             throw LiveKitError(.network, message: "Validation endpoint error: \(details)")
+        }
+    }
+
+    // MARK: - URLSessionDelegate
+
+    func urlSession(
+        _: URLSession,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+              let serverTrust = challenge.protectionSpace.serverTrust,
+              !customCACertificates.isEmpty
+        else {
+            completionHandler(.performDefaultHandling, nil)
+            return
+        }
+
+        TLSHelper.evaluate(
+            trust: serverTrust,
+            customCACertificates: customCACertificates
+        ) { [self] success, error in
+            if success {
+                completionHandler(.useCredential, URLCredential(trust: serverTrust))
+            } else {
+                log("HTTP TLS verification failed: \(error?.localizedDescription ?? "unknown")", .error)
+                completionHandler(.cancelAuthenticationChallenge, nil)
+            }
         }
     }
 }

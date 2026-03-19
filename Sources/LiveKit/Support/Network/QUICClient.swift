@@ -292,7 +292,7 @@ class QUICClient: NSObject, Loggable, @unchecked Sendable {
         self.delegate = delegate
     }
 
-    func connect(url: String, args: [String: Any]) -> Int32 {
+    func connect(url: String, args: [String: Any], customCACertificates: [Data] = []) -> Int32 {
         // 解析URL
         guard let u = URLComponents(string: url) else {
             return -1
@@ -325,7 +325,7 @@ class QUICClient: NSObject, Loggable, @unchecked Sendable {
         }
         quicOptions.direction = .bidirectional
 
-        let parameters = createQUICParametersWithCustomVerification(quicOptions: quicOptions, host: host)
+        let parameters = createQUICParametersWithCustomVerification(quicOptions: quicOptions, host: host, customCACertificates: customCACertificates)
 
         // 2. 使用属性存储，确保强引用
         let nwport = NWEndpoint.Port(rawValue: port)!
@@ -670,16 +670,22 @@ class QUICClient: NSObject, Loggable, @unchecked Sendable {
         close()
     }
 
-    private func createQUICParametersWithCustomVerification(quicOptions: NWProtocolQUIC.Options, host: String)
-        -> NWParameters
-    {
+    private func createQUICParametersWithCustomVerification(
+        quicOptions: NWProtocolQUIC.Options,
+        host: String,
+        customCACertificates: [Data]
+    ) -> NWParameters {
         let securityOptions: sec_protocol_options_t = quicOptions.securityProtocolOptions
 
         let customVerifyBlock: sec_protocol_verify_t = { [weak self] _, trust, completionHandler in
             let secTrust = sec_trust_copy_ref(trust).takeRetainedValue()
-            SecTrustEvaluateAsyncWithError(secTrust, DispatchQueue.global(qos: .userInitiated)) { _, result, error in
+
+            TLSHelper.evaluate(
+                trust: secTrust,
+                customCACertificates: customCACertificates
+            ) { result, error in
                 if !result {
-                    self?.log("TLS certificate verification failed for host \"\(host)\": \(error?.localizedDescription ?? "unknown error")", .error)
+                    self?.log("QUIC TLS verification failed for \"\(host)\": \(error?.localizedDescription ?? "unknown error")", .error)
                 }
                 completionHandler(result)
             }
@@ -688,13 +694,11 @@ class QUICClient: NSObject, Loggable, @unchecked Sendable {
         sec_protocol_options_set_verify_block(
             securityOptions,
             customVerifyBlock,
-            DispatchQueue.global(qos: .userInitiated)
+            .global(qos: .userInitiated)
         )
 
         sec_protocol_options_set_tls_server_name(securityOptions, host)
 
-        let parameters = NWParameters(quic: quicOptions)
-
-        return parameters
+        return NWParameters(quic: quicOptions)
     }
 }

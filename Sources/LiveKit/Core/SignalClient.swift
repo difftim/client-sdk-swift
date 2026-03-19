@@ -209,7 +209,7 @@ actor SignalClient: Loggable {
                                                  validate: true)
             log("Validating with url: \(validateUrl)...")
             do {
-                try await HTTP.requestValidation(from: validateUrl, token: token)
+                try await HTTP.requestValidation(from: validateUrl, token: token, customCACertificates: connectOptions?.customCACertificates ?? [])
                 // Re-throw original error since validation passed
                 throw LiveKitError(.network, internalError: connectionError)
             } catch let validationError as LiveKitError where validationError.type == .validation {

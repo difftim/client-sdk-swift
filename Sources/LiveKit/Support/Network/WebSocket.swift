@@ -19,7 +19,7 @@ import Network
 
 typealias WebSocketStream = AsyncThrowingStream<URLSessionWebSocketTask.Message, Error>
 
-final class WebSocket: NSObject, @unchecked Sendable, Loggable, AsyncSequence, URLSessionWebSocketDelegate {
+final class WebSocket: NSObject, @unchecked Sendable, Loggable, AsyncSequence, URLSessionDelegate, URLSessionWebSocketDelegate {
     typealias AsyncIterator = WebSocketStream.Iterator
     typealias Element = URLSessionWebSocketTask.Message
 
@@ -31,6 +31,7 @@ final class WebSocket: NSObject, @unchecked Sendable, Loggable, AsyncSequence, U
     }
 
     private let request: URLRequest
+    private let customCACertificates: [Data]
 
     private lazy var urlSession: URLSession = {
         #if targetEnvironment(simulator)
@@ -76,6 +77,7 @@ final class WebSocket: NSObject, @unchecked Sendable, Loggable, AsyncSequence, U
         }
         self.request = request
         self.sendAfterOpen = sendAfterOpen
+        customCACertificates = connectOptions?.customCACertificates ?? []
 
         super.init()
 
@@ -184,6 +186,38 @@ final class WebSocket: NSObject, @unchecked Sendable, Loggable, AsyncSequence, U
 
             state.connectContinuation = nil
             state.streamContinuation = nil
+        }
+    }
+
+    // MARK: - URLSessionDelegate
+
+    func urlSession(
+        _: URLSession,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+              let serverTrust = challenge.protectionSpace.serverTrust
+        else {
+            completionHandler(.performDefaultHandling, nil)
+            return
+        }
+
+        guard !customCACertificates.isEmpty else {
+            completionHandler(.performDefaultHandling, nil)
+            return
+        }
+
+        TLSHelper.evaluate(
+            trust: serverTrust,
+            customCACertificates: customCACertificates
+        ) { [self] success, error in
+            if success {
+                completionHandler(.useCredential, URLCredential(trust: serverTrust))
+            } else {
+                log("WebSocket TLS verification failed: \(error?.localizedDescription ?? "unknown")", .error)
+                completionHandler(.cancelAuthenticationChallenge, nil)
+            }
         }
     }
 }

@@ -95,6 +95,17 @@ public final class ConnectOptions: NSObject, Sendable {
     /// When set to `.quic` but unsupported, the SDK will gracefully fall back to `.websocket`.
     public let transportKind: TransportKind
 
+    /// DER-encoded root CA certificates for custom TLS verification.
+    ///
+    /// When non-empty, these certificates are added to the trust evaluation
+    /// for both WebSocket and QUIC signaling connections. This is required when
+    /// connecting to servers using self-signed certificates (e.g. IP-direct
+    /// connections with a private CA).
+    ///
+    /// Both system trust store and custom certificates are trusted simultaneously.
+    /// Pass the DER-encoded Data of each root CA certificate.
+    public let customCACertificates: [Data]
+
     @objc
     override public init() {
         autoSubscribe = true
@@ -111,6 +122,7 @@ public final class ConnectOptions: NSObject, Sendable {
         ttCallRequest = nil
         userAgent = nil
         transportKind = .websocket
+        customCACertificates = []
     }
 
     @objc
@@ -142,6 +154,7 @@ public final class ConnectOptions: NSObject, Sendable {
         ttCallRequest = nil
         self.userAgent = userAgent
         self.transportKind = transportKind
+        customCACertificates = []
     }
 
     public init(autoSubscribe: Bool = true,
@@ -157,7 +170,8 @@ public final class ConnectOptions: NSObject, Sendable {
                 protocolVersion: ProtocolVersion = .v12,
                 ttCallRequest: Livekit_TTCallRequest? = nil,
                 userAgent: String? = nil,
-                transportKind: TransportKind = .websocket)
+                transportKind: TransportKind = .websocket,
+                customCACertificates: [Data] = [])
     {
         self.autoSubscribe = autoSubscribe
         self.reconnectAttempts = reconnectAttempts
@@ -173,6 +187,7 @@ public final class ConnectOptions: NSObject, Sendable {
         self.ttCallRequest = ttCallRequest
         self.userAgent = userAgent
         self.transportKind = transportKind
+        self.customCACertificates = customCACertificates
     }
 
     // MARK: - Equal
@@ -192,7 +207,8 @@ public final class ConnectOptions: NSObject, Sendable {
             protocolVersion == other.protocolVersion &&
             ttCallRequest == other.ttCallRequest &&
             userAgent == other.userAgent &&
-            transportKind == other.transportKind
+            transportKind == other.transportKind &&
+            customCACertificates == other.customCACertificates
     }
 
     override public var hash: Int {
@@ -209,6 +225,7 @@ public final class ConnectOptions: NSObject, Sendable {
         hasher.combine(enableMicrophone)
         hasher.combine(protocolVersion)
         hasher.combine(transportKind)
+        hasher.combine(customCACertificates)
         return hasher.finalize()
     }
 }

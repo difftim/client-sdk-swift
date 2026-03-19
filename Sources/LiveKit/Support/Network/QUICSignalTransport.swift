@@ -60,7 +60,11 @@ final class QUICSignalTransport: SignalTransport, WTMessageDelegate, @unchecked 
         }
 
         // Kick off connection
-        let ret = transport.client.connect(url: url.absoluteString, args: args)
+        let ret = transport.client.connect(
+            url: url.absoluteString,
+            args: args,
+            customCACertificates: connectOptions?.customCACertificates ?? []
+        )
         guard ret == 0 else { return nil }
 
         // Wait for ready or failure
