@@ -43,57 +43,26 @@ openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial \
 openssl x509 -in ca.crt -outform DER -out ca.der
 ```
 
-### 1.3 当前代码现状
+### 1.3 URLSession 方案的局限性
 
-#### WebSocket 路径
+初始方案通过 `URLSessionDelegate.didReceive challenge:` 注入自定义 CA 证书。评估后发现 URLSession 存在以下平台级限制：
 
-```
-ConnectOptions
-  → SignalTransportFactory.create(kind: .websocket)
-    → WebSocketSignalTransport.init(url:token:connectOptions:sendAfterOpen:)
-      → WebSocket.init(url:token:connectOptions:sendAfterOpen:)
-        → URLSession(configuration:delegate:delegateQueue:)
-          → urlSession.webSocketTask(with:)
-            → TLS 握手：完全由系统 URLSession/ATS 默认处理
-```
+| 限制 | 说明 |
+|------|------|
+| **ATS 强制执行** | URLSession 受 App Transport Security 约束，系统会在 delegate 被调用之前执行 ATS 策略检查 |
+| **验证时序在系统之后** | `didReceive challenge:` 是系统构建 SecTrust 并形成初步评估意见**之后**才回调，不能替换验证策略 |
+| **CT/OCSP 检查不可控** | 部分 iOS 版本在 URLSession 层面强制执行 Certificate Transparency 和 OCSP 检查 |
+| **TLS 参数不可调** | 无法通过 URLSession API 指定最低/最高 TLS 版本、cipher suite 偏好 |
 
-`WebSocket` 类当前只实现了 `URLSessionWebSocketDelegate`，**没有**实现 `URLSessionDelegate` 的核心认证挑战方法 `urlSession(_:didReceive challenge:completionHandler:)`，因此无法介入 TLS 证书验证。
+### 1.4 最终方案：Network.framework (NWConnection + NWProtocolWebSocket)
 
-#### QUIC 路径
+`Network.framework` 通过 `sec_protocol_options_set_verify_block` 提供 **完全的 TLS 验证控制权**：
 
-```
-ConnectOptions
-  → SignalTransportFactory.create(kind: .quic)
-    → QUICSignalTransport.maybeCreate(url:token:connectOptions:sendAfterOpen:)
-      → QUICClient.connect(url:args:)
-        → createQUICParametersWithCustomVerification(quicOptions:host:)
-          → sec_protocol_options_set_verify_block
-            → SecTrustEvaluateAsyncWithError（仅系统信任库）
-```
-
-QUIC 已有自定义 verify block，但当前仅使用系统信任库评估。
-
-#### HTTP 验证路径
-
-```
-SignalClient.connect()  // 连接失败时
-  → HTTP.requestValidation(from:token:)
-    → URLSession（delegate 为 nil，无法自定义证书验证）
-```
-
-`HTTP.swift` 中的 `URLSession` delegate 为 nil，自签证书场景下 validate 请求也会失败。
-
-### 1.4 可行性结论
-
-**完全可行**。三条路径都有明确的 Apple API 支持自定义根证书验证：
-
-| 路径 | Apple API 入口 | 核心验证 API |
-|------|---------------|-------------|
-| WebSocket | `URLSessionDelegate.urlSession(_:didReceive challenge:completionHandler:)` | `SecTrustSetAnchorCertificates` + `SecTrustEvaluateAsyncWithError` |
-| QUIC | 已有的 `sec_protocol_verify_t` block | 同上 |
-| HTTP validate | `URLSessionDelegate.urlSession(_:didReceive challenge:completionHandler:)` | 同上 |
-
-三条路径最终都汇聚到同一组 Security.framework API，验证逻辑可统一。
+- verify block 是**唯一的**验证入口，系统不会预先干预
+- 不受 ATS 约束
+- 可配置 TLS 版本、cipher suite
+- 与 QUIC 路径使用完全相同的验证机制
+- `NWProtocolWebSocket` 提供原生 WebSocket 支持（iOS 13+）
 
 ### 1.5 IP 直连兼容性验证
 
@@ -113,14 +82,10 @@ SignalClient.connect()  // 连接失败时
 
 | 模式 | SNI 来源 | IP 直连时行为 |
 |------|---------|-------------|
-| WebSocket | `URLSession` 自动从 URL host 提取 | 自动使用 IP 地址作为 SNI |
-| QUIC | `sec_protocol_options_set_tls_server_name(securityOptions, host)` | `host` 来自 URL 解析即为 IP |
+| NWWebSocket | `sec_protocol_options_set_tls_server_name(securityOptions, host)` | `host` 来自 URL 解析即为 IP |
+| QUIC | `sec_protocol_options_set_tls_server_name(securityOptions, host)` | 同上 |
 
-两条路径都无需额外改动 SNI 逻辑，前提是服务端证书 SAN 中包含该 IP。
-
-#### ATS (App Transport Security)
-
-`wss://` 走 TLS，不需要 ATS 豁免。如果需要 `ws://`（不推荐），需在 Info.plist 中添加 `NSAllowsArbitraryLoads`。
+两条路径使用完全一致的 SNI 设置方式。
 
 ---
 
@@ -129,44 +94,70 @@ SignalClient.connect()  // 连接失败时
 ### 2.1 数据流全景
 
 ```
-┌────────────────────────────────────────────────────────────────────┐
-│  用户层                                                             │
-│  ConnectOptions(customCACertificates: [Data])                       │
-└──────────────────────────┬─────────────────────────────────────────┘
-                           │
-              ┌────────────▼────────────┐
-              │  SignalTransportFactory  │
-              └────┬───────────────┬────┘
-                   │               │
-        ┌──────────▼──────┐  ┌────▼──────────────────┐
-        │  WebSocket 路径  │  │      QUIC 路径         │
-        │                 │  │                        │
-        │  WebSocket      │  │  QUICSignalTransport   │
-        │  ↓              │  │  ↓                     │
-        │  URLSession     │  │  QUICClient.connect()  │
-        │  ↓              │  │  ↓                     │
-        │  didReceive     │  │  sec_protocol_verify_t │
-        │  challenge:     │  │  ↓                     │
-        │  ↓              │  │  SecTrust              │
-        └────────┬────────┘  └──────────┬─────────────┘
-                 │                      │
-        ┌────────▼──────────────────────▼─────────────┐
-        │         共享验证逻辑 (TLSHelper)               │
-        │                                              │
-        │  SecTrustSetAnchorCertificates(trust, certs) │
-        │  SecTrustSetAnchorCertificatesOnly(trust, false)│
-        │  SecTrustEvaluateAsyncWithError(trust, ...)   │
-        └──────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  用户层                                                                       │
+│  ConnectOptions(customCACertificates: [Data])                                 │
+└────────────────────────────┬─────────────────────────────────────────────────┘
+                             │
+                ┌────────────▼────────────┐
+                │  SignalTransportFactory  │
+                └──┬──────────┬───────────┘
+                   │          │
+    ┌──────────────▼──┐  ┌───▼─────────────────────┐
+    │ WebSocket 路径    │  │      QUIC 路径            │
+    │                  │  │                          │
+    │  有自定义证书?     │  │  QUICSignalTransport     │
+    │  ├─ 是 ───────┐  │  │  ↓                       │
+    │  │ NWWebSocket │  │  │  QUICClient.connect()   │
+    │  │ (Network.fw)│  │  │  ↓                       │
+    │  │ sec_proto.. │  │  │  sec_protocol_verify_t  │
+    │  ├─ 否 ───────┐  │  └──────────┬───────────────┘
+    │  │ WebSocket   │  │             │
+    │  │ (URLSession)│  │             │
+    │  │ 系统默认处理  │  │             │
+    └──┴────────┬───┘  │             │
+               │                     │
+    ┌──────────▼─────────────────────▼──────────────────────┐
+    │          共享验证逻辑 (TLSHelper)                        │
+    │                                                        │
+    │  SecTrustSetAnchorCertificates(trust, certs)           │
+    │  SecTrustSetAnchorCertificatesOnly(trust, false)       │
+    │  SecTrustEvaluateAsyncWithError(trust, ...)            │
+    └────────────────────────────────────────────────────────┘
 ```
 
-### 2.2 需要改动的文件清单
+### 2.2 WebSocket 双路径自动切换
+
+`SignalTransportFactory` 根据是否提供 `customCACertificates` 自动选择 WebSocket 实现：
+
+| 条件 | 选择的 Transport | 底层实现 | TLS 控制 |
+|------|-----------------|---------|----------|
+| `customCACertificates` 为空 | `WebSocketSignalTransport` | URLSession + URLSessionWebSocketTask | 系统默认 |
+| `customCACertificates` 非空 | `NWWebSocketSignalTransport` | NWConnection + NWProtocolWebSocket | `sec_protocol_verify_t` 完全自控 |
+
+```swift
+// SignalTransportFactory.create() 中的自动切换逻辑
+if transport == nil {
+    let hasCustomCerts = !(options?.customCACertificates ?? []).isEmpty
+    if hasCustomCerts {
+        transport = try await NWWebSocketSignalTransport(...)
+    } else {
+        transport = try await WebSocketSignalTransport(...)
+    }
+}
+```
+
+### 2.3 改动文件清单
 
 | 文件 | 操作 | 改动内容 |
 |------|------|---------|
 | `ConnectOptions.swift` | 修改 | 新增 `customCACertificates: [Data]` 属性 |
 | `ConnectOptions+Copy.swift` | 修改 | 同步新字段 |
 | `TLSHelper.swift` | **新建** | 统一的 SecTrust 验证逻辑 |
-| `WebSocket.swift` | 修改 | 接收证书参数 + 实现 `didReceive challenge:` |
+| `NWWebSocket.swift` | **新建** | 基于 NWConnection + NWProtocolWebSocket 的 WebSocket 实现 |
+| `NWWebSocketSignalTransport.swift` | **新建** | NWWebSocket 的 SignalTransport 适配层 |
+| `SignalTransport.swift` | 修改 | Factory 根据自定义证书自动切换 WebSocket 实现 |
+| `WebSocket.swift` | 修改 | 保留 URLSessionDelegate 作为后备方案 |
 | `QUICClient.swift` | 修改 | 接收证书参数 + 修改 verify block |
 | `QUICSignalTransport.swift` | 修改 | 透传证书到 QUICClient |
 | `HTTP.swift` | 修改 | 支持自定义根证书验证 |
@@ -205,20 +196,7 @@ public let customCACertificates: [Data]
 import Foundation
 import Security
 
-/// Shared TLS trust evaluation logic for both WebSocket and QUIC connections.
 enum TLSHelper: Loggable {
-
-    /// Evaluates a SecTrust with optional custom CA certificates.
-    ///
-    /// When `customCACertificates` is empty, uses the system trust store only.
-    /// When non-empty, injects the certificates as additional trust anchors while
-    /// keeping system CAs trusted (SecTrustSetAnchorCertificatesOnly = false).
-    ///
-    /// - Parameters:
-    ///   - trust: The SecTrust object from the TLS handshake.
-    ///   - customCACertificates: DER-encoded root CA certificates.
-    ///   - queue: Dispatch queue for async evaluation callback.
-    ///   - completion: Called with (success, error).
     static func evaluate(
         trust: SecTrust,
         customCACertificates: [Data],
@@ -233,9 +211,8 @@ enum TLSHelper: Loggable {
             if secCerts.isEmpty {
                 log("All provided CA certificates failed DER parsing", .error)
             } else {
-                // Inject custom root CAs into trust evaluation
                 SecTrustSetAnchorCertificates(trust, secCerts as CFArray)
-                // false = trust BOTH custom CAs AND system CAs
+                // Trust both custom CAs and system CAs
                 SecTrustSetAnchorCertificatesOnly(trust, false)
             }
         }
@@ -256,81 +233,190 @@ enum TLSHelper: Loggable {
 | `SecTrustSetAnchorCertificatesOnly(_:_:)` | `false` = 同时信任自定义 + 系统 CA；`true` = 只信任自定义 CA |
 | `SecTrustEvaluateAsyncWithError(_:_:_:)` | 异步执行完整证书链验证 |
 
-### 3.3 WebSocket 路径改造
+### 3.3 NWWebSocket — 基于 Network.framework 的 WebSocket
 
-**文件**: `Sources/LiveKit/Support/Network/WebSocket.swift`
+**文件**: `Sources/LiveKit/Support/Network/NWWebSocket.swift`（新建）
 
-#### 改动 A：保存证书参数 + 添加 URLSessionDelegate 协议
+当提供 `customCACertificates` 时，WebSocket 连接使用 `NWConnection` + `NWProtocolWebSocket` 替代 URLSession，获得完全的 TLS 控制权。
+
+#### 核心架构
 
 ```swift
-// 类声明添加 URLSessionDelegate
-final class WebSocket: NSObject, @unchecked Sendable, Loggable,
-                       AsyncSequence, URLSessionDelegate, URLSessionWebSocketDelegate {
+@available(iOS 13.0, macOS 10.15, tvOS 13.0, *)
+final class NWWebSocket: @unchecked Sendable, Loggable {
+    private var connection: NWConnection?
+    private let connectionQueue = DispatchQueue(label: "lk.nwwebsocket", qos: .userInitiated)
 
-    // 新增：保存自定义 CA 证书
-    private let customCACertificates: [Data]
-
-    init(url: URL, token: String, connectOptions: ConnectOptions?,
-         sendAfterOpen: Data?) async throws {
-        self.customCACertificates = connectOptions?.customCACertificates ?? []
-        // ... 其余不变
-    }
+    let stream: AsyncThrowingStream<URLSessionWebSocketTask.Message, Error>
+    // ...
+}
 ```
 
-#### 改动 B：实现认证挑战方法
+#### TLS 配置 — sec_protocol_verify_t
 
 ```swift
-// MARK: - URLSessionDelegate
+private static func createTLSOptions(
+    host: String,
+    customCACertificates: [Data]
+) -> NWProtocolTLS.Options {
+    let tlsOptions = NWProtocolTLS.Options()
+    let securityOptions = tlsOptions.securityProtocolOptions
 
-func urlSession(
-    _: URLSession,
-    didReceive challenge: URLAuthenticationChallenge,
-    completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
-) {
-    guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
-          let serverTrust = challenge.protectionSpace.serverTrust
-    else {
-        completionHandler(.performDefaultHandling, nil)
-        return
-    }
+    let verifyBlock: sec_protocol_verify_t = { _, trust, completionHandler in
+        let secTrust = sec_trust_copy_ref(trust).takeRetainedValue()
 
-    // No custom certs → system default handling (backward compatible)
-    guard !customCACertificates.isEmpty else {
-        completionHandler(.performDefaultHandling, nil)
-        return
-    }
-
-    TLSHelper.evaluate(
-        trust: serverTrust,
-        customCACertificates: customCACertificates
-    ) { success, error in
-        if success {
-            completionHandler(.useCredential, URLCredential(trust: serverTrust))
-        } else {
-            self.log("WebSocket TLS verification failed: \(error?.localizedDescription ?? "unknown")", .error)
-            completionHandler(.cancelAuthenticationChallenge, nil)
+        TLSHelper.evaluate(
+            trust: secTrust,
+            customCACertificates: customCACertificates
+        ) { result, _ in
+            completionHandler(result)
         }
+    }
+
+    sec_protocol_options_set_verify_block(
+        securityOptions, verifyBlock, .global(qos: .userInitiated)
+    )
+    sec_protocol_options_set_tls_server_name(securityOptions, host)
+
+    return tlsOptions
+}
+```
+
+#### 连接建立
+
+```swift
+// NWProtocolWebSocket 配置
+let wsOptions = NWProtocolWebSocket.Options()
+wsOptions.autoReplyPing = true
+wsOptions.setAdditionalHeaders([
+    ("Authorization", "Bearer \(token)"),
+    ("User-Agent", userAgent)
+])
+
+// NWParameters 配置 TLS + WebSocket
+let parameters = NWParameters(tls: createTLSOptions(host: host, customCACertificates: certs))
+parameters.defaultProtocolStack.applicationProtocols.insert(wsOptions, at: 0)
+
+// 使用 .url() endpoint 保留完整路径 (wss://host:port/rtc?...)
+let connection = NWConnection(to: .url(url), using: parameters)
+connection.start(queue: connectionQueue)
+```
+
+#### 消息收发
+
+```swift
+// 发送 — 通过 NWProtocolWebSocket.Metadata 指定 opcode
+func send(data: Data) async throws {
+    let metadata = NWProtocolWebSocket.Metadata(opcode: .binary)
+    let context = NWConnection.ContentContext(identifier: "ws-send", metadata: [metadata])
+    try await withCheckedThrowingContinuation { continuation in
+        connection.send(content: data, contentContext: context, isComplete: true,
+                        completion: .contentProcessed { error in ... })
+    }
+}
+
+// 接收 — 递归调用 receiveMessage，解析 WebSocket metadata
+private func receiveNextMessage() {
+    connection.receiveMessage { content, context, isComplete, error in
+        if let metadata = context?.protocolMetadata(definition: NWProtocolWebSocket.definition)
+            as? NWProtocolWebSocket.Metadata
+        {
+            switch metadata.opcode {
+            case .binary: continuation.yield(.data(data))
+            case .text:   continuation.yield(.string(text))
+            case .close:  continuation.finish()
+            // ...
+            }
+        }
+        self.receiveNextMessage()
     }
 }
 ```
 
-**关键设计点**：
-- `customCACertificates` 为空时返回 `.performDefaultHandling`，**完全保持原有行为**
-- 只有在有自定义 CA 时才走自定义验证路径
-- `URLCredential(trust:)` 表示接受此信任链
-- `WebSocketSignalTransport` 已透传 `ConnectOptions`，无需改动
+### 3.4 NWWebSocketSignalTransport — 适配层
 
-### 3.4 QUIC 路径改造
+**文件**: `Sources/LiveKit/Support/Network/NWWebSocketSignalTransport.swift`（新建）
+
+```swift
+@available(iOS 13.0, macOS 10.15, tvOS 13.0, *)
+final class NWWebSocketSignalTransport: SignalTransport, @unchecked Sendable {
+    private let socket: NWWebSocket
+
+    init(url: URL, token: String, connectOptions: ConnectOptions?,
+         sendAfterOpen: Data?) async throws {
+        socket = try await NWWebSocket(url: url, token: token,
+                                        connectOptions: connectOptions,
+                                        sendAfterOpen: sendAfterOpen)
+        super.init()
+        _stream = AsyncThrowingStream { continuation in
+            Task.detached { [weak self] in
+                guard let self else { return }
+                do {
+                    for try await message in socket.stream {
+                        continuation.yield(message)
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: LiveKitError.from(error: error))
+                }
+            }
+        }
+    }
+
+    override func send(data: Data) async throws {
+        try await socket.send(data: data)
+    }
+
+    override func close() {
+        socket.close()
+    }
+}
+```
+
+### 3.5 SignalTransportFactory — 自动切换逻辑
+
+**文件**: `Sources/LiveKit/Support/SignalTransport.swift`
+
+```swift
+enum SignalTransportFactory: Loggable {
+    static func create(kind: TransportKind, url: URL, token: String,
+                       options: ConnectOptions?, sendAfterOpen: Data?) async throws -> SignalTransport
+    {
+        var transport: SignalTransport?
+
+        if kind == .quic {
+            if #available(iOS 15.0, macOS 12.0, tvOS 15.0, *) {
+                transport = try await QUICSignalTransport.maybeCreate(...)
+            }
+        }
+
+        if transport == nil {
+            let hasCustomCerts = !(options?.customCACertificates ?? []).isEmpty
+            if hasCustomCerts {
+                // Network.framework: 完全 TLS 自控
+                transport = try await NWWebSocketSignalTransport(...)
+            } else {
+                // URLSession: 系统默认行为
+                transport = try await WebSocketSignalTransport(...)
+            }
+        }
+
+        guard let transport else { throw LiveKitError(.network) }
+        return transport
+    }
+}
+```
+
+### 3.6 QUIC 路径改造
 
 **文件**: `Sources/LiveKit/Support/Network/QUICClient.swift`
 
-#### 改动 A：connect 方法接收证书参数
+#### connect 方法接收证书参数
 
 ```swift
 func connect(url: String, args: [String: Any],
              customCACertificates: [Data] = []) -> Int32 {
     // ... URL 解析逻辑不变 ...
-
     let parameters = createQUICParametersWithCustomVerification(
         quicOptions: quicOptions,
         host: host,
@@ -340,7 +426,7 @@ func connect(url: String, args: [String: Any],
 }
 ```
 
-#### 改动 B：修改 verify block 使用 TLSHelper
+#### verify block 使用 TLSHelper
 
 ```swift
 private func createQUICParametersWithCustomVerification(
@@ -350,8 +436,7 @@ private func createQUICParametersWithCustomVerification(
 ) -> NWParameters {
     let securityOptions = quicOptions.securityProtocolOptions
 
-    let customVerifyBlock: sec_protocol_verify_t = {
-        [weak self] metadata, trust, completionHandler in
+    let customVerifyBlock: sec_protocol_verify_t = { [weak self] _, trust, completionHandler in
         let secTrust = sec_trust_copy_ref(trust).takeRetainedValue()
 
         TLSHelper.evaluate(
@@ -359,11 +444,8 @@ private func createQUICParametersWithCustomVerification(
             customCACertificates: customCACertificates
         ) { result, error in
             if !result {
-                self?.log(
-                    "QUIC TLS verification failed for \"\(host)\": "
-                    + "\(error?.localizedDescription ?? "unknown")",
-                    .error
-                )
+                self?.log("QUIC TLS verification failed for \"\(host)\": "
+                    + "\(error?.localizedDescription ?? "unknown")", .error)
             }
             completionHandler(result)
         }
@@ -383,7 +465,6 @@ private func createQUICParametersWithCustomVerification(
 透传证书到 `QUICClient.connect()`：
 
 ```swift
-// 在 maybeCreate 方法中
 let ret = transport.client.connect(
     url: url.absoluteString,
     args: args,
@@ -391,16 +472,15 @@ let ret = transport.client.connect(
 )
 ```
 
-### 3.5 HTTP 验证路径改造
+### 3.7 HTTP 验证路径改造
 
 **文件**: `Sources/LiveKit/Support/Network/HTTP.swift`
 
 当连接失败时 `SignalClient` 会发起 HTTP validate 请求。自签证书场景下，该请求也会因证书不受信任而失败，需要同步支持。
 
 ```swift
-class HTTP: NSObject, URLSessionDelegate {
+final class HTTP: NSObject, @unchecked Sendable, URLSessionDelegate, Loggable {
     private static let operationQueue = OperationQueue()
-
     private let customCACertificates: [Data]
 
     private init(customCACertificates: [Data]) {
@@ -419,24 +499,16 @@ class HTTP: NSObject, URLSessionDelegate {
         customCACertificates: [Data] = []
     ) async throws {
         let http = HTTP(customCACertificates: customCACertificates)
-        var request = URLRequest(
-            url: url,
-            cachePolicy: .reloadIgnoringLocalAndRemoteCacheData,
-            timeoutInterval: .defaultHTTPConnect
-        )
-        request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        defer { http.session.finishTasksAndInvalidate() }  // 打破 URLSession → delegate 循环引用
 
+        var request = URLRequest(url: url, ...)
+        request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         let (data, response) = try await http.session.data(for: request)
-        // ... 后续 HTTP 状态码校验逻辑不变
+        // ... HTTP 状态码校验逻辑不变
     }
 
-    // MARK: - URLSessionDelegate
-
-    func urlSession(
-        _: URLSession,
-        didReceive challenge: URLAuthenticationChallenge,
-        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
-    ) {
+    func urlSession(_: URLSession, didReceive challenge: URLAuthenticationChallenge,
+                    completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
         guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
               let serverTrust = challenge.protectionSpace.serverTrust,
               !customCACertificates.isEmpty
@@ -445,10 +517,7 @@ class HTTP: NSObject, URLSessionDelegate {
             return
         }
 
-        TLSHelper.evaluate(
-            trust: serverTrust,
-            customCACertificates: customCACertificates
-        ) { success, _ in
+        TLSHelper.evaluate(trust: serverTrust, customCACertificates: customCACertificates) { success, error in
             if success {
                 completionHandler(.useCredential, URLCredential(trust: serverTrust))
             } else {
@@ -475,13 +544,15 @@ try await HTTP.requestValidation(
 
 ## 四、用户 API 使用方式
 
+### 4.1 基本用法
+
 ```swift
 // 1. 加载预埋的根证书 DER 文件
 guard let certURL = Bundle.main.url(forResource: "my-root-ca", withExtension: "der"),
       let certData = try? Data(contentsOf: certURL)
 else { fatalError("Missing root CA certificate") }
 
-// 2. 配置连接选项（WebSocket 模式）
+// 2. 配置连接选项（WebSocket 模式 — 自动使用 NWWebSocket）
 let wsOptions = ConnectOptions(
     transportKind: .websocket,
     customCACertificates: [certData]
@@ -502,23 +573,42 @@ try await room.connect(
 )
 ```
 
-不传 `customCACertificates`（默认空数组）时，所有行为与现有版本**完全一致**。
+### 4.2 多证书支持
+
+```swift
+// 同时预埋多个根 CA（例如主备证书轮换场景）
+let cert1 = try Data(contentsOf: Bundle.main.url(forResource: "ca-primary", withExtension: "der")!)
+let cert2 = try Data(contentsOf: Bundle.main.url(forResource: "ca-backup", withExtension: "der")!)
+
+let options = ConnectOptions(
+    customCACertificates: [cert1, cert2]
+)
+```
+
+### 4.3 不传证书（默认行为）
+
+```swift
+// 不传 customCACertificates（默认空数组）时，所有行为与原有版本完全一致
+let options = ConnectOptions(transportKind: .websocket)
+// → 使用 URLSession WebSocket，系统默认 TLS 处理
+```
 
 ---
 
 ## 五、方案对比总结
 
-### 5.1 两种模式对比
+### 5.1 三种传输模式对比
 
-| 维度 | WebSocket | QUIC |
-|------|-----------|------|
-| 底层框架 | URLSession | Network.framework |
-| TLS 拦截点 | `URLSessionDelegate.didReceive challenge:` | `sec_protocol_verify_t` block |
-| 注入自定义 CA | `SecTrustSetAnchorCertificates` | 同左 |
-| SNI 来源 | URL host（自动） | `sec_protocol_options_set_tls_server_name` |
-| IP 直连兼容 | 原生支持 | 原生支持 |
-| 验证逻辑 | 共享 TLSHelper | 同左 |
-| 改动量 | 1 文件 | 2 文件 |
+| 维度 | NWWebSocket (有自定义证书) | URLSession WebSocket (无自定义证书) | QUIC |
+|------|--------------------------|-----------------------------------|----|
+| 底层框架 | Network.framework | URLSession | Network.framework |
+| TLS 验证入口 | `sec_protocol_verify_t` (唯一入口) | `didReceive challenge:` (系统后置回调) | `sec_protocol_verify_t` (唯一入口) |
+| ATS 约束 | **无** | 有 | **无** |
+| TLS 版本可控 | 是 (`sec_protocol_options`) | 否 | 是 |
+| CT/OCSP 检查 | **可自控** | 系统强制 | **可自控** |
+| 注入自定义 CA | TLSHelper | TLSHelper | TLSHelper |
+| SNI 来源 | `sec_protocol_options_set_tls_server_name` | URL host（自动） | `sec_protocol_options_set_tls_server_name` |
+| IP 直连兼容 | 原生支持 | 原生支持 | 原生支持 |
 
 ### 5.2 改动文件总览
 
@@ -526,19 +616,22 @@ try await room.connect(
 |------|------|--------|
 | `ConnectOptions.swift` | 修改 | 新增属性 + 3 个 init 同步 + isEqual/hash |
 | `ConnectOptions+Copy.swift` | 修改 | 同步新字段 |
-| `TLSHelper.swift` | 新建 | ~40 行 |
-| `WebSocket.swift` | 修改 | +1 属性, +1 delegate 方法 (~25 行) |
+| `TLSHelper.swift` | **新建** | ~50 行 |
+| `NWWebSocket.swift` | **新建** | ~300 行 |
+| `NWWebSocketSignalTransport.swift` | **新建** | ~55 行 |
+| `SignalTransport.swift` | 修改 | Factory 自动切换逻辑 (~8 行) |
+| `WebSocket.swift` | 修改 | +1 属性, +1 delegate 方法 (~35 行，URLSession 后备方案) |
 | `QUICClient.swift` | 修改 | connect 签名变更 + verify block 改用 TLSHelper |
 | `QUICSignalTransport.swift` | 修改 | 透传 1 个参数 (~1 行) |
-| `HTTP.swift` | 修改 | 改为实例方法 + 添加 delegate (~30 行) |
+| `HTTP.swift` | 修改 | 改为实例方法 + 添加 delegate (~40 行) |
 | `SignalClient.swift` | 修改 | 透传 1 个参数 (~1 行) |
 
 ### 5.3 向后兼容性
 
 | 场景 | 行为 |
 |------|------|
-| 不传 `customCACertificates`（默认） | 空数组 → 所有路径走 `.performDefaultHandling` / 系统信任库，**行为完全不变** |
-| 传入自定义 CA 证书 | 注入自定义 CA + 系统 CA 同时受信，自签证书可通过验证 |
+| 不传 `customCACertificates`（默认） | 空数组 → WebSocket 走 URLSession（系统默认），QUIC 走系统信任库，**行为完全不变** |
+| 传入自定义 CA 证书 | WebSocket 自动切换到 NWWebSocket (Network.framework)，QUIC 注入自定义 CA，同时信任自定义 + 系统 CA |
 | DER 解析失败 | `compactMap` 过滤无效证书，输出 error 日志，继续使用系统信任库 |
 | 全部 DER 无效 | 等同于空数组，使用系统信任库（可能导致验证失败） |
 
@@ -547,3 +640,4 @@ try await room.connect(
 - 自定义 CA 证书仅添加为信任锚点，**不会绕过完整的证书链验证**（证书有效期、签名、SAN 匹配等仍由系统检查）
 - `SecTrustSetAnchorCertificatesOnly(trust, false)` 确保系统 CA 仍然受信，不影响正常域名连接
 - 所有验证失败都会输出 error 级别日志，便于排查
+- HTTP.requestValidation 使用 `defer { session.finishTasksAndInvalidate() }` 防止 URLSession/delegate 循环引用导致的内存泄漏
