@@ -63,7 +63,8 @@ final class QUICSignalTransport: SignalTransport, WTMessageDelegate, @unchecked 
         let ret = transport.client.connect(
             url: url.absoluteString,
             args: args,
-            customCACertificates: connectOptions?.customCACertificates ?? []
+            customCACertificates: connectOptions?.customCACertificates ?? [],
+            insecureSkipTLSVerify: connectOptions?.insecureSkipTLSVerify ?? false
         )
         guard ret == 0 else { return nil }
 

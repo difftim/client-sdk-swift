@@ -585,10 +585,34 @@ let options = ConnectOptions(
 )
 ```
 
-### 4.3 不传证书（默认行为）
+### 4.3 跳过证书验证（仅限开发/测试环境）
 
 ```swift
-// 不传 customCACertificates（默认空数组）时，所有行为与原有版本完全一致
+// WARNING: 仅用于开发/测试环境，生产环境严禁使用！
+// 跳过所有 TLS 证书验证，接受任何服务端证书（包括过期、自签、不匹配的证书）
+let options = ConnectOptions(
+    insecureSkipTLSVerify: true
+)
+
+let room = Room()
+try await room.connect(
+    url: "wss://10.0.0.1:7880",
+    token: token,
+    connectOptions: options
+)
+```
+
+当 `insecureSkipTLSVerify = true` 时：
+- WebSocket 自动切换到 NWWebSocket（与自定义证书相同路径）
+- `TLSHelper.evaluate()` 直接返回 `completion(true, nil)`，不执行任何证书链评估
+- 与 `customCACertificates` 可同时设置，但 `insecureSkipTLSVerify` 优先生效
+- 每次跳过都会输出 `.warning` 级别日志
+
+### 4.4 不传证书（默认行为）
+
+```swift
+// 不传 customCACertificates（默认空数组）且 insecureSkipTLSVerify 为 false 时，
+// 所有行为与原有版本完全一致
 let options = ConnectOptions(transportKind: .websocket)
 // → 使用 URLSession WebSocket，系统默认 TLS 处理
 ```
@@ -630,8 +654,9 @@ let options = ConnectOptions(transportKind: .websocket)
 
 | 场景 | 行为 |
 |------|------|
-| 不传 `customCACertificates`（默认） | 空数组 → WebSocket 走 URLSession（系统默认），QUIC 走系统信任库，**行为完全不变** |
+| 不传 `customCACertificates`（默认）且 `insecureSkipTLSVerify = false` | 空数组 → WebSocket 走 URLSession（系统默认），QUIC 走系统信任库，**行为完全不变** |
 | 传入自定义 CA 证书 | WebSocket 自动切换到 NWWebSocket (Network.framework)，QUIC 注入自定义 CA，同时信任自定义 + 系统 CA |
+| `insecureSkipTLSVerify = true` | WebSocket 自动切换到 NWWebSocket，所有路径跳过证书验证直接通过，输出 warning 日志 |
 | DER 解析失败 | `compactMap` 过滤无效证书，输出 error 日志，继续使用系统信任库 |
 | 全部 DER 无效 | 等同于空数组，使用系统信任库（可能导致验证失败） |
 
@@ -639,5 +664,6 @@ let options = ConnectOptions(transportKind: .websocket)
 
 - 自定义 CA 证书仅添加为信任锚点，**不会绕过完整的证书链验证**（证书有效期、签名、SAN 匹配等仍由系统检查）
 - `SecTrustSetAnchorCertificatesOnly(trust, false)` 确保系统 CA 仍然受信，不影响正常域名连接
+- `insecureSkipTLSVerify` 仅用于开发/测试环境，每次跳过时输出 `.warning` 级别日志便于识别生产环境误用
 - 所有验证失败都会输出 error 级别日志，便于排查
 - HTTP.requestValidation 使用 `defer { session.finishTasksAndInvalidate() }` 防止 URLSession/delegate 循环引用导致的内存泄漏

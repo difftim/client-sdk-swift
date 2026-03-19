@@ -46,6 +46,7 @@ final class NWWebSocket: @unchecked Sendable, Loggable {
         let host = url.host ?? "localhost"
         let useTLS = url.scheme == "wss"
         let customCACertificates = connectOptions?.customCACertificates ?? []
+        let insecureSkipTLSVerify = connectOptions?.insecureSkipTLSVerify ?? false
 
         // Build NWProtocolWebSocket options
         let wsOptions = NWProtocolWebSocket.Options()
@@ -65,7 +66,8 @@ final class NWWebSocket: @unchecked Sendable, Loggable {
         if useTLS {
             parameters = NWParameters(tls: NWWebSocket.createTLSOptions(
                 host: host,
-                customCACertificates: customCACertificates
+                customCACertificates: customCACertificates,
+                insecureSkipTLSVerify: insecureSkipTLSVerify
             ))
         } else {
             parameters = NWParameters.tcp
@@ -271,7 +273,8 @@ final class NWWebSocket: @unchecked Sendable, Loggable {
 
     private static func createTLSOptions(
         host: String,
-        customCACertificates: [Data]
+        customCACertificates: [Data],
+        insecureSkipTLSVerify: Bool = false
     ) -> NWProtocolTLS.Options {
         let tlsOptions = NWProtocolTLS.Options()
         let securityOptions = tlsOptions.securityProtocolOptions
@@ -281,7 +284,8 @@ final class NWWebSocket: @unchecked Sendable, Loggable {
 
             TLSHelper.evaluate(
                 trust: secTrust,
-                customCACertificates: customCACertificates
+                customCACertificates: customCACertificates,
+                insecureSkipTLSVerify: insecureSkipTLSVerify
             ) { result, _ in
                 completionHandler(result)
             }

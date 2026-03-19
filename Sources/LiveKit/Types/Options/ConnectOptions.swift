@@ -106,6 +106,13 @@ public final class ConnectOptions: NSObject, Sendable {
     /// Pass the DER-encoded Data of each root CA certificate.
     public let customCACertificates: [Data]
 
+    /// Skip TLS server certificate verification entirely.
+    ///
+    /// **WARNING: This is insecure and should only be used in development/testing.**
+    /// When true, the SDK accepts any server certificate without validation,
+    /// including expired, self-signed, or mismatched certificates.
+    public let insecureSkipTLSVerify: Bool
+
     @objc
     override public init() {
         autoSubscribe = true
@@ -123,6 +130,7 @@ public final class ConnectOptions: NSObject, Sendable {
         userAgent = nil
         transportKind = .websocket
         customCACertificates = []
+        insecureSkipTLSVerify = false
     }
 
     @objc
@@ -155,6 +163,7 @@ public final class ConnectOptions: NSObject, Sendable {
         self.userAgent = userAgent
         self.transportKind = transportKind
         customCACertificates = []
+        insecureSkipTLSVerify = false
     }
 
     public init(autoSubscribe: Bool = true,
@@ -171,7 +180,8 @@ public final class ConnectOptions: NSObject, Sendable {
                 ttCallRequest: Livekit_TTCallRequest? = nil,
                 userAgent: String? = nil,
                 transportKind: TransportKind = .websocket,
-                customCACertificates: [Data] = [])
+                customCACertificates: [Data] = [],
+                insecureSkipTLSVerify: Bool = false)
     {
         self.autoSubscribe = autoSubscribe
         self.reconnectAttempts = reconnectAttempts
@@ -188,6 +198,7 @@ public final class ConnectOptions: NSObject, Sendable {
         self.userAgent = userAgent
         self.transportKind = transportKind
         self.customCACertificates = customCACertificates
+        self.insecureSkipTLSVerify = insecureSkipTLSVerify
     }
 
     // MARK: - Equal
@@ -208,7 +219,8 @@ public final class ConnectOptions: NSObject, Sendable {
             ttCallRequest == other.ttCallRequest &&
             userAgent == other.userAgent &&
             transportKind == other.transportKind &&
-            customCACertificates == other.customCACertificates
+            customCACertificates == other.customCACertificates &&
+            insecureSkipTLSVerify == other.insecureSkipTLSVerify
     }
 
     override public var hash: Int {
@@ -226,6 +238,7 @@ public final class ConnectOptions: NSObject, Sendable {
         hasher.combine(protocolVersion)
         hasher.combine(transportKind)
         hasher.combine(customCACertificates)
+        hasher.combine(insecureSkipTLSVerify)
         return hasher.finalize()
     }
 }

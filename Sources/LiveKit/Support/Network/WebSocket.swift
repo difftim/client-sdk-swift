@@ -32,6 +32,7 @@ final class WebSocket: NSObject, @unchecked Sendable, Loggable, AsyncSequence, U
 
     private let request: URLRequest
     private let customCACertificates: [Data]
+    private let insecureSkipTLSVerify: Bool
 
     private lazy var urlSession: URLSession = {
         #if targetEnvironment(simulator)
@@ -78,6 +79,7 @@ final class WebSocket: NSObject, @unchecked Sendable, Loggable, AsyncSequence, U
         self.request = request
         self.sendAfterOpen = sendAfterOpen
         customCACertificates = connectOptions?.customCACertificates ?? []
+        insecureSkipTLSVerify = connectOptions?.insecureSkipTLSVerify ?? false
 
         super.init()
 
@@ -203,14 +205,15 @@ final class WebSocket: NSObject, @unchecked Sendable, Loggable, AsyncSequence, U
             return
         }
 
-        guard !customCACertificates.isEmpty else {
+        guard !customCACertificates.isEmpty || insecureSkipTLSVerify else {
             completionHandler(.performDefaultHandling, nil)
             return
         }
 
         TLSHelper.evaluate(
             trust: serverTrust,
-            customCACertificates: customCACertificates
+            customCACertificates: customCACertificates,
+            insecureSkipTLSVerify: insecureSkipTLSVerify
         ) { [self] success, error in
             if success {
                 completionHandler(.useCredential, URLCredential(trust: serverTrust))

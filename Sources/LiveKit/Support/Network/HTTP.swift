@@ -20,20 +20,22 @@ final class HTTP: NSObject, @unchecked Sendable, URLSessionDelegate, Loggable {
     private static let operationQueue = OperationQueue()
 
     private let customCACertificates: [Data]
+    private let insecureSkipTLSVerify: Bool
 
-    private init(customCACertificates: [Data]) {
+    private init(customCACertificates: [Data], insecureSkipTLSVerify: Bool) {
         self.customCACertificates = customCACertificates
+        self.insecureSkipTLSVerify = insecureSkipTLSVerify
         super.init()
     }
 
     private lazy var session: URLSession = .init(
         configuration: .default,
-        delegate: customCACertificates.isEmpty ? nil : self,
+        delegate: (customCACertificates.isEmpty && !insecureSkipTLSVerify) ? nil : self,
         delegateQueue: Self.operationQueue
     )
 
-    static func requestValidation(from url: URL, token: String, customCACertificates: [Data] = []) async throws {
-        let http = HTTP(customCACertificates: customCACertificates)
+    static func requestValidation(from url: URL, token: String, customCACertificates: [Data] = [], insecureSkipTLSVerify: Bool = false) async throws {
+        let http = HTTP(customCACertificates: customCACertificates, insecureSkipTLSVerify: insecureSkipTLSVerify)
 
         var request = URLRequest(url: url,
                                  cachePolicy: .reloadIgnoringLocalAndRemoteCacheData,
@@ -79,7 +81,7 @@ final class HTTP: NSObject, @unchecked Sendable, URLSessionDelegate, Loggable {
     ) {
         guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
               let serverTrust = challenge.protectionSpace.serverTrust,
-              !customCACertificates.isEmpty
+              (!customCACertificates.isEmpty || insecureSkipTLSVerify)
         else {
             completionHandler(.performDefaultHandling, nil)
             return
@@ -87,7 +89,8 @@ final class HTTP: NSObject, @unchecked Sendable, URLSessionDelegate, Loggable {
 
         TLSHelper.evaluate(
             trust: serverTrust,
-            customCACertificates: customCACertificates
+            customCACertificates: customCACertificates,
+            insecureSkipTLSVerify: insecureSkipTLSVerify
         ) { [self] success, error in
             if success {
                 completionHandler(.useCredential, URLCredential(trust: serverTrust))

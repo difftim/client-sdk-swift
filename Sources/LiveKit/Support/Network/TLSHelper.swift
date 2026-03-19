@@ -24,9 +24,16 @@ enum TLSHelper: Loggable {
     static func evaluate(
         trust: SecTrust,
         customCACertificates: [Data],
+        insecureSkipTLSVerify: Bool = false,
         queue: DispatchQueue = .global(qos: .userInitiated),
         completion: @escaping (_ success: Bool, _ error: Error?) -> Void
     ) {
+        if insecureSkipTLSVerify {
+            log("TLS verification SKIPPED (insecureSkipTLSVerify=true)", .warning)
+            completion(true, nil)
+            return
+        }
+
         if !customCACertificates.isEmpty {
             let secCerts: [SecCertificate] = customCACertificates.compactMap {
                 SecCertificateCreateWithData(nil, $0 as CFData)

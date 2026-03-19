@@ -22,13 +22,15 @@ public extension ConnectOptions {
                   reconnectAttemptDelay: ValueOrAbsent<TimeInterval> = .absent,
                   reconnectMaxDelay: ValueOrAbsent<TimeInterval> = .absent,
                   protocolVersion: ValueOrAbsent<ProtocolVersion> = .absent,
-                  customCACertificates: ValueOrAbsent<[Data]> = .absent) -> ConnectOptions
+                  customCACertificates: ValueOrAbsent<[Data]> = .absent,
+                  insecureSkipTLSVerify: ValueOrAbsent<Bool> = .absent) -> ConnectOptions
     {
         ConnectOptions(autoSubscribe: autoSubscribe.value(ifAbsent: self.autoSubscribe),
                        reconnectAttempts: reconnectAttempts.value(ifAbsent: self.reconnectAttempts),
                        reconnectAttemptDelay: reconnectAttemptDelay.value(ifAbsent: self.reconnectAttemptDelay),
                        reconnectMaxDelay: reconnectMaxDelay.value(ifAbsent: self.reconnectMaxDelay),
                        protocolVersion: protocolVersion.value(ifAbsent: self.protocolVersion),
-                       customCACertificates: customCACertificates.value(ifAbsent: self.customCACertificates))
+                       customCACertificates: customCACertificates.value(ifAbsent: self.customCACertificates),
+                       insecureSkipTLSVerify: insecureSkipTLSVerify.value(ifAbsent: self.insecureSkipTLSVerify))
     }
 }

@@ -292,7 +292,7 @@ class QUICClient: NSObject, Loggable, @unchecked Sendable {
         self.delegate = delegate
     }
 
-    func connect(url: String, args: [String: Any], customCACertificates: [Data] = []) -> Int32 {
+    func connect(url: String, args: [String: Any], customCACertificates: [Data] = [], insecureSkipTLSVerify: Bool = false) -> Int32 {
         // 解析URL
         guard let u = URLComponents(string: url) else {
             return -1
@@ -325,7 +325,7 @@ class QUICClient: NSObject, Loggable, @unchecked Sendable {
         }
         quicOptions.direction = .bidirectional
 
-        let parameters = createQUICParametersWithCustomVerification(quicOptions: quicOptions, host: host, customCACertificates: customCACertificates)
+        let parameters = createQUICParametersWithCustomVerification(quicOptions: quicOptions, host: host, customCACertificates: customCACertificates, insecureSkipTLSVerify: insecureSkipTLSVerify)
 
         // 2. 使用属性存储，确保强引用
         let nwport = NWEndpoint.Port(rawValue: port)!
@@ -673,7 +673,8 @@ class QUICClient: NSObject, Loggable, @unchecked Sendable {
     private func createQUICParametersWithCustomVerification(
         quicOptions: NWProtocolQUIC.Options,
         host: String,
-        customCACertificates: [Data]
+        customCACertificates: [Data],
+        insecureSkipTLSVerify: Bool = false
     ) -> NWParameters {
         let securityOptions: sec_protocol_options_t = quicOptions.securityProtocolOptions
 
@@ -682,7 +683,8 @@ class QUICClient: NSObject, Loggable, @unchecked Sendable {
 
             TLSHelper.evaluate(
                 trust: secTrust,
-                customCACertificates: customCACertificates
+                customCACertificates: customCACertificates,
+                insecureSkipTLSVerify: insecureSkipTLSVerify
             ) { result, error in
                 if !result {
                     self?.log("QUIC TLS verification failed for \"\(host)\": \(error?.localizedDescription ?? "unknown error")", .error)

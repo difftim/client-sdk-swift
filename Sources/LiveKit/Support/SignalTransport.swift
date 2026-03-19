@@ -68,8 +68,9 @@ enum SignalTransportFactory: Loggable {
 
         if transport == nil {
             let hasCustomCerts = !(options?.customCACertificates ?? []).isEmpty
-            if hasCustomCerts {
-                log("use NWWebSocket transport (custom CA certificates provided)")
+            let skipTLS = options?.insecureSkipTLSVerify ?? false
+            if hasCustomCerts || skipTLS {
+                log("use NWWebSocket transport (custom TLS configuration)")
                 transport = try await NWWebSocketSignalTransport(url: url, token: token, connectOptions: options, sendAfterOpen: sendAfterOpen)
             } else {
                 log("use WebSocket transport")
