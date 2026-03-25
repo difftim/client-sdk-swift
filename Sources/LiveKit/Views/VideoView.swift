@@ -633,7 +633,7 @@ extension VideoView: VideoRenderer {
         }
     }
 
-    // swiftlint:disable:next function_body_length
+    // swiftlint:disable:next function_body_length cyclomatic_complexity
     public func render(frame: VideoFrame, captureDevice: AVCaptureDevice?, captureOptions: VideoCaptureOptions?) {
         let state = _state.copy()
 
@@ -653,7 +653,9 @@ extension VideoView: VideoRenderer {
         }
 
         // Update track dimensions
-        track?.set(dimensions: dimensions)
+        if track?.set(dimensions: dimensions) == true {
+            Task { @MainActor in self.setNeedsLayout() }
+        }
 
         let newState = _state.mutate {
             // Keep previous capture position

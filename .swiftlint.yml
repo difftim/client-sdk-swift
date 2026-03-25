@@ -1,4 +1,9 @@
 excluded:
+  - .build
+  - .build-test
+  - .cache
+  - .swiftpm
+  - build
   - Sources/LiveKit/Protos
 
 disabled_rules:
@@ -21,4 +26,9 @@ custom_rules:
     name: "No Manual Task Management"
     regex: "(let|var)\\s+\\w+\\s*:\\s*Task<Void,"
     message: "Prefer AnyTaskCancellable over manually managing Task<Void, ...>. This allows for safer cleanup, similar to Combine's AnyCancellable."
+    severity: warning
+  prefer_objc_members:
+    name: "Prefer @objcMembers for classes"
+    regex: "@objc(?![(\\[])\\s+(?:(?:public|open|final|internal|package)\\s+)*class\\b"
+    message: "Use @objcMembers instead of @objc for classes to implicitly expose members to Objective-C."
     severity: warning

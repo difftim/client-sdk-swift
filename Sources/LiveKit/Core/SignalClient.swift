@@ -25,7 +25,7 @@ actor SignalClient: Loggable {
 
     typealias AddTrackRequestPopulator = @Sendable (inout Livekit_AddTrackRequest) throws -> Void
 
-    enum ConnectResponse: Sendable {
+    enum ConnectResponse {
         case join(Livekit_JoinResponse)
         case reconnect(Livekit_ReconnectResponse)
 
@@ -132,13 +132,15 @@ actor SignalClient: Loggable {
                                      participantSid: participantSid,
                                      adaptiveStream: adaptiveStream)
 
-        if reconnectMode != nil {
-            log("[Connect] with url: \(url)")
+        let isReconnect = reconnectMode != nil
+
+        if isReconnect {
+            log("Reconnecting with url: \(url)")
         } else {
             log("Connecting with url: \(url)")
         }
 
-        _state.mutate { $0.connectionState = (reconnectMode != nil ? .reconnecting : .connecting) }
+        _state.mutate { $0.connectionState = (isReconnect ? .reconnecting : .connecting) }
 
         do {
             let sendAfterOpen: Data? = {
@@ -230,9 +232,24 @@ actor SignalClient: Loggable {
         }
     }
 
+    // Tears down connection state: closes socket, cancels timers, resets completers.
+    //
+    // Non-throwing: timer.cancel(), _state.mutate, completer.reset(),
+    // queue.clear() are all `async` but never `try`. CancellationError
+    // cannot interrupt the sequence.
+    //
+    // Idempotent: closing a nil socket, cancelling a stopped timer, or
+    // resetting an empty completer are all safe no-ops.
+    //
+    // Must never be guarded by Task.isCancelled — see Room.cleanUp()
+    // for the full cancellation contract.
+    //
+    // Only called from:
+    //   Room.cleanUp()           ──► forwards disconnectError
+    //   subscribe() onFailure    ──► WebSocket error (guarded: suppressed when
+    //                                Task.isCancelled, preventing stale loops
+    //                                from tearing down a new connection)
     func cleanUp(withError disconnectError: Error? = nil) async {
-        if Task.isCancelled { return }
-
         log("withError: \(String(describing: disconnectError))")
 
         // Cancel ping/pong timers immediately to prevent stale timers from affecting future connections
@@ -329,10 +346,12 @@ private extension SignalClient {
             await _restartPingTimer()
 
         case let .answer(sd):
-            _delegate.notifyDetached { await $0.signalClient(self, didReceiveAnswer: sd.toRTCType()) }
+            let (rtcDescription, offerId) = sd.toRTCType()
+            _delegate.notifyDetached { await $0.signalClient(self, didReceiveAnswer: rtcDescription, offerId: offerId) }
 
         case let .offer(sd):
-            _delegate.notifyDetached { await $0.signalClient(self, didReceiveOffer: sd.toRTCType()) }
+            let (rtcDescription, offerId) = sd.toRTCType()
+            _delegate.notifyDetached { await $0.signalClient(self, didReceiveOffer: rtcDescription, offerId: offerId) }
 
         case let .trickle(trickle):
             guard let rtcCandidate = try? RTC.createIceCandidate(fromJsonString: trickle.candidateInit) else {
@@ -346,6 +365,9 @@ private extension SignalClient {
 
         case let .roomUpdate(update):
             _delegate.notifyDetached { await $0.signalClient(self, didUpdateRoom: update.room) }
+
+        case let .roomMoved(response):
+            _delegate.notifyDetached { await $0.signalClient(self, didReceiveRoomMoved: response) }
 
         case let .trackPublished(trackPublished):
             log("[publish] resolving completer for cid: \(trackPublished.cid)")
@@ -365,7 +387,13 @@ private extension SignalClient {
             _delegate.notifyDetached { await $0.signalClient(self, didUpdateRemoteMute: Track.Sid(from: mute.sid), muted: mute.muted) }
 
         case let .leave(leave):
-            _delegate.notifyDetached { await $0.signalClient(self, didReceiveLeave: leave.canReconnect, reason: leave.reason, action: leave.action) }
+            _delegate.notifyDetached {
+                await $0.signalClient(self,
+                                      didReceiveLeave: leave.canReconnect,
+                                      action: leave.action,
+                                      reason: leave.reason,
+                                      regions: leave.hasRegions ? leave.regions : nil)
+            }
 
         case let .streamStateUpdate(states):
             _delegate.notifyDetached { await $0.signalClient(self, didUpdateTrackStreamStates: states.streamStates) }
@@ -411,17 +439,17 @@ extension SignalClient {
 // MARK: - Send methods
 
 extension SignalClient {
-    func send(offer: LKRTCSessionDescription) async throws {
+    func send(offer: LKRTCSessionDescription, offerId: UInt32) async throws {
         let r = Livekit_SignalRequest.with {
-            $0.offer = offer.toPBType()
+            $0.offer = offer.toPBType(offerId: offerId)
         }
 
         try await _sendRequest(r)
     }
 
-    func send(answer: LKRTCSessionDescription) async throws {
+    func send(answer: LKRTCSessionDescription, offerId: UInt32) async throws {
         let r = Livekit_SignalRequest.with {
-            $0.answer = answer.toPBType()
+            $0.answer = answer.toPBType(offerId: offerId)
         }
 
         try await _sendRequest(r)
@@ -479,9 +507,7 @@ extension SignalClient {
         try await _sendRequest(request)
 
         // Wait for the trackInfo...
-        let trackInfo = try await completer.wait()
-
-        return trackInfo
+        return try await completer.wait()
     }
 
     func sendUpdateTrackSettings(trackSid: Track.Sid, settings: TrackSettings) async throws {

@@ -62,6 +62,11 @@ public enum LiveKitErrorType: Int, Sendable {
     case encryptionFailed = 1001
     case decryptionFailed = 1002
 
+    // LiveKit Cloud
+    case onlyForCloud = 1101
+    case regionManager = 1102
+
+    // TT specific
     case startCall = 2001
 }
 
@@ -120,6 +125,10 @@ extension LiveKitErrorType: CustomStringConvertible {
             "Encryption failed"
         case .decryptionFailed:
             "Decryption failed"
+        case .onlyForCloud:
+            "Only for LiveKit Cloud"
+        case .regionManager:
+            "Region manager error"
         case .startCall:
             "TT Start Call Error"
         default: "Unknown"
@@ -127,7 +136,7 @@ extension LiveKitErrorType: CustomStringConvertible {
     }
 }
 
-@objc
+@objcMembers
 public class LiveKitError: NSError, @unchecked Sendable, Loggable {
     public let type: LiveKitErrorType
     public let message: String?
@@ -187,13 +196,62 @@ extension LiveKitError {
             return LiveKitError(.cancelled)
         }
 
-        // TODO: Identify more network error types
+        let nsError = error as NSError
+        if (nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorTimedOut)
+            || (nsError.domain == NSPOSIXErrorDomain && Int32(nsError.code) == ETIMEDOUT)
+        {
+            return LiveKitError(.timedOut, message: nsError.localizedDescription, internalError: error)
+        }
+
+        if error.isNetworkError {
+            return LiveKitError(.network, internalError: error)
+        }
+
         log("Uncategorized error for: \(String(describing: error))")
         return LiveKitError(.unknown)
     }
 
     static func from(reason: Livekit_DisconnectReason) -> LiveKitError {
         LiveKitError(reason.toLKType())
+    }
+}
+
+extension Error {
+    /// Returns `true` for URLError, CFNetwork, and POSIX socket errors.
+    var isNetworkError: Bool {
+        if self is URLError { return true }
+        let nsError = self as NSError
+        switch nsError.domain {
+        case NSURLErrorDomain,
+             // CFNetwork errors (SSL/TLS failures, proxy issues, etc.)
+             "kCFErrorDomainCFNetwork":
+            return true
+        case NSPOSIXErrorDomain:
+            // Only whitelist known socket-related POSIX codes; non-network
+            // errors (ENOMEM, EACCES, …) should not be classified as network errors.
+            let socketCodes: Set<Int32> = [
+                ECONNREFUSED, ECONNRESET, ECONNABORTED,
+                ETIMEDOUT, ENETUNREACH, ENETDOWN,
+                EHOSTUNREACH, EPIPE, ENOTCONN,
+            ]
+            return socketCodes.contains(Int32(nsError.code))
+        default:
+            return false
+        }
+    }
+
+    /// Returns `true` for network/timeouts that should trigger region failover.
+    var isRetryableForRegionFailover: Bool {
+        if let liveKitError = self as? LiveKitError {
+            switch liveKitError.type {
+            case .network, .timedOut:
+                return true
+            default:
+                return false
+            }
+        }
+
+        return isNetworkError
     }
 }
 

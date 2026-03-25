@@ -29,7 +29,7 @@ import os.signpost
 ///
 /// - Important: This class is not thread safe and will be called on a dedicated serial `processingQueue`.
 @available(iOS 15.0, macOS 12.0, tvOS 15.0, visionOS 1.0, *)
-@objc
+@objcMembers
 public final class BackgroundBlurVideoProcessor: NSObject, @unchecked Sendable, VideoProcessor, Loggable {
     #if LK_SIGNPOSTS
     private let signpostLog = OSLog(subsystem: Bundle.main.bundleIdentifier ?? "", category: "BackgroundBlur")
@@ -58,7 +58,7 @@ public final class BackgroundBlurVideoProcessor: NSObject, @unchecked Sendable, 
 
     // MARK: CoreImage
 
-    private let ciContext: CIContext = .metal()
+    private let ciContext: CIContext
 
     private let blurFilter = CIFilter.gaussianBlur()
     private let blendFilter = CIFilter.blendWithMask()
@@ -71,9 +71,16 @@ public final class BackgroundBlurVideoProcessor: NSObject, @unchecked Sendable, 
 
     // MARK: Init
 
+    private let useMetal: Bool
+
     /// Initialize the background blur video processor.
-    /// - Parameter highQuality: If true, use more detailed segmentation, but at the cost of performance.
-    public init(highQuality: Bool = true) {
+    /// - Parameters:
+    ///   - highQuality: If true, use more detailed segmentation, but at the cost of performance.
+    ///   - useMetal: If true, use Metal rendering for better performance. Set to false when the app may be backgrounded (e.g. during PiP).
+    public init(highQuality: Bool = true, useMetal: Bool = true) {
+        self.useMetal = useMetal
+        ciContext = useMetal ? .metal() : .softwareRenderer()
+        super.init()
         segmentationRequest.qualityLevel = highQuality ? .balanced : .fast
     }
 
@@ -169,7 +176,13 @@ public final class BackgroundBlurVideoProcessor: NSObject, @unchecked Sendable, 
 
     private func getOutputBuffer(of size: CGSize) -> CVPixelBuffer? {
         if cachedPixelBufferSize != size {
-            cachedPixelBuffer = .metal(width: Int(size.width), height: Int(size.height))
+            if useMetal {
+                cachedPixelBuffer = .metal(width: Int(size.width), height: Int(size.height))
+            } else {
+                var pixelBuffer: CVPixelBuffer?
+                CVPixelBufferCreate(kCFAllocatorDefault, Int(size.width), Int(size.height), kCVPixelFormatType_32BGRA, nil, &pixelBuffer)
+                cachedPixelBuffer = pixelBuffer
+            }
             cachedPixelBufferSize = size
         }
         return cachedPixelBuffer

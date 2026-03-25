@@ -53,9 +53,6 @@ jobs:
             platform: "macOS,variant=Mac Catalyst"
           - os: macos-15
             xcode: 16.4
-            platform: "visionOS Simulator,name=Apple Vision Pro,OS=2.5"
-          - os: macos-15
-            xcode: 16.4
             platform: "tvOS Simulator,name=Apple TV,OS=18.5"
 
           # https://github.com/actions/runner-images/blob/main/images/macos/macos-26-arm64-Readme.md
@@ -79,6 +76,10 @@ jobs:
             xcode: 26.1
             platform: "macOS"
             tsan: true
+          - os: macos-26
+            xcode: 26.1
+            platform: "macOS"
+            strict-concurrency-env: true
           - os: macos-26
             xcode: 26.1
             platform: "macOS,variant=Mac Catalyst"
@@ -125,6 +126,8 @@ jobs:
 
       - name: Run Tests
         uses: nick-fields/retry@v3
+        env:
+          LIBDISPATCH_COOPERATIVE_POOL_STRICT: ${{ matrix.strict-concurrency-env == true && '1' || '' }}
         with:
           timeout_minutes: ${{ env.TEST_TIMEOUT_MINUTES }}
           max_attempts: ${{ env.TEST_RETRY_ATTEMPTS }}

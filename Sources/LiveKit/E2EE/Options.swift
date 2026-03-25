@@ -50,15 +50,13 @@ public protocol TTEncryptor: AnyObject, Sendable {
     func decryptCallKey(eKey: String, eMKey: String) -> Data?
 }
 
-@objc
-public final class E2EEOptions: NSObject, @unchecked Sendable {
-    @objc
+@available(*, deprecated, message: "Migrate to 'EncryptionOptions' instead. Important: It will enable data channel encryption by default (requires support from all platforms).")
+@objcMembers
+public final class E2EEOptions: NSObject, Sendable {
     public let keyProvider: BaseKeyProvider
 
-    @objc
     public let encryptionType: EncryptionType
 
-    @objc
     public weak var ttEncryptor: TTEncryptor?
 
     public init(keyProvider: BaseKeyProvider,
@@ -86,12 +84,10 @@ public final class E2EEOptions: NSObject, @unchecked Sendable {
     }
 }
 
-@objc
+@objcMembers
 public final class EncryptionOptions: NSObject, Sendable {
-    @objc
     public let keyProvider: BaseKeyProvider
 
-    @objc
     public let encryptionType: EncryptionType
 
     public init(keyProvider: BaseKeyProvider,

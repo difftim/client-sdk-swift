@@ -23,7 +23,7 @@ import Foundation
 import Network
 #endif
 
-@objc
+@objcMembers
 // swiftlint:disable:next type_body_length
 public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
     // MARK: - MulticastDelegate
@@ -37,78 +37,67 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
     // MARK: - Public
 
     /// Server assigned id of the Room.
-    @objc
     public var sid: Sid? { _state.sid }
 
     /// Server assigned id of the Room. *async* version of ``Room/sid``.
-    @objc
     public func sid() async throws -> Sid {
         try await _sidCompleter.wait()
     }
 
-    @objc
     public var name: String? { _state.name }
 
     /// Room's metadata.
-    @objc
     public var metadata: String? { _state.metadata }
 
-    @objc
     public var serverVersion: String? { _state.serverInfo?.version.nilIfEmpty }
 
     /// Region code the client is currently connected to.
-    @objc
     public var serverRegion: String? { _state.serverInfo?.region.nilIfEmpty }
 
     /// Region code the client is currently connected to.
-    @objc
     public var serverNodeId: String? { _state.serverInfo?.nodeID.nilIfEmpty }
 
-    @objc
     public var remoteParticipants: [Participant.Identity: RemoteParticipant] { _state.remoteParticipants }
 
-    @objc
     public var activeSpeakers: [Participant] { _state.activeSpeakers }
 
-    @objc
     public var creationTime: Date? { _state.creationTime }
 
     /// If the current room has a participant with `recorder:true` in its JWT grant.
-    @objc
     public var isRecording: Bool { _state.isRecording }
 
-    @objc
     public var maxParticipants: Int { _state.maxParticipants }
 
-    @objc
     public var participantCount: Int { _state.numParticipants }
 
-    @objc
     public var publishersCount: Int { _state.numPublishers }
 
-    // expose engine's vars
-    @objc
-    public var url: String? { _state.url?.absoluteString }
+    /// User-provided URL.
+    public var url: String? { _state.providedUrl?.absoluteString }
 
-    @objc
+    /// Actual server URL used for the current connection (may include a regional URL).
+    public var connectedUrl: String? { _state.connectedUrl?.absoluteString }
+
     public var token: String? { _state.token }
 
     /// Current ``ConnectionState`` of the ``Room``.
-    @objc
     public var connectionState: ConnectionState { _state.connectionState }
 
-    @objc
     public var disconnectError: LiveKitError? { _state.disconnectError }
 
     public var connectStopwatch: Stopwatch { _state.connectStopwatch }
 
     // MARK: - Internal
 
-    public var e2eeManager: E2EEManager?
+    private let _e2eeManager = StateSync<E2EEManager?>(nil)
+
+    public var e2eeManager: E2EEManager? {
+        get { _e2eeManager.copy() }
+        set { _e2eeManager.mutate { $0 = newValue } }
+    }
 
     public internal(set) var ttCallResp: Livekit_TTCallResponse?
 
-    @objc
     public lazy var localParticipant: LocalParticipant = .init(room: self)
 
     let primaryTransportConnectedCompleter = AsyncCompleter<Void>(label: "Primary transport connect", defaultTimeout: .defaultTransportState)
@@ -147,7 +136,7 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
 
     // MARK: - State
 
-    struct State: Equatable, Sendable {
+    struct State: Equatable {
         // Options
         var connectOptions: ConnectOptions
         var roomOptions: RoomOptions
@@ -169,8 +158,11 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
         var serverInfo: Livekit_ServerInfo?
 
         // Engine
-        var url: URL?
+        var providedUrl: URL?
+        var connectedUrl: URL?
         var token: String?
+        var preparedRegion: RegionInfo?
+
         // preferred reconnect mode which will be used only for next attempt
         var nextReconnectMode: ReconnectMode?
         var isReconnectingWithMode: ReconnectMode?
@@ -219,16 +211,18 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
     private let _sidCompleter = AsyncCompleter<Sid>(label: "sid", defaultTimeout: .resolveSid)
     private let _disconnectCompleter = AsyncCompleter<Void>(label: "disconnect", defaultTimeout: .defaultTransportState * 10)
 
+    // MARK: - Region
+
+    let _regionManager = StateSync<RegionManager?>(nil)
+
     // MARK: Objective-C Support
 
-    @objc
     override public convenience init() {
         self.init(delegate: nil,
                   connectOptions: ConnectOptions(),
                   roomOptions: RoomOptions())
     }
 
-    @objc
     // swiftlint:disable:next cyclomatic_complexity function_body_length
     public init(delegate: RoomDelegate? = nil,
                 connectOptions: ConnectOptions? = nil,
@@ -328,14 +322,13 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
         }
     }
 
-    @objc
-    // swiftlint:disable:next function_body_length
-    public func connect(url: String,
+    // swiftlint:disable:next cyclomatic_complexity function_body_length
+    public func connect(url urlString: String,
                         token: String,
                         connectOptions: ConnectOptions? = nil,
                         roomOptions: RoomOptions? = nil) async throws
     {
-        guard let url = URL(string: url), url.isValidForConnect else {
+        guard let providedUrl = URL(string: urlString), providedUrl.isValidForConnect else {
             log("URL parse failed", .error)
             throw LiveKitError(.failedToParseUrl)
         }
@@ -356,6 +349,8 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
         if let connectOptions, connectOptions != _state.connectOptions {
             _state.mutate { $0.connectOptions = connectOptions }
         }
+
+        let preparedRegion = consumePreparedRegion(for: providedUrl)
 
         await cleanUp()
 
@@ -378,7 +373,28 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
             publisherDataChannel.e2eeManager = nil
         }
 
-        _state.mutate { $0.connectionState = .connecting }
+        _state.mutate {
+            $0.providedUrl = providedUrl
+            $0.token = token
+            $0.connectionState = .connecting
+        }
+
+        var nextUrl = providedUrl
+        var nextRegion: RegionInfo?
+        let regionManager = await regionManager(for: providedUrl)
+
+        if providedUrl.isCloud {
+            if let regionManager {
+                await regionManager.resetAttempts(onlyIfExhausted: true)
+
+                if let preparedRegion {
+                    nextUrl = preparedRegion.url
+                    nextRegion = preparedRegion
+                } else if await regionManager.shouldRequestSettings() {
+                    await regionManager.prepareSettingsFetch(token: token)
+                }
+            }
+        }
 
         // Concurrent mic publish mode
         let enableMicrophone = _state.connectOptions.enableMicrophone
@@ -401,22 +417,28 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
         }
 
         do {
-            try await fullConnectSequence(url, token)
+            let finalUrl: URL
+            if providedUrl.isCloud {
+                guard let regionManager else {
+                    throw LiveKitError(.onlyForCloud)
+                }
 
-            if let createMicrophoneTrackTask, !createMicrophoneTrackTask.isCancelled {
-                let track = try await createMicrophoneTrackTask.value
-                try await localParticipant._publish(track: track, options: _state.roomOptions.defaultAudioPublishOptions.withPreconnect(preConnectBuffer.recorder?.isRecording ?? false))
+                finalUrl = try await connectWithCloudRegionFailover(regionManager: regionManager,
+                                                                    initialUrl: nextUrl,
+                                                                    initialRegion: nextRegion,
+                                                                    token: token)
+            } else {
+                try await fullConnectSequence(nextUrl, token)
+                finalUrl = nextUrl
             }
 
             // Connect sequence successful
             log("Connect sequence completed")
-
             // Final check if cancelled, don't fire connected events
             try Task.checkCancellation()
 
-            // update internal vars (only if connect succeeded)
             _state.mutate {
-                $0.url = url
+                $0.connectedUrl = finalUrl
 
                 // Only set token if server hasn't provided(refreashToken) one yet
                 if $0.token == nil {
@@ -425,8 +447,13 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
 
                 $0.connectionState = .connected
             }
-
+            // Publish mic if mic task was created
+            if let createMicrophoneTrackTask, !createMicrophoneTrackTask.isCancelled {
+                let track = try await createMicrophoneTrackTask.value
+                try await localParticipant._publish(track: track, options: _state.roomOptions.defaultAudioPublishOptions.withPreconnect(preConnectBuffer.recorder?.isRecording ?? false))
+            }
         } catch {
+            log("Failed to resolve a region or connect: \(error)")
             // Stop the track if it was created but not published
             if let createMicrophoneTrackTask, !createMicrophoneTrackTask.isCancelled,
                case let .success(track) = await createMicrophoneTrackTask.result
@@ -435,14 +462,12 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
             }
 
             await cleanUp(withError: error)
-            // Re-throw error
-            throw error
+            throw error // Re-throw the original error
         }
 
         log("Connected to \(String(describing: self))", .info)
     }
 
-    @objc
     public func disconnect() async {
         let disconnectId = UUID().uuidString
         log("[freeze]\(disconnectId): in", .info)
@@ -515,12 +540,43 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
 // MARK: - Internal
 
 extension Room {
-    // Resets state of Room
-    func cleanUp(withError disconnectError: Error? = nil,
-                 isFullReconnect: Bool = false,
-                 stopTrackCaptureImmediately: Bool = false) async
+    // Resets state of Room.
+    //
+    // Safety properties:
+    //
+    //   Non-throwing: Every operation is either synchronous or `async` (no `try`).
+    //   CancellationError cannot interrupt the sequence mid-execution because
+    //   there are no throwing suspension points (`try await`).
+    //
+    //   Idempotent: Socket close, timer cancel, completer reset, and state
+    //   mutation to .disconnected are all safe to call multiple times. A second
+    //   cleanUp() on an already-disconnected Room is a no-op in effect.
+    //
+    //   No re-entrancy risk: The subscribe() helper suppresses onFailure
+    //   callbacks when Task.isCancelled is true (AsyncSequence+Subscribe:47),
+    //   so cancelling the messageLoopTask inside cleanUp cannot trigger a
+    //   recursive cleanUp call through the onFailure path.
+    //
+    // Cancellation contract — cleanUp() must NEVER be guarded by Task.isCancelled:
+    //
+    //   disconnect()
+    //       cancelReconnect() ──► reconnectTask cancelled
+    //       await cleanUp()   ──► runs in disconnect's own (non-cancelled) Task
+    //
+    //   startReconnect() catch
+    //       if !Task.isCancelled ──► skips when reconnect was cancelled;
+    //       await cleanUp()         caller (disconnect/new reconnect) owns cleanup
+    //
+    //   connect() catch
+    //       await cleanUp()   ──► connect failed, clean up and re-throw
+    //
+    // @nonobjc is required: Room is @objcMembers, which causes async method
+    // calls to create a new task context — silently breaking Task.isCancelled
+    // propagation. This method is internal and never called from ObjC.
+    @nonobjc func cleanUp(withError disconnectError: Error? = nil,
+                          isFullReconnect: Bool = false,
+                          stopTrackCaptureImmediately: Bool = false) async
     {
-        guard !Task.isCancelled else { return }
         log("withError: \(String(describing: disconnectError)), isFullReconnect: \(isFullReconnect), stopTrackCaptureImmediately: \(stopTrackCaptureImmediately)")
 
         // Reset completers
@@ -537,9 +593,11 @@ extension Room {
 
         // Clean up sender-related resources (incl. encryption state) before tearing down RTC.
         // During reconnect local capture may still produce frames; tearing down RTC/cryptors first can cause callbacks to touch released objects and crash.
-        await cleanUpParticipants(isFullReconnect: isFullReconnect)
-
+        // Cancel all track stats timers before closing transports to prevent
+        // stats collection from accessing destroyed WebRTC channels.
+        cancelTimers()
         await cleanUpRTC()
+        await cleanUpParticipants(isFullReconnect: isFullReconnect)
 
         // Cleanup for E2EE
         if let e2eeManager {
@@ -553,7 +611,8 @@ extension Room {
                 connectOptions: $0.connectOptions,
                 roomOptions: $0.roomOptions,
                 // remoteParticipants: removePar ? [:] : $0.remoteParticipants,
-                url: $0.url,
+                providedUrl: $0.providedUrl,
+                connectedUrl: $0.connectedUrl,
                 token: $0.token,
                 nextReconnectMode: $0.nextReconnectMode,
                 isReconnectingWithMode: $0.isReconnectingWithMode,
@@ -568,6 +627,14 @@ extension Room {
                 reconnectTask: $0.reconnectTask,
                 disconnectError: LiveKitError.from(error: disconnectError)
             )
+        }
+    }
+
+    private func cancelTimers() {
+        for (_, participant) in allParticipants {
+            for (_, publication) in participant._state.trackPublications {
+                publication.track?.cancelStatisticsTimer()
+            }
         }
     }
 }

@@ -24,12 +24,10 @@ import UIKit
 
 internal import LiveKitWebRTC
 
-@objc
+@objcMembers
 public class LocalParticipant: Participant, @unchecked Sendable {
-    @objc
     public var localAudioTracks: [LocalTrackPublication] { audioTracks.compactMap { $0 as? LocalTrackPublication } }
 
-    @objc
     public var localVideoTracks: [LocalTrackPublication] { videoTracks.compactMap { $0 as? LocalTrackPublication } }
 
     #if canImport(UIKit)
@@ -47,7 +45,6 @@ public class LocalParticipant: Participant, @unchecked Sendable {
     private var trackPermissions: [ParticipantTrackPermission] = []
 
     /// publish a new audio track to the Room
-    @objc
     @discardableResult
     public func publish(audioTrack: LocalAudioTrack, options: AudioPublishOptions? = nil) async throws -> LocalTrackPublication {
         let result = try await _publishSerialRunner.run {
@@ -58,7 +55,6 @@ public class LocalParticipant: Participant, @unchecked Sendable {
     }
 
     /// publish a new video track to the Room
-    @objc
     @discardableResult
     public func publish(videoTrack: LocalVideoTrack, options: VideoPublishOptions? = nil) async throws -> LocalTrackPublication {
         let result = try await _publishSerialRunner.run {
@@ -68,7 +64,6 @@ public class LocalParticipant: Participant, @unchecked Sendable {
         return result
     }
 
-    @objc
     override public func unpublishAll(notify _notify: Bool = true) async {
         // Build a list of Publications
         let publications = _state.trackPublications.values.compactMap { $0 as? LocalTrackPublication }
@@ -84,7 +79,6 @@ public class LocalParticipant: Participant, @unchecked Sendable {
 
     /// unpublish an existing published track
     /// this will also stop the track
-    @objc
     public func unpublish(publication: LocalTrackPublication, notify _notify: Bool = true) async throws {
         let room = try requireRoom()
 
@@ -134,7 +128,6 @@ public class LocalParticipant: Participant, @unchecked Sendable {
     /// - Parameters:
     ///   - data: Data to send
     ///   - options: Provide options with a ``DataPublishOptions`` class.
-    @objc
     public func publish(data: Data, options: DataPublishOptions? = nil) async throws {
         let room = try requireRoom()
         let options = options ?? room._state.roomOptions.defaultDataPublishOptions
@@ -170,7 +163,6 @@ public class LocalParticipant: Participant, @unchecked Sendable {
      * - Parameter participantTrackPermissions Full list of individual permissions per
      *  participant/track. Any omitted participants will not receive any permissions.
      */
-    @objc
     public func setTrackSubscriptionPermissions(allParticipantsAllowed: Bool,
                                                 trackPermissions: [ParticipantTrackPermission] = []) async throws
     {
@@ -219,6 +211,29 @@ public class LocalParticipant: Participant, @unchecked Sendable {
         else { return }
 
         sender._set(subscribedQualities: qualities)
+    }
+
+    override func set(info: Livekit_ParticipantInfo, connectionState: ConnectionState) {
+        super.set(info: info, connectionState: connectionState)
+
+        // Reconcile track mute status
+        for trackInfo in info.tracks {
+            let trackSid = Track.Sid(from: trackInfo.sid)
+            guard let publication = trackPublications[trackSid] as? LocalTrackPublication else { continue }
+
+            let localMuted = publication.isMuted
+            if localMuted != trackInfo.muted {
+                log("updating server mute state after reconcile, track: \(trackSid), muted: \(localMuted)", .debug)
+                Task {
+                    do {
+                        let room = try requireRoom()
+                        try await room.signalClient.sendMuteTrack(trackSid: trackSid, muted: localMuted)
+                    } catch {
+                        log("Failed to update server mute state after reconcile, error: \(error)", .error)
+                    }
+                }
+            }
+        }
     }
 
     override func set(permissions newValue: ParticipantPermissions) -> Bool {
@@ -420,7 +435,8 @@ public extension LocalParticipant {
                             return nil
                         }
                         // Wait until broadcasting to publish track
-                        localTrack = LocalVideoTrack.createBroadcastScreenCapturerTrack(options: defaultOptions)
+                        localTrack = LocalVideoTrack.createBroadcastScreenCapturerTrack(options: defaultOptions,
+                                                                                        reportStatistics: room._state.roomOptions.reportRemoteTrackStatistics)
                     } else {
                         let options = (captureOptions as? ScreenShareCaptureOptions) ?? defaultOptions
                         localTrack = LocalVideoTrack.createInAppScreenShareTrack(options: options)

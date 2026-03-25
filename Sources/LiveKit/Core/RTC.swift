@@ -21,9 +21,8 @@ internal import LiveKitWebRTC
 private extension Array where Element: LKRTCVideoCodecInfo {
     func rewriteCodecsIfNeeded() -> [LKRTCVideoCodecInfo] {
         // rewrite H264's profileLevelId to 42e032
-        let codecs = map { $0.name == kLKRTCVideoCodecH264Name ? RTC.h264BaselineLevel5CodecInfo : $0 }
+        map { $0.name == kLKRTCVideoCodecH264Name ? RTC.h264BaselineLevel5CodecInfo : $0 }
         // logger.log("supportedCodecs: \(codecs.map({ "\($0.name) - \($0.parameters)" }).joined(separator: ", "))", type: RTC.self)
-        return codecs
     }
 }
 
@@ -96,6 +95,9 @@ actor RTC {
         LKRTCInitializeSSL()
 
         Room.log("Initializing PeerConnectionFactory...")
+
+        // Enable DTLS during ICE handshake for faster connection setup.
+        LKRTCPeerConnectionFactory.configureFieldTrials("WebRTC-IceHandshakeDtls/Enabled/")
 
         return LKRTCPeerConnectionFactory(audioDeviceModuleType: admType.toRTCType(),
                                           bypassVoiceProcessing: bypassVoiceProcessing,
@@ -187,6 +189,14 @@ actor RTC {
 
         if let scalabilityMode {
             result.scalabilityMode = scalabilityMode.rawStringValue
+        }
+
+        if let bitratePriority = encoding?.bitratePriority {
+            result.bitratePriority = bitratePriority.toBitratePriority()
+        }
+
+        if let networkPriority = encoding?.networkPriority {
+            result.networkPriority = networkPriority.toRTCPriority()
         }
 
         return result
