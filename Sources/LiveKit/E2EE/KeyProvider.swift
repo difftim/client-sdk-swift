@@ -97,6 +97,7 @@ public final class BaseKeyProvider: NSObject, Loggable, Sendable {
     // MARK: Init
 
     @available(*, deprecated, message: "Use init(isSharedKey:sharedKey:) with Data type for sharedKey instead of String.")
+    @objc(initWithIsSharedKey:sharedKeyString:)
     public init(isSharedKey: Bool, sharedKey: String? = nil) {
         options = KeyProviderOptions(sharedKey: isSharedKey)
         rtcKeyProvider = LKRTCFrameCryptorKeyProvider(ratchetSalt: options.ratchetSalt,

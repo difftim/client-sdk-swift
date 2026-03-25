@@ -213,8 +213,12 @@ public class LocalParticipant: Participant, @unchecked Sendable {
         sender._set(subscribedQualities: qualities)
     }
 
-    override func set(info: Livekit_ParticipantInfo, connectionState: ConnectionState) {
-        super.set(info: info, connectionState: connectionState)
+    @discardableResult
+    override func set(info: Livekit_ParticipantInfo, connectionState: ConnectionState) -> Bool {
+        guard super.set(info: info, connectionState: connectionState) else {
+            log("Skipping outdated participant info, sid: \(info.sid), version: \(info.version)")
+            return false
+        }
 
         // Reconcile track mute status
         for trackInfo in info.tracks {
@@ -234,6 +238,8 @@ public class LocalParticipant: Participant, @unchecked Sendable {
                 }
             }
         }
+
+        return true
     }
 
     override func set(permissions newValue: ParticipantPermissions) -> Bool {

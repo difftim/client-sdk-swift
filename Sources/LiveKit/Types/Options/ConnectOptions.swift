@@ -117,37 +117,6 @@ public final class ConnectOptions: NSObject, Sendable {
                 isDscpEnabled: Bool = false,
                 enableMicrophone: Bool = false,
                 protocolVersion: ProtocolVersion = .v16,
-                userAgent: String? = nil,
-                transportKind: TransportKind = .websocket)
-    {
-        self.autoSubscribe = autoSubscribe
-        self.reconnectAttempts = reconnectAttempts
-        self.reconnectAttemptDelay = reconnectAttemptDelay
-        self.reconnectMaxDelay = max(reconnectMaxDelay, reconnectAttemptDelay)
-        self.socketConnectTimeoutInterval = socketConnectTimeoutInterval
-        self.primaryTransportConnectTimeout = primaryTransportConnectTimeout
-        self.publisherTransportConnectTimeout = publisherTransportConnectTimeout
-        self.iceServers = iceServers
-        self.iceTransportPolicy = iceTransportPolicy
-        self.isDscpEnabled = isDscpEnabled
-        self.enableMicrophone = enableMicrophone
-        self.protocolVersion = protocolVersion
-        ttCallRequest = nil
-        self.userAgent = userAgent
-        self.transportKind = transportKind
-    }
-
-    public init(autoSubscribe: Bool = true,
-                reconnectAttempts: Int = 10,
-                reconnectAttemptDelay: TimeInterval = .defaultReconnectDelay,
-                reconnectMaxDelay: TimeInterval = .defaultReconnectMaxDelay,
-                socketConnectTimeoutInterval: TimeInterval = .defaultSocketConnect,
-                primaryTransportConnectTimeout: TimeInterval = .defaultTransportState,
-                publisherTransportConnectTimeout: TimeInterval = .defaultTransportState,
-                iceServers: [IceServer] = [],
-                iceTransportPolicy: IceTransportPolicy = .all,
-                enableMicrophone: Bool = false,
-                protocolVersion: ProtocolVersion = .v12,
                 ttCallRequest: Livekit_TTCallRequest? = nil,
                 userAgent: String? = nil,
                 transportKind: TransportKind = .websocket)
@@ -161,6 +130,7 @@ public final class ConnectOptions: NSObject, Sendable {
         self.publisherTransportConnectTimeout = publisherTransportConnectTimeout
         self.iceServers = iceServers
         self.iceTransportPolicy = iceTransportPolicy
+        self.isDscpEnabled = isDscpEnabled
         self.enableMicrophone = enableMicrophone
         self.protocolVersion = protocolVersion
         self.ttCallRequest = ttCallRequest

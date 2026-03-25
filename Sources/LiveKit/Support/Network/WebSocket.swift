@@ -37,8 +37,6 @@ actor WebSocket: Loggable, AsyncSequence {
         return config
     }
 
-    private var sendAfterOpen: Data?
-
     init(url: URL, token: String, connectOptions: ConnectOptions?, sendAfterOpen: Data?) async throws {
         var request = URLRequest(url: url,
                                  cachePolicy: .useProtocolCachePolicy,
@@ -50,8 +48,6 @@ actor WebSocket: Loggable, AsyncSequence {
             request.addValue(userAgent, forHTTPHeaderField: "User-Agent")
         }
 
-        self.sendAfterOpen = sendAfterOpen
-
         #if targetEnvironment(simulator)
         if #available(iOS 26.0, *) {
             nw_tls_create_options()
@@ -59,6 +55,7 @@ actor WebSocket: Loggable, AsyncSequence {
         #endif
 
         delegate = Delegate()
+        delegate.setSendAfterOpen(sendAfterOpen)
         urlSession = URLSession(configuration: Self.makeSessionConfiguration(),
                                 delegate: delegate, delegateQueue: nil)
         task = urlSession.webSocketTask(with: request)
@@ -126,9 +123,14 @@ actor WebSocket: Loggable, AsyncSequence {
 
     private final class Delegate: NSObject, Loggable, URLSessionWebSocketDelegate {
         private let _continuation = StateSync<CheckedContinuation<Void, Error>?>(nil)
+        private let _sendAfterOpen = StateSync<Data?>(nil)
 
         func setConnectContinuation(_ continuation: CheckedContinuation<Void, Error>) {
             _continuation.mutate { $0 = continuation }
+        }
+
+        func setSendAfterOpen(_ data: Data?) {
+            _sendAfterOpen.mutate { $0 = data }
         }
 
         func cancelConnection() {
@@ -138,10 +140,9 @@ actor WebSocket: Loggable, AsyncSequence {
             }
         }
 
-        func urlSession(_: URLSession, webSocketTask _: URLSessionWebSocketTask, didOpenWithProtocol _: String?) {
-            if let data = sendAfterOpen {
-                sendAfterOpen = nil
-                Task { try await send(data: data) }
+        func urlSession(_: URLSession, webSocketTask: URLSessionWebSocketTask, didOpenWithProtocol _: String?) {
+            if let data = _sendAfterOpen.mutate({ let v = $0; $0 = nil; return v }) {
+                webSocketTask.send(.data(data)) { _ in }
             }
 
             _continuation.mutate {

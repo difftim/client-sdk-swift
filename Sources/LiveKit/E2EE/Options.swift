@@ -57,7 +57,7 @@ public final class E2EEOptions: NSObject, Sendable {
 
     public let encryptionType: EncryptionType
 
-    public weak var ttEncryptor: TTEncryptor?
+    public nonisolated(unsafe) weak var ttEncryptor: TTEncryptor?
 
     public init(keyProvider: BaseKeyProvider,
                 encryptionType: EncryptionType = .gcm,
