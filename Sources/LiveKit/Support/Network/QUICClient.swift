@@ -693,8 +693,6 @@ class QUICClient: NSObject, Loggable, @unchecked Sendable {
 
         sec_protocol_options_set_tls_server_name(securityOptions, host)
 
-        let parameters = NWParameters(quic: quicOptions)
-
-        return parameters
+        return NWParameters(quic: quicOptions)
     }
 }

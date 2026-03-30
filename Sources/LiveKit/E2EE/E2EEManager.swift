@@ -216,18 +216,6 @@ extension E2EEManager {
 
         log("frameCryptor didStateChangeWithParticipantId \(participantId) with state \(state.rawValue)")
 
-        if state == .ok, let track = publication.track as? RemoteAudioTrack {
-            // Start the track after frame cryptor is setup
-            Task {
-                do {
-                    log("[delay] start track \"\(String(describing: track.sid))\" because FrameCryptorState is ok", .warning)
-                    try await track.start()
-                } catch {
-                    self.log("[delay] Failed to start track \"\(String(describing: track.sid))\" with error: \(error)", .error)
-                }
-            }
-        }
-
         room.delegates.notify { delegate in
             delegate.room?(room, trackPublication: publication, didUpdateE2EEState: state.toLKType())
         }

@@ -20,22 +20,17 @@ import Network
 /// Experimental QUIC signaling transport.
 /// Wraps QUICClient and exposes a WebSocket-like AsyncSequence of messages.
 @available(iOS 15.0, macOS 12.0, tvOS 15.0, *)
-final class QUICSignalTransport: SignalTransport, WTMessageDelegate, @unchecked Sendable {
-    private let client = QUICClient()
+actor QUICSignalTransport: SignalTransport {
+    typealias Element = URLSessionWebSocketTask.Message
 
-    private let _state = StateSync(State())
-    private struct State {
-        var streamContinuation: SignalMessageStream.Continuation?
-        var connectContinuation: CheckedContinuation<Void, Error>?
-    }
+    private let client: QUICClient
+    private let delegate: Delegate
 
-    override private init() {
-        super.init()
-        _stream = SignalMessageStream { continuation in
-            _state.mutate { state in
-                state.streamContinuation = continuation
-            }
-        }
+    private init() {
+        let delegate = Delegate()
+        self.delegate = delegate
+        client = QUICClient()
+        client.setDelegate(delegate: delegate)
     }
 
     // MARK: - Factory
@@ -45,12 +40,9 @@ final class QUICSignalTransport: SignalTransport, WTMessageDelegate, @unchecked 
                             connectOptions: ConnectOptions?,
                             sendAfterOpen: Data?) async throws -> QUICSignalTransport?
     {
-        // Ensure API is available at runtime (iOS 16+, macOS 13+ for Network QUIC)
         #if canImport(Network)
         let transport = QUICSignalTransport()
-        transport.client.setDelegate(delegate: transport)
 
-        // Prepare args for connect command
         var args: [String: Any] = [:]
         if !token.isEmpty {
             args["Authorization"] = "Bearer \(token)"
@@ -59,27 +51,21 @@ final class QUICSignalTransport: SignalTransport, WTMessageDelegate, @unchecked 
             args["User-Agent"] = ua
         }
 
-        // Kick off connection
         let ret = transport.client.connect(url: url.absoluteString, args: args)
         guard ret == 0 else { return nil }
 
-        // Wait for ready or failure
         do {
             try await withThrowingTaskGroup(of: Void.self) { group in
                 group.addTask {
                     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                        transport._state.mutate { state in
-                            state.connectContinuation = continuation
-                        }
+                        transport.delegate.setConnectContinuation(continuation)
                     }
                 }
-                // Add a timeout guard based on socketConnectTimeoutInterval
                 let timeout = UInt64((connectOptions?.socketConnectTimeoutInterval ?? .defaultSocketConnect) * 1_000_000_000)
                 group.addTask {
                     try await Task.sleep(nanoseconds: timeout)
                     throw LiveKitError(.timedOut)
                 }
-                // Return as soon as one completes
                 do {
                     try await group.next()
                     group.cancelAll()
@@ -89,12 +75,10 @@ final class QUICSignalTransport: SignalTransport, WTMessageDelegate, @unchecked 
                 }
             }
         } catch {
-            // Close on failure
             transport.close()
             return nil
         }
 
-        // Send pending first payload if provided
         if let data = sendAfterOpen {
             try? await transport.send(data: data)
         }
@@ -107,59 +91,137 @@ final class QUICSignalTransport: SignalTransport, WTMessageDelegate, @unchecked 
 
     // MARK: - SignalTransport
 
-    override func send(data: Data) async throws {
+    nonisolated func send(data: Data) async throws {
         try await client.send(data: data)
     }
 
-    override func close() {
+    nonisolated func close() {
         client.close()
-        _state.mutate { state in
-            state.streamContinuation?.finish()
-            state.streamContinuation = nil
-            state.connectContinuation = nil
-        }
+        delegate.finish()
     }
 
-    // MARK: - WTMessageDelegate
+    // MARK: - AsyncSequence
 
-    func quicClient(_: QUICClient, didReceiveData data: Data) {
-        guard let continuation = _state.streamContinuation else {
-            return
-        }
+    struct AsyncIterator: AsyncIteratorProtocol {
+        fileprivate let client: QUICClient
+        fileprivate let delegate: Delegate
 
-        continuation.yield(.data(data))
-    }
-
-    func quicClientDidConnect(_: QUICClient, args _: [String: Any]) {
-        _state.mutate { state in
-            state.connectContinuation?.resume()
-            state.connectContinuation = nil
-        }
-    }
-
-    func quicClientDidSend(_: QUICClient, size _: Int) {
-        // no-op
-    }
-
-    func quicClient(_: QUICClient, didFailWithError error: NWError) {
-        // Map NWError to LiveKitError and signal failure if connecting; else finish stream with error
-        let lkError = LiveKitError(.network, message: error.localizedDescription, internalError: error)
-        _state.mutate { state in
-            if let cc = state.connectContinuation {
-                cc.resume(throwing: lkError)
-                state.connectContinuation = nil
-            } else {
-                state.streamContinuation?.finish(throwing: lkError)
-                state.streamContinuation = nil
+        func next() async throws -> URLSessionWebSocketTask.Message? {
+            try await withTaskCancellationHandler {
+                try await delegate.nextMessage()
+            } onCancel: {
+                client.close()
+                delegate.finish()
             }
         }
     }
 
-    func quicClientDidDisconnect(_: QUICClient) {
-        _state.mutate { state in
-            state.streamContinuation?.finish()
-            state.streamContinuation = nil
-            state.connectContinuation = nil
+    nonisolated func makeAsyncIterator() -> AsyncIterator {
+        AsyncIterator(client: client, delegate: delegate)
+    }
+
+    // MARK: - Delegate
+
+    /// Bridges QUICClient's callback-based delegate into a continuation-driven
+    /// async iterator, keeping all mutable state behind `StateSync`.
+    fileprivate final class Delegate: WTMessageDelegate, Sendable {
+        private let _state = StateSync(State())
+        private struct State {
+            var connectContinuation: CheckedContinuation<Void, Error>?
+            var messageContinuation: CheckedContinuation<URLSessionWebSocketTask.Message?, Error>?
+            var buffer: [URLSessionWebSocketTask.Message] = []
+            var failure: LiveKitError?
+            var finished = false
+        }
+
+        func setConnectContinuation(_ continuation: CheckedContinuation<Void, Error>) {
+            _state.mutate { $0.connectContinuation = continuation }
+        }
+
+        func finish() {
+            _state.mutate { state in
+                state.finished = true
+                state.messageContinuation?.resume(returning: nil)
+                state.messageContinuation = nil
+                state.connectContinuation?.resume(throwing: LiveKitError(.cancelled))
+                state.connectContinuation = nil
+            }
+        }
+
+        func nextMessage() async throws -> URLSessionWebSocketTask.Message? {
+            let immediate: Result<URLSessionWebSocketTask.Message?, LiveKitError>? = _state.mutate { state in
+                if let error = state.failure {
+                    state.failure = nil
+                    return .failure(error)
+                }
+                if !state.buffer.isEmpty {
+                    return .success(state.buffer.removeFirst())
+                }
+                if state.finished { return .success(nil) }
+                return nil
+            }
+
+            if let immediate {
+                return try immediate.get()
+            }
+
+            return try await withCheckedThrowingContinuation { continuation in
+                _state.mutate { state in
+                    if let error = state.failure {
+                        state.failure = nil
+                        continuation.resume(throwing: error)
+                    } else if !state.buffer.isEmpty {
+                        continuation.resume(returning: state.buffer.removeFirst())
+                    } else if state.finished {
+                        continuation.resume(returning: nil)
+                    } else {
+                        state.messageContinuation = continuation
+                    }
+                }
+            }
+        }
+
+        // MARK: - WTMessageDelegate
+
+        func quicClient(_: QUICClient, didReceiveData data: Data) {
+            _state.mutate { state in
+                if let continuation = state.messageContinuation {
+                    state.messageContinuation = nil
+                    continuation.resume(returning: .data(data))
+                } else {
+                    state.buffer.append(.data(data))
+                }
+            }
+        }
+
+        func quicClientDidConnect(_: QUICClient, args _: [String: Any]) {
+            _state.mutate { state in
+                state.connectContinuation?.resume()
+                state.connectContinuation = nil
+            }
+        }
+
+        func quicClientDidSend(_: QUICClient, size _: Int) {}
+
+        func quicClient(_: QUICClient, didFailWithError error: NWError) {
+            let lkError = LiveKitError(.network, message: error.localizedDescription, internalError: error)
+            _state.mutate { state in
+                if let cc = state.connectContinuation {
+                    cc.resume(throwing: lkError)
+                    state.connectContinuation = nil
+                } else if let mc = state.messageContinuation {
+                    state.messageContinuation = nil
+                    state.finished = true
+                    mc.resume(throwing: lkError)
+                } else {
+                    state.finished = true
+                    state.failure = lkError
+                }
+            }
+        }
+
+        func quicClientDidDisconnect(_: QUICClient) {
+            finish()
         }
     }
 }

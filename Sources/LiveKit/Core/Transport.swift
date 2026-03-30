@@ -248,12 +248,6 @@ extension Transport: LKRTCPeerConnectionDelegate {
         }
 
         log("type: \(type(of: track)), track.id: \(track.trackId), streams: \(streams.map { "Stream(hash: \($0.hash), id: \($0.streamId), videoTracks: \($0.videoTracks.count), audioTracks: \($0.audioTracks.count))" })")
-
-        if track.kind == "audio" {
-            track.isEnabled = false
-            log("[delay] Disabling audio track \"\(track.trackId)\" until set e2ee or disable e2ee", .warning)
-        }
-
         _delegate.notify { $0.transport(self, didAddTrack: track, rtpReceiver: rtpReceiver, streams: streams) }
     }
 

@@ -16,34 +16,22 @@
 
 import Foundation
 
-final class WebSocketSignalTransport: SignalTransport, @unchecked Sendable {
+actor WebSocketSignalTransport: SignalTransport {
     private let socket: WebSocket
 
     init(url: URL, token: String, connectOptions: ConnectOptions?, sendAfterOpen: Data?) async throws {
-        // Create the underlying WebSocket
         socket = try await WebSocket(url: url, token: token, connectOptions: connectOptions, sendAfterOpen: sendAfterOpen)
-        super.init()
-        // Expose the socket's stream via our base _stream
-        _stream = AsyncThrowingStream { continuation in
-            Task.detached { [weak self] in
-                guard let self else { return }
-                do {
-                    for try await message in socket {
-                        continuation.yield(message)
-                    }
-                    continuation.finish()
-                } catch {
-                    continuation.finish(throwing: LiveKitError.from(error: error))
-                }
-            }
-        }
     }
 
-    override func send(data: Data) async throws {
+    nonisolated func makeAsyncIterator() -> WebSocket.AsyncIterator {
+        socket.makeAsyncIterator()
+    }
+
+    nonisolated func send(data: Data) async throws {
         try await socket.send(data: data)
     }
 
-    override func close() {
+    nonisolated func close() {
         socket.close()
     }
 }

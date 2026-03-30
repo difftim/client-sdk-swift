@@ -126,20 +126,7 @@ public class RemoteParticipant: Participant, @unchecked Sendable {
         }
 
         add(publication: publication)
-
-        if track is RemoteVideoTrack {
-            try await track.start()
-        } else {
-            if room.e2eeManager == nil {
-                log("[delay] start track \"\(rtcTrack.trackId)\" because e2eeManager is disabled", .warning)
-                try await track.start()
-            } else if publication.encryptionType == .none {
-                log("[delay] start track \"\(rtcTrack.trackId)\" because track not enable e2ee", .warning)
-                try await track.start()
-            } else {
-                log("[delay] not start track \"\(rtcTrack.trackId)\" until set e2ee or disable e2ee", .warning)
-            }
-        }
+        try await track.start()
 
         delegates.notify(label: { "participant.didSubscribe \(publication)" }) {
             $0.participant?(self, didSubscribeTrack: publication)

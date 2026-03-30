@@ -55,7 +55,6 @@ actor SignalClient: Loggable {
     // MARK: - Private
 
     let _delegate = AsyncSerialDelegate<SignalClientDelegate>()
-    private let _queue = DispatchQueue(label: "LiveKitSDK.signalClient", qos: .default)
 
     // Queue to store requests while reconnecting
     private lazy var _requestQueue = QueueActor<Livekit_SignalRequest>(onProcess: { [weak self] request in
@@ -90,7 +89,7 @@ actor SignalClient: Loggable {
     struct State {
         var connectionState: ConnectionState = .disconnected
         var disconnectError: LiveKitError?
-        var transport: SignalTransport?
+        var transport: (any SignalTransport)?
         var messageLoopTask: AnyTaskCancellable?
         var lastJoinResponse: Livekit_JoinResponse?
         var rtt: Int64 = 0
@@ -749,7 +748,7 @@ extension Livekit_SignalRequest {
 }
 
 private extension SignalClient {
-    func requireTransport() async throws -> SignalTransport {
+    func requireTransport() async throws -> any SignalTransport {
         guard let result = _state.transport else {
             log("Signal transport is nil", .error)
             throw LiveKitError(.invalidState, message: "Signal transport is nil")

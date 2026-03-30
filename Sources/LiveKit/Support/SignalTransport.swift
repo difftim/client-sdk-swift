@@ -16,65 +16,39 @@
 
 import Foundation
 
-// Reuse the same stream and message types used by WebSocket for minimal integration changes
-public typealias SignalMessageStream = AsyncThrowingStream<URLSessionWebSocketTask.Message, Error>
-
-/// Base class for signaling transports. Subclasses provide concrete implementations
-/// such as WebSocket or QUIC while exposing a common AsyncSequence of messages.
-class SignalTransport: NSObject, @unchecked Sendable, Loggable, AsyncSequence {
-    typealias AsyncIterator = SignalMessageStream.Iterator
-    typealias Element = URLSessionWebSocketTask.Message
-
-    // Subclasses must provide a stream and implement send/close
-    // internal so subclasses in the same module can assign the stream
-    var _stream: SignalMessageStream!
-
-    // MARK: - AsyncSequence
-
-    func makeAsyncIterator() -> AsyncIterator {
-        _stream.makeAsyncIterator()
-    }
-
-    // MARK: - Transport API
-
-    func send(data _: Data) async throws {
-        fatalError("send(data:) must be overridden by subclass")
-    }
-
-    func close() {
-        // Optional override
-    }
+/// Protocol for signaling transports. Concrete implementations (WebSocket, QUIC)
+/// provide an `AsyncSequence` of messages along with send/close capabilities.
+protocol SignalTransport: AsyncSequence, Sendable, Loggable
+    where Element == URLSessionWebSocketTask.Message
+{
+    func send(data: Data) async throws
+    func close()
 }
 
-/// Factory for creating transports based on ConnectOptions.TransportKind.
+/// Factory for creating transports based on ``TransportKind``.
 enum SignalTransportFactory: Loggable {
     static func create(kind: TransportKind,
                        url: URL,
                        token: String,
                        options: ConnectOptions?,
-                       sendAfterOpen: Data?) async throws -> SignalTransport
+                       sendAfterOpen: Data?) async throws -> any SignalTransport
     {
-        var transport: SignalTransport?
-
         if kind == .quic {
-            // Try QUIC if available on this OS version, otherwise gracefully fall back to WebSocket
             if #available(iOS 15.0, macOS 12.0, tvOS 15.0, *) {
                 log("use QUIC transport")
-                transport = try await QUICSignalTransport.maybeCreate(url: url, token: token, connectOptions: options, sendAfterOpen: sendAfterOpen)
+                if let transport = try await QUICSignalTransport.maybeCreate(
+                    url: url, token: token, connectOptions: options, sendAfterOpen: sendAfterOpen
+                ) {
+                    return transport
+                }
             } else {
                 log("fall back to WebSocket transport: QUIC not available on this OS version")
             }
         }
 
-        if transport == nil {
-            log("use WebSocket transport")
-            transport = try await WebSocketSignalTransport(url: url, token: token, connectOptions: options, sendAfterOpen: sendAfterOpen)
-        }
-
-        if let transport {
-            return transport
-        } else {
-            throw LiveKitError(.network)
-        }
+        log("use WebSocket transport")
+        return try await WebSocketSignalTransport(
+            url: url, token: token, connectOptions: options, sendAfterOpen: sendAfterOpen
+        )
     }
 }
