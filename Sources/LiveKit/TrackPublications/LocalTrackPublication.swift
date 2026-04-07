@@ -192,18 +192,17 @@ extension LocalTrackPublication {
         log("Computed encodings: \(encodings)")
 
         for current in parameters.encodings {
-            //
             if let updated = encodings.first(where: { $0.rid == current.rid }) {
-                // update parameters for matching rid
                 current.isActive = updated.isActive
                 current.scaleResolutionDownBy = updated.scaleResolutionDownBy
                 current.maxBitrateBps = updated.maxBitrateBps
                 current.maxFramerate = updated.maxFramerate
+                current.scalabilityMode = updated.scalabilityMode
             } else {
                 current.isActive = false
                 current.scaleResolutionDownBy = nil
                 current.maxBitrateBps = nil
-                current.maxBitrateBps = nil
+                current.maxFramerate = nil
             }
         }
 

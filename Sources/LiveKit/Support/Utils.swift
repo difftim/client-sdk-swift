@@ -228,10 +228,10 @@ class Utils: Loggable {
         let videoCodec = overrideVideoCodec ?? publishOptions.preferredCodec
 
         if let videoCodec, videoCodec.isSVC {
-            // SVC mode
-            log("Using SVC mode")
-            // VP9/AV1 with screen sharing requires single spatial layer
-            return [RTC.createRtpEncodingParameters(encoding: encoding, scalabilityMode: isScreenShare ? .L1T3 : .L3T3_KEY)]
+            // SVC mode — screen share always uses L1T3 (single spatial layer required)
+            let mode: ScalabilityMode = isScreenShare ? .L1T3 : publishOptions.scalabilityMode
+            log("Using SVC mode, scalabilityMode: \(mode)")
+            return [RTC.createRtpEncodingParameters(encoding: encoding, scalabilityMode: mode)]
         } else if !publishOptions.simulcast {
             // Not-simulcast mode
             log("Simulcast not enabled")
