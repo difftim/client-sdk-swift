@@ -596,13 +596,21 @@ extension Room {
         // Cancel all track stats timers before closing transports to prevent
         // stats collection from accessing destroyed WebRTC channels.
         cancelTimers()
-        await cleanUpRTC()
-        await cleanUpParticipants(isFullReconnect: isFullReconnect)
 
         // Cleanup for E2EE
         if let e2eeManager {
+            log("[cleanup] e2eeManager.cleanUp begin")
             e2eeManager.cleanUp()
+            log("[cleanup] e2eeManager.cleanUp end")
         }
+
+        log("[cleanup] cleanUpParticipants begin")
+        await cleanUpParticipants(isFullReconnect: isFullReconnect)
+        log("[cleanup] cleanUpParticipants end")
+
+        log("[cleanup] cleanUpRTC begin")
+        await cleanUpRTC()
+        log("[cleanup] cleanUpRTC end")
 
         // Reset state
         _state.mutate {

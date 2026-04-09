@@ -145,7 +145,7 @@ public class E2EEManager: NSObject, @unchecked Sendable, ObservableObject, Logga
 
         frameCryptor.delegate = delegateAdapter
 
-        return _state.mutate {
+        _state.mutate {
             $0.frameCryptors[[participantIdentity: publication.sid]] = frameCryptor
             $0.trackPublications[frameCryptor] = publication
             frameCryptor.enabled = $0.enabled
@@ -175,7 +175,7 @@ public class E2EEManager: NSObject, @unchecked Sendable, ObservableObject, Logga
 
         frameCryptor.delegate = delegateAdapter
 
-        return _state.mutate {
+        _state.mutate {
             $0.frameCryptors[[participantIdentity: publication.sid]] = frameCryptor
             $0.trackPublications[frameCryptor] = publication
             frameCryptor.enabled = $0.enabled
