@@ -26,6 +26,10 @@ public extension TimeInterval {
 
     // the following 3 timeouts are used for a typical connect sequence
     static let defaultSocketConnect: Self = 10
+    /// Connect timeout for the experimental QUIC signaling transport.
+    /// Kept short so the SDK can fall back to WebSocket quickly when QUIC/UDP
+    /// is blocked or the peer is unreachable.
+    static let defaultQUICSocketConnect: Self = 7
     // used for validation mode
     static let defaultHTTPConnect: Self = 5
 

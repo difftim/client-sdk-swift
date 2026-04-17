@@ -54,17 +54,32 @@ actor QUICSignalTransport: SignalTransport {
         let ret = transport.client.connect(url: url.absoluteString, args: args)
         guard ret == 0 else { return nil }
 
+        // QUIC uses its own (shorter) connect timeout so we can fall back to
+        // WebSocket quickly when UDP/QUIC is blocked. We also must ensure the
+        // underlying NWConnection is torn down when the timeout or the parent
+        // task cancels us, otherwise `withCheckedThrowingContinuation` below
+        // never resumes and we end up waiting for NWConnection's own idle
+        // timeout (~30s+).
+        let configuredTimeout = connectOptions?.socketConnectTimeoutInterval ?? .defaultQUICSocketConnect
+        let quicTimeout = Swift.min(configuredTimeout, .defaultQUICSocketConnect)
+        transport.log("QUIC connect starting, timeout: \(quicTimeout)s")
+
         do {
             try await withThrowingTaskGroup(of: Void.self) { group in
                 group.addTask {
-                    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                        transport.delegate.setConnectContinuation(continuation)
+                    try await withTaskCancellationHandler {
+                        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                            transport.delegate.setConnectContinuation(continuation)
+                        }
+                    } onCancel: {
+                        transport.log("QUIC connect task cancelled, tearing down NWConnection")
+                        transport.close()
                     }
                 }
-                let timeout = UInt64((connectOptions?.socketConnectTimeoutInterval ?? .defaultSocketConnect) * 1_000_000_000)
                 group.addTask {
-                    try await Task.sleep(nanoseconds: timeout)
-                    throw LiveKitError(.timedOut)
+                    try await Task.sleep(nanoseconds: UInt64(quicTimeout * 1_000_000_000))
+                    transport.log("QUIC connect timed out after \(quicTimeout)s, will fall back", .warning)
+                    throw LiveKitError(.timedOut, message: "QUIC connect timed out after \(quicTimeout)s")
                 }
                 do {
                     try await group.next()
@@ -75,9 +90,12 @@ actor QUICSignalTransport: SignalTransport {
                 }
             }
         } catch {
+            transport.log("QUIC connect failed: \(error), falling back to WebSocket", .warning)
             transport.close()
             return nil
         }
+
+        transport.log("QUIC connect succeeded")
 
         if let data = sendAfterOpen {
             try? await transport.send(data: data)
