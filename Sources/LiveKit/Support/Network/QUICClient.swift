@@ -321,7 +321,8 @@ class QUICClient: NSObject, Loggable, @unchecked Sendable {
         }
         self.props = props
         // 1. 定义 QUIC 协议和 ALPN
-        let quicOptions = NWProtocolQUIC.Options(alpn: ["ttsignal"])
+        log("QUIC connect: host=\(host), port=\(port), alpn=\(host)")
+        let quicOptions = NWProtocolQUIC.Options(alpn: [host])
         quicOptions.idleTimeout = 30000
         if #available(iOS 16.0, macOS 13.0, tvOS 16.0, *) {
             quicOptions.maxDatagramFrameSize = 1600
