@@ -258,6 +258,13 @@ protocol WTMessageDelegate: AnyObject {
 
 @available(iOS 15.0, macOS 12.0, tvOS 15.0, *)
 class QUICClient: NSObject, Loggable, @unchecked Sendable {
+    struct ConnectionConfiguration {
+        let connectHost: String
+        let logicalHost: String
+        let port: UInt16
+        let props: [String: Any]
+    }
+
     enum ClientStateType: UInt8 {
         case INIT = 0
         case CONNECTING
@@ -296,45 +303,31 @@ class QUICClient: NSObject, Loggable, @unchecked Sendable {
     }
 
     func connect(url: String, args: [String: Any]) -> Int32 {
-        // 解析URL
-        guard let u = URLComponents(string: url) else {
+        let configuration: ConnectionConfiguration
+        do {
+            configuration = try Self.buildConnectionConfiguration(url: url, args: args)
+        } catch {
+            log("Failed to build QUIC connection configuration: \(error)", .error)
             return -1
         }
 
-        let scheme = u.scheme ?? ""
-        let host = u.host ?? ""
-        let port = UInt16(u.port ?? 443)
-        let path = u.path.isEmpty ? "/" : u.path
-        let query = u.query ?? ""
-
-        //        log("解析后的URL组件: scheme=\(scheme), host=\(host), port=\(port), path=\(path)")
-
-        var props = [String: Any]()
-
-        props["scheme"] = scheme
-        props["host"] = host
-        props["port"] = port
-        props["path"] = path
-        props["query"] = query
-        for (key, value) in args {
-            props[key] = value
-        }
-        self.props = props
+        props = configuration.props
         // 1. 定义 QUIC 协议和 ALPN
-        log("QUIC connect: host=\(host), port=\(port), alpn=\(host)")
-        let quicOptions = NWProtocolQUIC.Options(alpn: [host])
+        log("QUIC connect: connectHost=\(configuration.connectHost), logicalHost=\(configuration.logicalHost), port=\(configuration.port)")
+        let quicOptions = NWProtocolQUIC.Options(alpn: ["ttsignal"])
         quicOptions.idleTimeout = 30000
         if #available(iOS 16.0, macOS 13.0, tvOS 16.0, *) {
             quicOptions.maxDatagramFrameSize = 1600
         }
         quicOptions.direction = .bidirectional
 
-        let parameters = createQUICParametersWithCustomVerification(quicOptions: quicOptions, host: host)
+        let parameters = createQUICParametersWithCustomVerification(quicOptions: quicOptions,
+                                                                    host: configuration.logicalHost)
 
         // 2. 使用属性存储，确保强引用
-        let nwport = NWEndpoint.Port(rawValue: port)!
+        let nwport = NWEndpoint.Port(rawValue: configuration.port)!
         let stream = NWConnection(
-            to: .hostPort(host: NWEndpoint.Host(host), port: nwport), using: parameters
+            to: .hostPort(host: NWEndpoint.Host(configuration.connectHost), port: nwport), using: parameters
         )
         self.stream = stream
 
@@ -347,6 +340,34 @@ class QUICClient: NSObject, Loggable, @unchecked Sendable {
         stream.start(queue: connectionQueue)
         state = .CONNECTING
         return 0
+    }
+
+    static func buildConnectionConfiguration(url: String, args: [String: Any]) throws -> ConnectionConfiguration {
+        guard let components = URLComponents(string: url),
+              let connectHost = components.host,
+              !connectHost.isEmpty
+        else {
+            throw LiveKitError(.invalidParameter, message: "Invalid QUIC URL")
+        }
+
+        let port = UInt16(components.port ?? 443)
+        let scheme = components.scheme ?? ""
+        let path = components.path.isEmpty ? "/" : components.path
+        let query = components.query ?? ""
+        let logicalHost = connectHost
+
+        var props = args
+        props["scheme"] = scheme
+        props["host"] = connectHost
+        props["port"] = port
+        props["path"] = path
+        props["query"] = query
+        props["serverHost"] = logicalHost
+
+        return ConnectionConfiguration(connectHost: connectHost,
+                                       logicalHost: logicalHost,
+                                       port: port,
+                                       props: props)
     }
 
     func sendData(data: Data) -> Int32 {
