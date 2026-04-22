@@ -49,16 +49,17 @@ extension Stopwatch: Equatable {
 }
 
 extension Stopwatch: CustomStringConvertible {
-    public var description: String {
-        var e = [String]()
+    public var description: String { formatted { "\($0.rounded(to: 2))s" } }
+    public var msDescription: String { formatted { "\(Int($0 * 1000))ms" } }
+
+    private func formatted(interval: (TimeInterval) -> String) -> String {
+        var parts = [String]()
         var s = start
         for x in splits {
-            let diff = x.time - s
+            parts.append("\(x.label) +\(interval(x.time - s))")
             s = x.time
-            e.append("\(x.label) +\(diff.rounded(to: 2))s")
         }
-
-        e.append("total \((s - start).rounded(to: 2))s")
-        return "Stopwatch(\(label), \(e.joined(separator: ", ")))"
+        parts.append("total \(interval(s - start))")
+        return "Stopwatch(\(label), \(parts.joined(separator: ", ")))"
     }
 }

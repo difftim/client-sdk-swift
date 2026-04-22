@@ -266,10 +266,13 @@ class QUICClient: NSObject, Loggable, @unchecked Sendable {
     }
 
     private let KEEP_ALIVE_INTERVAL: TimeInterval = 10
+    private let CLOSE_FLUSH_DELAY: TimeInterval = 0.5
     // Dedicated queue for NWConnection callbacks and QUIC processing (avoid main queue)
     private let connectionQueue = DispatchQueue(
         label: "io.livekit.quic.connection", qos: .userInitiated
     )
+    // Protects the stream-capture-and-nil sequence in close() against concurrent calls.
+    private let _closeLock: some Lock = createLock()
     private var stream: NWConnection?
     private var nextTransId: UInt32 = 1
     var delegate: WTMessageDelegate?
@@ -437,13 +440,28 @@ class QUICClient: NSObject, Loggable, @unchecked Sendable {
     }
 
     func close() {
-        log("Closing QUIC Client connection")
-        if let stream {
-            stream.cancel()
+        log("close() called")
+        // Capture-and-nil under lock so concurrent close() calls can't both pass the guard.
+        let capturedStream = _closeLock.sync { () -> NWConnection? in
+            guard let s = self.stream else { return nil }
+            state = .CLOSED
             self.stream = nil
+            return s
         }
-        // stop timer
+        guard let capturedStream else {
+            log("close() skipped — already closed")
+            return
+        }
         stopPingTimer()
+        let delay = CLOSE_FLUSH_DELAY
+        log("close() deferring NWConnection.cancel() by \(Int(delay * 1000))ms")
+        // Only the NWConnection teardown is deferred: give the QUIC stack this window to
+        // flush any already-queued sends (e.g. LeaveRequest) before cancelling.
+        // Dispatched on connectionQueue to serialise with NWConnection callbacks.
+        connectionQueue.asyncAfter(deadline: .now() + delay) {
+            self.log("close() NWConnection.cancel() executing")
+            capturedStream.cancel()
+        }
     }
 
     private func sendPing() {

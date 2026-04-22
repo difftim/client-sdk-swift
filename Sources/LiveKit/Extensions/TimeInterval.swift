@@ -41,6 +41,7 @@ public extension TimeInterval {
     static let defaultCaptureStart: Self = 10
 
     static let defaultParticipantActiveTimeout: Self = 10
+    static let defaultDisconnectCompletion: Self = 10 // upper bound for a full client-initiated disconnect sequence
 
     /// Computes a retry delay based on an "easeOutCirc" curve between baseDelay and maxDelay.
     ///
