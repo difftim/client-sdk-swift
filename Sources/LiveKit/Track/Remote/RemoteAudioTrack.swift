@@ -53,10 +53,7 @@ public class RemoteAudioTrack: Track, RemoteTrackProtocol, AudioTrackProtocol, @
 
     deinit {
         if let audioTrack = mediaTrack as? LKRTCAudioTrack {
-            let adapter = _adapter
-            Task.detached {
-                audioTrack.remove(adapter)
-            }
+            audioTrack.remove(_adapter)
         }
     }
 
