@@ -31,8 +31,12 @@ actor WebSocket: Loggable, AsyncSequence {
         config.shouldUseExtendedBackgroundIdleMode = true
         config.networkServiceType = .callSignaling
         #if os(iOS) || os(visionOS)
+        // MPTCP handover would help on Wi-Fi <-> cellular transitions, but the LiveKit
+        // signaling server we deploy against does not currently support Multipath TCP,
+        // so enabling it causes the WebSocket handshake to fail. Re-enable once the
+        // server-side support lands.
         // https://developer.apple.com/documentation/foundation/urlsessionconfiguration/improving_network_reliability_using_multipath_tcp
-        config.multipathServiceType = .handover
+        // config.multipathServiceType = .handover
         #endif
         return config
     }
@@ -84,16 +88,22 @@ actor WebSocket: Loggable, AsyncSequence {
 
     struct AsyncIterator: AsyncIteratorProtocol {
         fileprivate let task: URLSessionWebSocketTask
+        fileprivate let delegate: Delegate
 
         func next() async throws -> URLSessionWebSocketTask.Message? {
             guard task.closeCode == .invalid else { return nil }
+            let receiveContinuation = ReceiveContinuation()
+
             return try await withTaskCancellationHandler {
                 do {
                     // Use the callback API instead of the async overlay to avoid
                     // a TSan-visible data race inside Foundation's continuation bridge.
                     return try await withCheckedThrowingContinuation { continuation in
+                        receiveContinuation.set(continuation)
+                        delegate.setReceiveContinuation(receiveContinuation)
                         task.receive { result in
-                            continuation.resume(with: result)
+                            delegate.clearReceiveContinuation(receiveContinuation)
+                            receiveContinuation.resume(with: result)
                         }
                     }
                 } catch {
@@ -104,13 +114,14 @@ actor WebSocket: Loggable, AsyncSequence {
                     throw LiveKitError.from(error: error) ?? error
                 }
             } onCancel: {
+                delegate.cancelReceiveContinuation(receiveContinuation)
                 task.cancel(with: .normalClosure, reason: nil)
             }
         }
     }
 
     nonisolated func makeAsyncIterator() -> AsyncIterator {
-        AsyncIterator(task: task)
+        AsyncIterator(task: task, delegate: delegate)
     }
 
     // MARK: - Send
@@ -121,8 +132,51 @@ actor WebSocket: Loggable, AsyncSequence {
 
     // MARK: - Delegate
 
-    private final class Delegate: NSObject, Loggable, URLSessionWebSocketDelegate {
+    fileprivate final class ReceiveContinuation: Sendable {
+        private struct State {
+            var continuation: CheckedContinuation<URLSessionWebSocketTask.Message, Error>?
+            var isCancelled = false
+        }
+
+        private let _state = StateSync(State())
+
+        func set(_ continuation: CheckedContinuation<URLSessionWebSocketTask.Message, Error>) {
+            let shouldCancel = _state.mutate { state -> Bool in
+                guard !state.isCancelled else { return true }
+                state.continuation = continuation
+                return false
+            }
+
+            if shouldCancel {
+                continuation.resume(throwing: CancellationError())
+            }
+        }
+
+        func resume(with result: Result<URLSessionWebSocketTask.Message, Error>) {
+            _state.mutate {
+                let continuation = $0.continuation
+                $0.continuation = nil
+                return continuation
+            }?.resume(with: result)
+        }
+
+        func cancel() {
+            resume(throwing: CancellationError())
+        }
+
+        func resume(throwing error: Error) {
+            _state.mutate {
+                $0.isCancelled = true
+                let continuation = $0.continuation
+                $0.continuation = nil
+                return continuation
+            }?.resume(throwing: error)
+        }
+    }
+
+    fileprivate final class Delegate: NSObject, Loggable, URLSessionWebSocketDelegate {
         private let _continuation = StateSync<CheckedContinuation<Void, Error>?>(nil)
+        private let _receiveContinuation = StateSync<ReceiveContinuation?>(nil)
         private let _sendAfterOpen = StateSync<Data?>(nil)
 
         func setConnectContinuation(_ continuation: CheckedContinuation<Void, Error>) {
@@ -131,6 +185,22 @@ actor WebSocket: Loggable, AsyncSequence {
 
         func setSendAfterOpen(_ data: Data?) {
             _sendAfterOpen.mutate { $0 = data }
+        }
+
+        func setReceiveContinuation(_ continuation: ReceiveContinuation) {
+            _receiveContinuation.mutate { $0 = continuation }
+        }
+
+        func clearReceiveContinuation(_ continuation: ReceiveContinuation) {
+            _receiveContinuation.mutate {
+                guard $0 === continuation else { return }
+                $0 = nil
+            }
+        }
+
+        func cancelReceiveContinuation(_ continuation: ReceiveContinuation) {
+            clearReceiveContinuation(continuation)
+            continuation.cancel()
         }
 
         func cancelConnection() {
@@ -154,15 +224,23 @@ actor WebSocket: Loggable, AsyncSequence {
         func urlSession(_: URLSession, task _: URLSessionTask, didCompleteWithError error: Error?) {
             log("didCompleteWithError: \(String(describing: error))", error != nil ? .error : .debug)
 
+            let lkError = LiveKitError.from(error: error) ?? LiveKitError(.unknown)
             _continuation.mutate {
-                if let error {
-                    let lkError = LiveKitError.from(error: error) ?? LiveKitError(.unknown)
+                if error != nil {
                     $0?.resume(throwing: lkError)
                 } else {
                     $0?.resume()
                 }
                 $0 = nil
             }
+
+            guard error != nil else { return }
+
+            _receiveContinuation.mutate {
+                let continuation = $0
+                $0 = nil
+                return continuation
+            }?.resume(throwing: lkError)
         }
     }
 }

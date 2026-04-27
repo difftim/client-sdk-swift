@@ -322,6 +322,9 @@ extension Room {
             try await configureTransports(connectResponse: connectResponse)
             try Task.checkCancellation()
 
+            await _state.subscriber?.setIsRestartingIce()
+            try Task.checkCancellation()
+
             // Resume after configuring transports...
             await signalClient.resumeQueues()
 
@@ -338,8 +341,6 @@ extension Room {
 
             // send SyncState before offer
             try await sendSyncState()
-
-            await _state.subscriber?.setIsRestartingIce()
 
             if let publisher = _state.publisher, _state.hasPublished {
                 // Only if published, wait for publisher to connect...

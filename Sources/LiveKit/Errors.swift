@@ -224,7 +224,8 @@ extension Error {
         switch nsError.domain {
         case NSURLErrorDomain,
              // CFNetwork errors (SSL/TLS failures, proxy issues, etc.)
-             "kCFErrorDomainCFNetwork":
+             "kCFErrorDomainCFNetwork",
+             "kNWErrorDomainPOSIX":
             return true
         case NSPOSIXErrorDomain:
             // Only whitelist known socket-related POSIX codes; non-network

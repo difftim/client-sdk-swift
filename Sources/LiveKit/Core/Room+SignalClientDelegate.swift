@@ -21,6 +21,14 @@ import Foundation
 internal import LiveKitWebRTC
 
 extension Room: SignalClientDelegate {
+    /// On `URLSessionWebSocketTask` network errors, `NWPathMonitor` may report
+    /// `unsatisfied` 100–300 ms *after* the WebSocket already failed. Reconnecting
+    /// immediately would race that update and create a doomed `URLSessionWebSocketTask`
+    /// that fails with `A data connection is not currently allowed`. Wait this long for
+    /// the path to settle, then run reconnect through the unified `requestReconnect`
+    /// entry which will defer if `hasConnectivity` is now `false`.
+    private static let networkErrorReconnectDelay: UInt64 = 300_000_000 // 300ms
+
     func signalClient(_: SignalClient, didUpdateConnectionState connectionState: ConnectionState,
                       oldState: ConnectionState,
                       disconnectError: LiveKitError?) async
@@ -34,13 +42,28 @@ extension Room: SignalClientDelegate {
            // engine is currently connected state
            case .connected = _state.connectionState
         {
-            Task {
-                do {
-                    try await startReconnect(reason: .websocket)
-                } catch {
-                    log("Failed calling startReconnect, error: \(error)", .error)
+            if errorType == .network {
+                log("[reconnect][net] websocket network error, delaying reconnect 300ms for path settle")
+                // Detached + `[weak self]` so we don't keep `Room` alive purely for the
+                // wakeup, and so the delegate's serial runner isn't held up by the sleep.
+                Task.detached { [weak self] in
+                    try? await Task.sleep(nanoseconds: Room.networkErrorReconnectDelay)
+                    guard let self else { return }
+                    // Re-check: user may have called `disconnect()` during the sleep,
+                    // or the engine may have transitioned to reconnecting via another
+                    // path (transport, networkSwitch). `requestReconnect` itself
+                    // double-checks under `_state.mutate`, but this avoids the noisy
+                    // "ignored" log for the common case.
+                    guard _state.connectionState == .connected else {
+                        log("[reconnect][net] skipping delayed websocket reconnect, engine no longer connected")
+                        return
+                    }
+                    requestReconnect(reason: .websocket)
                 }
+                return
             }
+
+            requestReconnect(reason: .websocket)
         }
     }
 

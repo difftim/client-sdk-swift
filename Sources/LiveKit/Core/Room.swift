@@ -169,6 +169,13 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
         var connectionState: ConnectionState = .disconnected
         // var reconnectTask: Task<Result<Void, LiveKitError>, Error>?
         var reconnectTask: AnyTaskCancellable?
+        var isReconnectStartPending: Bool = false
+        var pendingReconnectOnConnectivity: PendingReconnect?
+        // Mirrored from `ConnectivityListener.shared.hasConnectivity` so that all
+        // reconnect-scheduling decisions can read connectivity inside the same
+        // `_state.mutate` block that performs the transition. Treat `nil` as
+        // "unknown / allow", `false` as offline.
+        var hasConnectivity: Bool?
         var disconnectError: LiveKitError?
         var connectStopwatch = Stopwatch(label: "connect")
         var hasPublished: Bool = false
@@ -178,6 +185,40 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
         var isSubscriberPrimary: Bool = false
 
         var serverNotifyDisconnect: Bool = false
+
+        struct PendingReconnect: Equatable {
+            var reason: StartReconnectReason
+            var nextReconnectMode: ReconnectMode?
+
+            // Manual `==` implemented via pattern matching so that
+            // `StartReconnectReason` / `ReconnectMode` do NOT need to declare
+            // public `Equatable` conformance just to satisfy the synthesis here.
+            // (`State: Equatable` would otherwise force the cascade up to the
+            // public enums.) Pattern matching works on case-only enums without
+            // requiring `Equatable`.
+            static func == (lhs: PendingReconnect, rhs: PendingReconnect) -> Bool {
+                let reasonsEqual = switch (lhs.reason, rhs.reason) {
+                case (.websocket, .websocket),
+                     (.transport, .transport),
+                     (.networkSwitch, .networkSwitch),
+                     (.debug, .debug):
+                    true
+                default:
+                    false
+                }
+
+                let modesEqual = switch (lhs.nextReconnectMode, rhs.nextReconnectMode) {
+                case (nil, nil),
+                     (.quick?, .quick?),
+                     (.full?, .full?):
+                    true
+                default:
+                    false
+                }
+
+                return reasonsEqual && modesEqual
+            }
+        }
 
         // Agents
         var transcriptionReceivedTimes: [String: Date] = [:]
@@ -252,6 +293,11 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
         Task { @MainActor in
             AppStateListener.shared.delegates.add(delegate: self)
         }
+        ConnectivityListener.shared.add(delegate: self)
+        // Seed the mirror with whatever the listener already observed; subsequent
+        // updates flow through `connectivityListener(_:didUpdate:)` /
+        // `connectivityListener(_:didSwitch:)` below.
+        _state.mutate { $0.hasConnectivity = ConnectivityListener.shared.hasConnectivity }
 
         Task {
             await metricsManager.register(room: self)
@@ -758,6 +804,148 @@ extension Room: AppStateDelegate {
     }
 
     func appDidWake() {}
+}
+
+// MARK: - ConnectivityListenerDelegate
+
+extension Room: ConnectivityListenerDelegate {
+    func connectivityListener(_: ConnectivityListener, didUpdate hasConnectivity: Bool) {
+        // Snapshot the new value into `_state` first so any concurrent
+        // `requestReconnect(...)` observes it under the same lock.
+        _state.mutate { $0.hasConnectivity = hasConnectivity }
+
+        guard hasConnectivity else {
+            handleConnectivityLost()
+            return
+        }
+        resumeReconnectAfterConnectivityRestored(source: "connectivity update")
+    }
+
+    func connectivityListener(_: ConnectivityListener, didSwitch path: NWPath) {
+        guard path.isSatisfied() else {
+            log("[reconnect][net] network switch ignored, path is not satisfied")
+            return
+        }
+
+        // The listener has already updated `hasConnectivity` to true before
+        // notifying didSwitch; mirror it explicitly so the reconnect decision
+        // below sees a consistent view even if the prior `didUpdate` raced.
+        _state.mutate { $0.hasConnectivity = true }
+
+        guard !resumeReconnectAfterConnectivityRestored(source: "network switch") else { return }
+
+        requestReconnect(reason: .networkSwitch)
+    }
+}
+
+// MARK: - Reconnect scheduling
+
+extension Room {
+    func handleConnectivityLost() {
+        Task.detached { [weak self] in
+            guard let self else { return }
+            guard await signalClient.connectionState != .disconnected else { return }
+
+            log("[reconnect][net] connectivity lost, closing signal transport")
+            await signalClient.cleanUp(withError: LiveKitError(.network, message: "Connectivity lost"))
+        }
+    }
+
+    @discardableResult
+    func resumeReconnectAfterConnectivityRestored(source: String) -> Bool {
+        let pendingReconnect = _state.mutate { state -> State.PendingReconnect? in
+            guard state.connectionState == .connected,
+                  state.isReconnectingWithMode == nil,
+                  state.reconnectTask == nil,
+                  !state.isReconnectStartPending,
+                  let pendingReconnect = state.pendingReconnectOnConnectivity
+            else {
+                return nil
+            }
+
+            state.pendingReconnectOnConnectivity = nil
+            return pendingReconnect
+        }
+
+        guard let pendingReconnect else { return false }
+
+        log("[reconnect][net] connectivity restored from \(source), resuming pending reconnect, reason: \(pendingReconnect.reason)")
+        requestReconnect(reason: pendingReconnect.reason, nextReconnectMode: pendingReconnect.nextReconnectMode)
+        return true
+    }
+
+    func requestReconnect(reason: StartReconnectReason, nextReconnectMode: ReconnectMode? = nil) {
+        // Single critical section that decides:
+        //   - .start    : safe to launch a reconnect right now
+        //   - .deferred : we're offline, stash a pending entry instead
+        //   - .skip     : not eligible (not connected / already reconnecting)
+        //
+        // Reading `state.hasConnectivity` *inside* this same `_state.mutate`
+        // block is the whole point — `ConnectivityListener` writes that field
+        // through the same lock, so we cannot lose a `didUpdate(false)` that
+        // races with this decision.
+        enum Decision {
+            case start
+            case deferred
+            case skip(String)
+        }
+
+        let decision = _state.mutate { state -> Decision in
+            guard state.connectionState == .connected else {
+                return .skip("not in connected state")
+            }
+            guard state.isReconnectingWithMode == nil,
+                  state.reconnectTask == nil,
+                  !state.isReconnectStartPending
+            else {
+                return .skip("reconnect already in progress or pending")
+            }
+
+            if state.hasConnectivity == false {
+                // Offline: stash a pending entry. Merge policy:
+                //  - reason: latest caller wins (transport disconnect arriving after a
+                //    websocket failure is the more recent intent).
+                //  - mode: any caller asking for `.full` upgrades the pending entry to
+                //    `.full` and it stays there. A transport disconnect genuinely needs
+                //    a full reconnect — we must not silently drop that signal just
+                //    because we happened to be offline when it arrived.
+                let pendingMode = state.pendingReconnectOnConnectivity?.nextReconnectMode
+                let mergedMode: ReconnectMode? = (pendingMode == .full || nextReconnectMode == .full)
+                    ? .full
+                    : (pendingMode ?? nextReconnectMode)
+                state.pendingReconnectOnConnectivity = State.PendingReconnect(
+                    reason: reason,
+                    nextReconnectMode: mergedMode
+                )
+                return .deferred
+            }
+
+            state.isReconnectStartPending = true
+            state.pendingReconnectOnConnectivity = nil
+            return .start
+        }
+
+        switch decision {
+        case .start:
+            log("[reconnect][net] starting reconnect, reason: \(reason)")
+            Task.detached { [weak self] in
+                guard let self else { return }
+                defer {
+                    self._state.mutate { $0.isReconnectStartPending = false }
+                }
+
+                do {
+                    try await startReconnect(reason: reason, nextReconnectMode: nextReconnectMode)
+                } catch {
+                    log("[reconnect][net] failed to start reconnect, reason: \(reason), error: \(error)", .error)
+                }
+            }
+        case .deferred:
+            log("[reconnect][net] reconnect deferred until connectivity is restored, reason: \(reason)")
+        case let .skip(why):
+            log("[reconnect][net] reconnect ignored (\(why)), reason: \(reason)")
+        }
+    }
 }
 
 // MARK: - Devices
