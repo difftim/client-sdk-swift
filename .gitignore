@@ -12,3 +12,4 @@ Documentation
 *.doccarchive
 # Local WebRTC
 LiveKitWebRTC.xcframework
+Docs/
