@@ -44,6 +44,13 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
         try await _sidCompleter.wait()
     }
 
+    /// Local identifier for this ``Room`` instance.
+    ///
+    /// This value is generated locally when the ``Room`` is created. Prefer ``sid`` or ``name`` when
+    /// they are available; use ``localId`` only when a local fallback identifier is needed before
+    /// server room information has been populated.
+    public let localId = UUID().uuidString
+
     public var name: String? { _state.name }
 
     /// Room's metadata.

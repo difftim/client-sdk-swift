@@ -20,6 +20,15 @@ import LiveKitTestSupport
 #endif
 
 class RoomTests: LKTestCase, @unchecked Sendable {
+    func testLocalIdIsUniquePerRoom() {
+        let room1 = Room()
+        let room2 = Room()
+
+        XCTAssertFalse(room1.localId.isEmpty)
+        XCTAssertFalse(room2.localId.isEmpty)
+        XCTAssertNotEqual(room1.localId, room2.localId)
+    }
+
     func testRoomProperties() async throws {
         try await withRooms([RoomTestingOptions()]) { rooms in
             // Alias to Room
