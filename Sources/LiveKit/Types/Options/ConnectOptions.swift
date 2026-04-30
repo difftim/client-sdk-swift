@@ -87,6 +87,22 @@ public final class ConnectOptions: NSObject, Sendable {
     /// When set to `.quic` but unsupported, the SDK will gracefully fall back to `.websocket`.
     public let transportKind: TransportKind
 
+    // MARK: - QUIC signaling (ttsignal)
+
+    /// Device type for QUIC signaling (e.g. 1 = phone, 2 = PC). Only used when the transport kind is QUIC.
+    public let quicDeviceType: Int
+
+    /// Connection ID tag for QUIC signaling. Only used when the transport kind is QUIC.
+    public let quicCidTag: String
+
+    /// Root CA certificate in PEM format for QUIC TLS verification and IP-direct scenarios.
+    /// When `nil` or empty, the ttsignal stack uses its default verification behavior.
+    public let caCertPem: String?
+
+    /// Logical hostname for TLS SNI and certificate verification when the signaling URL uses an IP address.
+    /// Ignored for WebSocket-only flows unless QUIC fallback rewriting applies.
+    public let serverHost: String?
+
     override public init() {
         autoSubscribe = true
         reconnectAttempts = 10
@@ -103,6 +119,10 @@ public final class ConnectOptions: NSObject, Sendable {
         ttCallRequest = nil
         userAgent = nil
         transportKind = .websocket
+        quicDeviceType = 0
+        quicCidTag = ""
+        caCertPem = nil
+        serverHost = nil
     }
 
     public init(autoSubscribe: Bool = true,
@@ -119,7 +139,11 @@ public final class ConnectOptions: NSObject, Sendable {
                 protocolVersion: ProtocolVersion = .v16,
                 ttCallRequest: Livekit_TTCallRequest? = nil,
                 userAgent: String? = nil,
-                transportKind: TransportKind = .websocket)
+                transportKind: TransportKind = .websocket,
+                quicDeviceType: Int = 0,
+                quicCidTag: String = "",
+                caCertPem: String? = nil,
+                serverHost: String? = nil)
     {
         self.autoSubscribe = autoSubscribe
         self.reconnectAttempts = reconnectAttempts
@@ -136,6 +160,10 @@ public final class ConnectOptions: NSObject, Sendable {
         self.ttCallRequest = ttCallRequest
         self.userAgent = userAgent
         self.transportKind = transportKind
+        self.quicDeviceType = quicDeviceType
+        self.quicCidTag = quicCidTag
+        self.caCertPem = caCertPem
+        self.serverHost = serverHost
     }
 
     // MARK: - Equal
@@ -156,7 +184,11 @@ public final class ConnectOptions: NSObject, Sendable {
             protocolVersion == other.protocolVersion &&
             ttCallRequest == other.ttCallRequest &&
             userAgent == other.userAgent &&
-            transportKind == other.transportKind
+            transportKind == other.transportKind &&
+            quicDeviceType == other.quicDeviceType &&
+            quicCidTag == other.quicCidTag &&
+            caCertPem == other.caCertPem &&
+            serverHost == other.serverHost
     }
 
     override public var hash: Int {
@@ -173,7 +205,13 @@ public final class ConnectOptions: NSObject, Sendable {
         hasher.combine(isDscpEnabled)
         hasher.combine(enableMicrophone)
         hasher.combine(protocolVersion)
+        hasher.combine(ttCallRequest)
+        hasher.combine(userAgent)
         hasher.combine(transportKind)
+        hasher.combine(quicDeviceType)
+        hasher.combine(quicCidTag)
+        hasher.combine(caCertPem)
+        hasher.combine(serverHost)
         return hasher.finalize()
     }
 }
@@ -186,12 +224,4 @@ public final class ConnectOptions: NSObject, Sendable {
 public enum TransportKind: Int, Sendable {
     case websocket
     case quic
-
-    /// Returns true if this kind requires runtime OS features only available iOS 15+/macOS 12+.
-    public var requiresModernOS: Bool {
-        switch self {
-        case .websocket: false
-        case .quic: true
-        }
-    }
 }

@@ -34,21 +34,44 @@ enum SignalTransportFactory: Loggable {
                        sendAfterOpen: Data?) async throws -> any SignalTransport
     {
         if kind == .quic {
-            if #available(iOS 15.0, macOS 12.0, tvOS 15.0, *) {
-                log("use QUIC transport")
-                if let transport = try await QUICSignalTransport.maybeCreate(
-                    url: url, token: token, connectOptions: options, sendAfterOpen: sendAfterOpen
-                ) {
-                    return transport
-                }
-            } else {
-                log("fall back to WebSocket transport: QUIC not available on this OS version")
+            log("use QUIC transport")
+            if let transport = try await QUICSignalTransport.maybeCreate(
+                url: url, token: token, connectOptions: options, sendAfterOpen: sendAfterOpen
+            ) {
+                return transport
             }
+            log("fall back to WebSocket transport")
         }
 
         log("use WebSocket transport")
+        let webSocketURL = rewriteURLIfQuicFallbackNeeded(originalURL: url, options: options)
         return try await WebSocketSignalTransport(
-            url: url, token: token, connectOptions: options, sendAfterOpen: sendAfterOpen
+            url: webSocketURL, token: token, connectOptions: options, sendAfterOpen: sendAfterOpen
         )
+    }
+
+    /// When QUIC used custom CA + IP-direct URL, WebSocket TLS needs a hostname that matches the certificate.
+    /// Aligns with Android ``QuicWithFallbackTransport.rewriteIpUrlForWebSocket``.
+    private static func rewriteURLIfQuicFallbackNeeded(originalURL: URL, options: ConnectOptions?) -> URL {
+        guard let pem = options?.caCertPem, !pem.isEmpty,
+              let serverHost = options?.serverHost?.trimmingCharacters(in: .whitespacesAndNewlines), !serverHost.isEmpty,
+              let host = originalURL.host,
+              isIpLiteral(host),
+              host.caseInsensitiveCompare(serverHost) != .orderedSame
+        else {
+            return originalURL
+        }
+        guard var components = URLComponents(url: originalURL, resolvingAgainstBaseURL: false) else {
+            return originalURL
+        }
+        components.host = serverHost
+        return components.url ?? originalURL
+    }
+
+    private static func isIpLiteral(_ host: String) -> Bool {
+        if host.hasPrefix("[") && host.hasSuffix("]") { return true }
+        if host.contains(":") { return true }
+        let ipv4 = #"^(\d{1,3})(\.\d{1,3}){3}$"#
+        return host.range(of: ipv4, options: .regularExpression) != nil
     }
 }

@@ -38,6 +38,8 @@ public class LiveKitSDK: NSObject, Loggable {
 
     fileprivate struct State {
         var logger: Logger = OSLogger()
+        var enableQuicLogging = false
+        var quicLogLevel: LogLevel = .warning
     }
 
     fileprivate static let state = StateSync(State())
@@ -61,6 +63,20 @@ public class LiveKitSDK: NSObject, Loggable {
     /// e.g. in the `App.init()` or `AppDelegate/SceneDelegate`
     public static func disableLogging() {
         setLogger(DisabledLogger())
+    }
+
+    /// Enables forwarding native QUIC transport logs into the LiveKit logger.
+    /// - Note: Set this before starting QUIC connections.
+    public static var enableQuicLogging: Bool {
+        get { state.enableQuicLogging }
+        set { state.mutate { $0.enableQuicLogging = newValue } }
+    }
+
+    /// Minimum native QUIC log level to request from the ttsignal stack.
+    /// - Note: Set this before the first QUIC connection so the shared ttsignal connector uses the configured level.
+    public static var quicLogLevel: LogLevel {
+        get { state.quicLogLevel }
+        set { state.mutate { $0.quicLogLevel = newValue } }
     }
 
     @available(*, deprecated, renamed: "setLogLevel")

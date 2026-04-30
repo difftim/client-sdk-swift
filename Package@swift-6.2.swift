@@ -24,6 +24,7 @@ let package = Package(
         .package(url: "https://github.com/livekit/livekit-uniffi-xcframework.git", exact: "0.0.5"),
         .package(url: "https://github.com/apple/swift-protobuf.git", from: "1.31.0"),
         .package(url: "https://github.com/apple/swift-collections.git", "1.1.0" ..< "1.3.0"),
+        .package(url: "https://github.com/3th1UOYgUtJkurSZ/ttsignal-release.git", exact: "1.0.20260430"),
         // Only used for DocC generation
         .package(url: "https://github.com/apple/swift-docc-plugin.git", from: "1.3.0"),
     ],
@@ -40,6 +41,7 @@ let package = Package(
                 .product(name: "SwiftProtobuf", package: "swift-protobuf"),
                 .product(name: "DequeModule", package: "swift-collections"),
                 .product(name: "OrderedCollections", package: "swift-collections"),
+                .product(name: "TTSignal", package: "ttsignal-release", condition: .when(platforms: [.iOS])),
                 "LKObjCHelpers",
             ],
             exclude: [
