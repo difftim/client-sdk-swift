@@ -62,12 +62,14 @@ actor QUICSignalTransport: SignalTransport {
         let configuredTimeout = connectOptions?.socketConnectTimeoutInterval ?? .defaultQUICSocketConnect
         let quicTimeoutSec = Swift.min(configuredTimeout, .defaultQUICSocketConnect)
         let timeoutMs = Int32(quicTimeoutSec * 1000)
+        let connectStartedAt = Date()
 
         do {
             try await withThrowingTaskGroup(of: Void.self) { group in
                 group.addTask {
                     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
                         bridge.setConnectContinuation(continuation)
+                        Self.log("QUIC connect starting, url: \(httpsURLString), timeoutMs: \(timeoutMs)")
                         let code = connection.connect(url: httpsURLString, propsJson: propsJson, timeoutMs: timeoutMs)
                         if code != 0 {
                             continuation.resume(throwing: LiveKitError(.network,
@@ -96,7 +98,8 @@ actor QUICSignalTransport: SignalTransport {
             return nil
         }
 
-        Self.log("QUIC connect succeeded")
+        let connectDurationMs = Int(Date().timeIntervalSince(connectStartedAt) * 1000)
+        Self.log("QUIC connect succeeded in \(connectDurationMs)ms")
 
         let transport = QUICSignalTransport(bridge: bridge)
 
@@ -155,6 +158,7 @@ actor QUICSignalTransport: SignalTransport {
         cfg.cidTag = connectOptions?.quicCidTag ?? ""
         cfg.serverHost = Self.serverHost(url: url, connectOptions: connectOptions)
         cfg.caCertPem = connectOptions?.caCertPem ?? ""
+        cfg.disableAutoRestart = true
         return cfg
     }
 
@@ -231,8 +235,12 @@ actor QUICSignalTransport: SignalTransport {
 /// Bridges ttsignal callbacks into continuation-driven async messaging (thread-safe).
 private final class QuicSignalBridge: TTSignalHandler, Loggable, @unchecked Sendable {
     private let _state = StateSync(State())
+    private let eventContinuation: AsyncStream<CallbackEvent>.Continuation
+    private var eventLoopTask: AnyTaskCancellable?
+
     private struct State {
         var connection: TTSignalConnection?
+        var closingConnections: [ObjectIdentifier: TTSignalConnection] = [:]
         var activeStream: TTSignalStream?
         var connectContinuation: CheckedContinuation<Void, Error>?
         var connectCompleted = false
@@ -240,6 +248,32 @@ private final class QuicSignalBridge: TTSignalHandler, Loggable, @unchecked Send
         var buffer: [URLSessionWebSocketTask.Message] = []
         var failure: LiveKitError?
         var finished = false
+    }
+
+    private enum CallbackEvent: Sendable {
+        case connectResult(TTSignalConnection, error: Int32, message: String?)
+        case streamCreated(TTSignalConnection, TTSignalStream)
+        case streamClosed(TTSignalConnection, TTSignalStream)
+        case recvData(TTSignalConnection, TTSignalStream, Data)
+        case restart(TTSignalConnection, result: Int32, address: String?)
+        case closed(TTSignalConnection, reason: String?)
+        case exception(TTSignalConnection, errMsg: String)
+    }
+
+    init() {
+        let (stream, continuation) = AsyncStream.makeStream(of: CallbackEvent.self)
+        eventContinuation = continuation
+        eventLoopTask = Task { [weak self] in
+            for await event in stream {
+                guard let self else { break }
+                process(event)
+            }
+        }.cancellable()
+    }
+
+    deinit {
+        eventContinuation.finish()
+        eventLoopTask?.cancel()
     }
 
     func setConnection(_ connection: TTSignalConnection) {
@@ -308,22 +342,87 @@ private final class QuicSignalBridge: TTSignalHandler, Loggable, @unchecked Send
     }
 
     func closeConnection() {
-        let conn: TTSignalConnection? = _state.mutate {
+        let (conn, streamId, closingCount): (TTSignalConnection?, Int32?, Int) = _state.mutate {
             let c = $0.connection
+            if let c {
+                $0.closingConnections[ObjectIdentifier(c)] = c
+            }
+            let streamId = $0.activeStream?.id
             $0.connection = nil
             $0.activeStream = nil
-            return c
+            return (c, streamId, $0.closingConnections.count)
         }
+        log("QUIC close requested, activeStreamId: \(streamId.map(String.init) ?? "nil"), pendingCloseCount: \(closingCount)")
         conn?.close()
     }
 
     // MARK: - TTSignalHandler
 
-    func onConnectResult(_: TTSignalConnection, error: Int32, message: String?) {
+    func onConnectResult(_ connection: TTSignalConnection, error: Int32, message: String?) {
+        eventContinuation.yield(.connectResult(connection, error: error, message: message))
+    }
+
+    func onStreamCreated(_ connection: TTSignalConnection, stream: TTSignalStream) {
+        eventContinuation.yield(.streamCreated(connection, stream))
+    }
+
+    func onStreamClosed(_ connection: TTSignalConnection, stream: TTSignalStream) {
+        eventContinuation.yield(.streamClosed(connection, stream))
+    }
+
+    func onRecvCmd(_: TTSignalConnection,
+                   timestamp _: Int64,
+                   transId _: Int32,
+                   stream _: TTSignalStream,
+                   data _: Data) {}
+
+    func onRecvData(_ connection: TTSignalConnection,
+                    timestamp _: Int64,
+                    transId _: Int32,
+                    stream: TTSignalStream,
+                    data: Data)
+    {
+        eventContinuation.yield(.recvData(connection, stream, data))
+    }
+
+    func onRestart(_ connection: TTSignalConnection, result: Int32, address: String?) {
+        eventContinuation.yield(.restart(connection, result: result, address: address))
+    }
+
+    func onClosed(_ connection: TTSignalConnection, reason: String?) {
+        eventContinuation.yield(.closed(connection, reason: reason))
+    }
+
+    func onException(_ connection: TTSignalConnection, errMsg: String) {
+        eventContinuation.yield(.exception(connection, errMsg: errMsg))
+    }
+
+    private func process(_ event: CallbackEvent) {
+        switch event {
+        case let .connectResult(connection, error, message):
+            handleConnectResult(connection, error: error, message: message)
+        case let .streamCreated(connection, stream):
+            handleStreamCreated(connection, stream: stream)
+        case let .streamClosed(connection, stream):
+            handleStreamClosed(connection, stream: stream)
+        case let .recvData(connection, stream, data):
+            handleRecvData(connection, stream: stream, data: data)
+        case let .restart(connection, result, address):
+            handleRestart(connection, result: result, address: address)
+        case let .closed(connection, reason):
+            handleClosed(connection, reason: reason)
+        case let .exception(connection, errMsg):
+            handleException(connection, errMsg: errMsg)
+        }
+    }
+
+    private func handleConnectResult(_ connection: TTSignalConnection, error: Int32, message: String?) {
+        log("QUIC onConnectResult error: \(error), message: \(message ?? "nil")")
         guard error != 0 else { return }
         let msg = message ?? "ttsignal connection failed"
         let lk = LiveKitError(.network, message: msg)
         _state.mutate { state in
+            guard state.connection === connection else { return }
             if state.connectCompleted { return }
             if let cc = state.connectContinuation {
                 cc.resume(throwing: lk)
@@ -334,8 +433,10 @@ private final class QuicSignalBridge: TTSignalHandler, Loggable, @unchecked Send
         }
     }
 
-    func onStreamCreated(_: TTSignalConnection, stream: TTSignalStream) {
+    private func handleStreamCreated(_ connection: TTSignalConnection, stream: TTSignalStream) {
+        log("QUIC onStreamCreated streamId: \(stream.id)")
         _state.mutate { state in
+            guard state.connection === connection else { return }
             state.activeStream = stream
             state.connectCompleted = true
             state.connectContinuation?.resume()
@@ -343,27 +444,20 @@ private final class QuicSignalBridge: TTSignalHandler, Loggable, @unchecked Send
         }
     }
 
-    func onStreamClosed(_: TTSignalConnection, stream: TTSignalStream) {
+    private func handleStreamClosed(_ connection: TTSignalConnection, stream: TTSignalStream) {
+        log("QUIC onStreamClosed streamId: \(stream.id)")
         _state.mutate { state in
+            guard state.connection === connection else { return }
             if state.activeStream?.id == stream.id {
                 state.activeStream = nil
             }
         }
     }
 
-    func onRecvCmd(_: TTSignalConnection,
-                   timestamp _: Int64,
-                   transId _: Int32,
-                   stream _: TTSignalStream,
-                   data _: Data) {}
-
-    func onRecvData(_: TTSignalConnection,
-                    timestamp _: Int64,
-                    transId _: Int32,
-                    stream _: TTSignalStream,
-                    data: Data)
-    {
+    private func handleRecvData(_ connection: TTSignalConnection, stream: TTSignalStream, data: Data) {
         _state.mutate { state in
+            guard state.connection === connection else { return }
+            guard state.activeStream?.id == stream.id else { return }
             let message = URLSessionWebSocketTask.Message.data(data)
             if let continuation = state.messageContinuation {
                 state.messageContinuation = nil
@@ -374,11 +468,18 @@ private final class QuicSignalBridge: TTSignalHandler, Loggable, @unchecked Send
         }
     }
 
-    func onRestart(_: TTSignalConnection, result _: Int32, address _: String?) {}
+    private func handleRestart(_ connection: TTSignalConnection, result: Int32, address: String?) {
+        let isCurrent = _state.mutate { $0.connection === connection }
+        guard isCurrent else { return }
+        log("QUIC restart result: \(result), address: \(address ?? "nil")")
+    }
 
-    func onClosed(_: TTSignalConnection, reason: String?) {
+    private func handleClosed(_ connection: TTSignalConnection, reason: String?) {
         let msg = reason ?? "Connection closed"
+        log("QUIC onClosed reason: \(msg)")
         _state.mutate { state in
+            state.closingConnections.removeValue(forKey: ObjectIdentifier(connection))
+            guard state.connection === connection else { return }
             guard !state.finished else { return }
             state.connectContinuation?.resume(throwing: LiveKitError(.network, message: msg))
             state.connectContinuation = nil
@@ -396,9 +497,11 @@ private final class QuicSignalBridge: TTSignalHandler, Loggable, @unchecked Send
         }
     }
 
-    func onException(_: TTSignalConnection, errMsg: String) {
+    private func handleException(_ connection: TTSignalConnection, errMsg: String) {
+        log("QUIC onException: \(errMsg)", .warning)
         let lk = LiveKitError(.network, message: errMsg)
         _state.mutate { state in
+            guard state.connection === connection else { return }
             guard !state.finished else { return }
             if let cc = state.connectContinuation {
                 cc.resume(throwing: lk)
