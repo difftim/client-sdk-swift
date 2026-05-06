@@ -73,8 +73,9 @@ actor QUICSignalTransport: SignalTransport {
                         Self.log("QUIC connect starting, url: \(httpsURLString), timeoutMs: \(timeoutMs)")
                         let code = connection.connect(url: httpsURLString, propsJson: propsJson, timeoutMs: timeoutMs)
                         if code != 0 {
-                            continuation.resume(throwing: LiveKitError(.network,
-                                                                       message: "ttsignal connect returned \(code)"))
+                            bridge.failConnectContinuation(
+                                LiveKitError(.network, message: "ttsignal connect returned \(code)")
+                            )
                         }
                     }
                 }
@@ -289,6 +290,14 @@ private final class QuicSignalBridge: TTSignalHandler, Loggable, @unchecked Send
     func setConnectContinuation(_ continuation: CheckedContinuation<Void, Error>) {
         _state.mutate { state in
             state.connectContinuation = continuation
+        }
+    }
+
+    func failConnectContinuation(_ error: LiveKitError) {
+        _state.mutate { state in
+            guard !state.connectCompleted, let continuation = state.connectContinuation else { return }
+            state.connectContinuation = nil
+            continuation.resume(throwing: error)
         }
     }
 
