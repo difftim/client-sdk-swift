@@ -95,12 +95,23 @@ public final class ConnectOptions: NSObject, Sendable {
     /// Connection ID tag for QUIC signaling. Only used when the transport kind is QUIC.
     public let quicCidTag: String
 
-    /// Root CA certificate in PEM format for QUIC TLS verification and IP-direct scenarios.
-    /// When `nil` or empty, the ttsignal stack uses its default verification behavior.
+    /// Root CA certificate(s) in PEM format for TLS verification when the server chain is signed by a non-public CA.
+    ///
+    /// When `nil` or empty:
+    /// - **WebSocket** uses the system trust store only.
+    /// - **QUIC** uses the ttsignal stack default verification.
+    ///
+    /// When non-empty:
+    /// - **WebSocket** validates the server certificate chain against these anchors only (hostname checks still apply
+    ///   for the URL host). Malformed PEM logs a warning and falls back to the system trust store.
+    /// - **QUIC** passes the PEM to the ttsignal stack for custom CA and IP-direct scenarios.
     public let caCertPem: String?
 
-    /// Logical hostname for TLS SNI and certificate verification when the signaling URL uses an IP address.
-    /// Ignored for WebSocket-only flows unless QUIC fallback rewriting applies.
+    /// Logical hostname for TLS SNI and certificate hostname checks when the signaling URL host is an IP literal.
+    ///
+    /// `SignalTransportFactory` may rewrite the WebSocket URL host from the IP to this value when both `caCertPem`
+    /// and `serverHost` are set, so TLS hostname verification matches the certificate (aligned with Android
+    /// QUIC-to-WebSocket fallback). For domain-based WebSocket URLs, this field is ignored.
     public let serverHost: String?
 
     override public init() {

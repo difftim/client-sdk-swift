@@ -60,6 +60,7 @@ actor WebSocket: Loggable, AsyncSequence {
 
         delegate = Delegate()
         delegate.setSendAfterOpen(sendAfterOpen)
+        delegate.configureCustomTrust(caCertPem: connectOptions?.caCertPem)
         urlSession = URLSession(configuration: Self.makeSessionConfiguration(),
                                 delegate: delegate, delegateQueue: nil)
         task = urlSession.webSocketTask(with: request)
@@ -174,10 +175,12 @@ actor WebSocket: Loggable, AsyncSequence {
         }
     }
 
-    fileprivate final class Delegate: NSObject, Loggable, URLSessionWebSocketDelegate {
+    fileprivate final class Delegate: NSObject, Loggable, URLSessionWebSocketDelegate, URLSessionTaskDelegate {
         private let _continuation = StateSync<CheckedContinuation<Void, Error>?>(nil)
         private let _receiveContinuation = StateSync<ReceiveContinuation?>(nil)
         private let _sendAfterOpen = StateSync<Data?>(nil)
+        /// Custom CA anchors for WebSocket TLS when `ConnectOptions.caCertPem` is set; empty means default system trust.
+        private var anchorCertificates: [SecCertificate] = []
 
         func setConnectContinuation(_ continuation: CheckedContinuation<Void, Error>) {
             _continuation.mutate { $0 = continuation }
@@ -185,6 +188,18 @@ actor WebSocket: Loggable, AsyncSequence {
 
         func setSendAfterOpen(_ data: Data?) {
             _sendAfterOpen.mutate { $0 = data }
+        }
+
+        /// When [caCertPem] is non-empty, parse root CA(s) and use them as the only trust anchors for the WebSocket TLS handshake.
+        /// Malformed PEM logs a warning and leaves default system trust (matches Android ``WebSocketTransport`` fallback).
+        func configureCustomTrust(caCertPem: String?) {
+            guard let pem = caCertPem?.trimmingCharacters(in: .whitespacesAndNewlines), !pem.isEmpty else { return }
+            if let certs = CertificateTrustEvaluator.certificates(fromPEM: pem), !certs.isEmpty {
+                anchorCertificates = certs
+                log("WebSocket TLS: loaded \(certs.count) custom CA anchor(s) from caCertPem; server trust will use anchor-only evaluation", .debug)
+            } else {
+                log("Failed to parse caCertPem for WebSocket, falling back to default trust store.", .warning)
+            }
         }
 
         func setReceiveContinuation(_ continuation: ReceiveContinuation) {
@@ -241,6 +256,47 @@ actor WebSocket: Loggable, AsyncSequence {
                 $0 = nil
                 return continuation
             }?.resume(throwing: lkError)
+        }
+
+        func urlSession(_: URLSession,
+                        didReceive challenge: URLAuthenticationChallenge,
+                        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void)
+        {
+            handleAuthenticationChallenge(challenge, completionHandler: completionHandler)
+        }
+
+        func urlSession(_: URLSession,
+                        task _: URLSessionTask,
+                        didReceive challenge: URLAuthenticationChallenge,
+                        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void)
+        {
+            handleAuthenticationChallenge(challenge, completionHandler: completionHandler)
+        }
+
+        private func handleAuthenticationChallenge(_ challenge: URLAuthenticationChallenge,
+                                                   completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void)
+        {
+            guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+                  let serverTrust = challenge.protectionSpace.serverTrust
+            else {
+                completionHandler(.performDefaultHandling, nil)
+                return
+            }
+
+            guard !anchorCertificates.isEmpty else {
+                completionHandler(.performDefaultHandling, nil)
+                return
+            }
+
+            let host = challenge.protectionSpace.host
+            log("WebSocket TLS: serverTrust challenge for host \(host), evaluating with custom anchors only", .debug)
+            if CertificateTrustEvaluator.evaluateServerTrust(serverTrust, host: host, anchorCertificates: anchorCertificates) {
+                log("WebSocket TLS: custom anchor trust evaluation succeeded for host \(host)", .debug)
+                completionHandler(.useCredential, URLCredential(trust: serverTrust))
+            } else {
+                log("WebSocket TLS trust evaluation failed for host \(host)", .warning)
+                completionHandler(.cancelAuthenticationChallenge, nil)
+            }
         }
     }
 }

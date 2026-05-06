@@ -58,8 +58,8 @@ enum SignalTransportFactory: Loggable {
         )
     }
 
-    /// When QUIC used custom CA + IP-direct URL, WebSocket TLS needs a hostname that matches the certificate.
-    /// Aligns with Android ``QuicWithFallbackTransport.rewriteIpUrlForWebSocket``.
+    /// When `caCertPem` is set and the URL host is an IP literal, rewrite the host to `serverHost` so WebSocket TLS
+    /// hostname verification matches the certificate. Aligns with Android ``QuicWithFallbackTransport.rewriteIpUrlForWebSocket``.
     private static func rewriteURLIfQuicFallbackNeeded(originalURL: URL, options: ConnectOptions?) -> URL {
         guard let pem = options?.caCertPem, !pem.isEmpty,
               let serverHost = options?.serverHost?.trimmingCharacters(in: .whitespacesAndNewlines), !serverHost.isEmpty,
