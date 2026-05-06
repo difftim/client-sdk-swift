@@ -15,6 +15,7 @@
  */
 
 import Foundation
+import Network
 
 /// Protocol for signaling transports. Concrete implementations (WebSocket, QUIC)
 /// provide an `AsyncSequence` of messages along with send/close capabilities.
@@ -23,6 +24,13 @@ protocol SignalTransport: AsyncSequence, Sendable, Loggable
 {
     func send(data: Data) async throws
     func close()
+    func restart(interface: NWInterface?) async -> Bool
+}
+
+extension SignalTransport {
+    func restart(interface _: NWInterface?) async -> Bool {
+        false
+    }
 }
 
 /// Factory for creating transports based on ``TransportKind``.
@@ -69,7 +77,7 @@ enum SignalTransportFactory: Loggable {
     }
 
     private static func isIpLiteral(_ host: String) -> Bool {
-        if host.hasPrefix("[") && host.hasSuffix("]") { return true }
+        if host.hasPrefix("["), host.hasSuffix("]") { return true }
         if host.contains(":") { return true }
         let ipv4 = #"^(\d{1,3})(\.\d{1,3}){3}$"#
         return host.range(of: ipv4, options: .regularExpression) != nil

@@ -24,7 +24,8 @@ extension LKRTCPeerConnectionState {
     }
 
     var isDisconnected: Bool {
-        [.disconnected, .failed].contains(self)
+        // WebRTC .disconnected is transient during network switches and can recover by itself.
+        [.failed, .closed].contains(self)
     }
 }
 

@@ -276,7 +276,10 @@ extension Room {
     }
 
     // swiftlint:disable:next cyclomatic_complexity function_body_length
-    func startReconnect(reason: StartReconnectReason, nextReconnectMode: ReconnectMode? = nil) async throws {
+    func startReconnect(reason: StartReconnectReason,
+                        nextReconnectMode: ReconnectMode? = nil,
+                        restartInterface: NWInterface? = nil) async throws
+    {
         log("[Connect] Starting, reason: \(reason)")
 
         guard case .connected = _state.connectionState else {
@@ -309,6 +312,20 @@ extension Room {
         // quick connect sequence, does not update connection state
         @Sendable func quickReconnectSequence() async throws {
             log("[Connect] Starting .quick reconnect sequence...")
+
+            let signalClientConnected = await signalClient.connectionState == .connected
+            let shouldTryQuicRestart = restartInterface != nil &&
+                _state.connectOptions.transportKind == .quic &&
+                signalClientConnected
+            if shouldTryQuicRestart {
+                log("[reconnect][quic] trying transport restart, interface: \(restartInterface?.name ?? "nil")")
+                if await signalClient.restartTransport(interface: restartInterface) {
+                    log("[reconnect][quic] transport restart succeeded, skipping signal reconnect")
+                    await signalClient.resumeQueues()
+                    return
+                }
+                log("[reconnect][quic] transport restart failed, falling back to signal reconnect", .warning)
+            }
 
             let connectResponse = try await signalClient.connect(url,
                                                                  token,

@@ -17,6 +17,7 @@
 // swiftlint:disable file_length
 
 import Foundation
+import Network
 
 internal import LiveKitWebRTC
 
@@ -432,6 +433,27 @@ extension SignalClient {
     func resumeQueues() async {
         await _responseQueue.resume()
         await _requestQueue.resume()
+    }
+
+    func canRestartTransport() async -> Bool {
+        connectionState == .connected && _state.transport != nil
+    }
+
+    func restartTransport(interface: NWInterface?) async -> Bool {
+        guard connectionState == .connected else {
+            log("[reconnect][quic] restart skipped, signal state: \(connectionState)")
+            return false
+        }
+
+        guard let transport = _state.transport else {
+            log("[reconnect][quic] restart skipped, transport is nil")
+            return false
+        }
+
+        log("[reconnect][quic] restarting transport, interface: \(interface?.name ?? "nil")")
+        let result = await transport.restart(interface: interface)
+        log("[reconnect][quic] restart transport result: \(result)")
+        return result
     }
 }
 

@@ -145,6 +145,10 @@ extension NWPath {
         if case .satisfied = status { return true }
         return false
     }
+
+    var activeInterface: NWInterface? {
+        availableInterfaces.first { usesInterfaceType($0.type) }
+    }
 }
 
 extension NWInterface {

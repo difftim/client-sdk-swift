@@ -16,6 +16,7 @@
 
 #if os(iOS)
 import Foundation
+import Network
 import TTSignal
 
 extension TTSignalConnector: @unchecked Sendable {}
@@ -42,7 +43,7 @@ actor QUICSignalTransport: SignalTransport {
     {
         QuicSignalLog.configure()
 
-        guard let connector = Self.sharedConnector() else {
+        guard let connector = sharedConnector() else {
             return nil
         }
 
@@ -73,7 +74,7 @@ actor QUICSignalTransport: SignalTransport {
                         let code = connection.connect(url: httpsURLString, propsJson: propsJson, timeoutMs: timeoutMs)
                         if code != 0 {
                             continuation.resume(throwing: LiveKitError(.network,
-                                                                        message: "ttsignal connect returned \(code)"))
+                                                                       message: "ttsignal connect returned \(code)"))
                         }
                     }
                 }
@@ -210,6 +211,10 @@ actor QUICSignalTransport: SignalTransport {
         bridge.finish()
     }
 
+    nonisolated func restart(interface: NWInterface?) async -> Bool {
+        await bridge.restart(interface: interface)
+    }
+
     // MARK: - AsyncSequence
 
     struct AsyncIterator: AsyncIteratorProtocol {
@@ -245,12 +250,13 @@ private final class QuicSignalBridge: TTSignalHandler, Loggable, @unchecked Send
         var connectContinuation: CheckedContinuation<Void, Error>?
         var connectCompleted = false
         var messageContinuation: CheckedContinuation<URLSessionWebSocketTask.Message?, Error>?
+        var restartContinuation: CheckedContinuation<Bool, Never>?
         var buffer: [URLSessionWebSocketTask.Message] = []
         var failure: LiveKitError?
         var finished = false
     }
 
-    private enum CallbackEvent: Sendable {
+    private enum CallbackEvent {
         case connectResult(TTSignalConnection, error: Int32, message: String?)
         case streamCreated(TTSignalConnection, TTSignalStream)
         case streamClosed(TTSignalConnection, TTSignalStream)
@@ -354,6 +360,49 @@ private final class QuicSignalBridge: TTSignalHandler, Loggable, @unchecked Send
         }
         log("QUIC close requested, activeStreamId: \(streamId.map(String.init) ?? "nil"), pendingCloseCount: \(closingCount)")
         conn?.close()
+    }
+
+    func restart(interface: NWInterface?) async -> Bool {
+        await withTaskGroup(of: Bool.self) { group in
+            group.addTask { [weak self] in
+                await withCheckedContinuation { continuation in
+                    guard let self else {
+                        continuation.resume(returning: false)
+                        return
+                    }
+
+                    let connection: TTSignalConnection? = self._state.mutate { state in
+                        guard let connection = state.connection, !state.finished else {
+                            return nil
+                        }
+                        state.restartContinuation = continuation
+                        return connection
+                    }
+
+                    guard let connection else {
+                        continuation.resume(returning: false)
+                        return
+                    }
+
+                    self.log("QUIC restart requested, interface: \(interface?.name ?? "nil")")
+                    connection.restart(interface: interface)
+                }
+            }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                return false
+            }
+
+            let result = await group.next() ?? false
+            group.cancelAll()
+            if !result {
+                _state.mutate { state in
+                    state.restartContinuation?.resume(returning: false)
+                    state.restartContinuation = nil
+                }
+            }
+            return result
+        }
     }
 
     // MARK: - TTSignalHandler
@@ -469,9 +518,14 @@ private final class QuicSignalBridge: TTSignalHandler, Loggable, @unchecked Send
     }
 
     private func handleRestart(_ connection: TTSignalConnection, result: Int32, address: String?) {
-        let isCurrent = _state.mutate { $0.connection === connection }
-        guard isCurrent else { return }
         log("QUIC restart result: \(result), address: \(address ?? "nil")")
+        let continuation: CheckedContinuation<Bool, Never>? = _state.mutate { state in
+            guard state.connection === connection else { return nil }
+            let continuation = state.restartContinuation
+            state.restartContinuation = nil
+            return continuation
+        }
+        continuation?.resume(returning: result == 0)
     }
 
     private func handleClosed(_ connection: TTSignalConnection, reason: String?) {
@@ -526,10 +580,10 @@ import Foundation
 actor QUICSignalTransport: SignalTransport {
     typealias Element = URLSessionWebSocketTask.Message
 
-    static func maybeCreate(url: URL,
-                            token: String,
-                            connectOptions: ConnectOptions?,
-                            sendAfterOpen: Data?) async throws -> QUICSignalTransport?
+    static func maybeCreate(url _: URL,
+                            token _: String,
+                            connectOptions _: ConnectOptions?,
+                            sendAfterOpen _: Data?) async throws -> QUICSignalTransport?
     {
         nil
     }

@@ -825,7 +825,8 @@ extension Room: ConnectivityListenerDelegate {
             handleConnectivityLost()
             return
         }
-        resumeReconnectAfterConnectivityRestored(source: "connectivity update")
+        resumeReconnectAfterConnectivityRestored(source: "connectivity update",
+                                                 restartInterface: ConnectivityListener.shared.path?.activeInterface)
     }
 
     func connectivityListener(_: ConnectivityListener, didSwitch path: NWPath) {
@@ -839,9 +840,10 @@ extension Room: ConnectivityListenerDelegate {
         // below sees a consistent view even if the prior `didUpdate` raced.
         _state.mutate { $0.hasConnectivity = true }
 
-        guard !resumeReconnectAfterConnectivityRestored(source: "network switch") else { return }
+        guard !resumeReconnectAfterConnectivityRestored(source: "network switch",
+                                                        restartInterface: path.activeInterface) else { return }
 
-        requestReconnect(reason: .networkSwitch)
+        requestReconnect(reason: .networkSwitch, restartInterface: path.activeInterface)
     }
 }
 
@@ -853,13 +855,21 @@ extension Room {
             guard let self else { return }
             guard await signalClient.connectionState != .disconnected else { return }
 
+            if _state.connectOptions.transportKind == .quic,
+               await signalClient.canRestartTransport()
+            {
+                log("[reconnect][net] connectivity lost with QUIC signal, deferring reconnect without closing signal transport")
+                requestReconnect(reason: .networkSwitch)
+                return
+            }
+
             log("[reconnect][net] connectivity lost, closing signal transport")
             await signalClient.cleanUp(withError: LiveKitError(.network, message: "Connectivity lost"))
         }
     }
 
     @discardableResult
-    func resumeReconnectAfterConnectivityRestored(source: String) -> Bool {
+    func resumeReconnectAfterConnectivityRestored(source: String, restartInterface: NWInterface? = nil) -> Bool {
         let pendingReconnect = _state.mutate { state -> State.PendingReconnect? in
             guard state.connectionState == .connected,
                   state.isReconnectingWithMode == nil,
@@ -877,11 +887,16 @@ extension Room {
         guard let pendingReconnect else { return false }
 
         log("[reconnect][net] connectivity restored from \(source), resuming pending reconnect, reason: \(pendingReconnect.reason)")
-        requestReconnect(reason: pendingReconnect.reason, nextReconnectMode: pendingReconnect.nextReconnectMode)
+        requestReconnect(reason: pendingReconnect.reason,
+                         nextReconnectMode: pendingReconnect.nextReconnectMode,
+                         restartInterface: restartInterface)
         return true
     }
 
-    func requestReconnect(reason: StartReconnectReason, nextReconnectMode: ReconnectMode? = nil) {
+    func requestReconnect(reason: StartReconnectReason,
+                          nextReconnectMode: ReconnectMode? = nil,
+                          restartInterface: NWInterface? = nil)
+    {
         // Single critical section that decides:
         //   - .start    : safe to launch a reconnect right now
         //   - .deferred : we're offline, stash a pending entry instead
@@ -942,7 +957,9 @@ extension Room {
                 }
 
                 do {
-                    try await startReconnect(reason: reason, nextReconnectMode: nextReconnectMode)
+                    try await startReconnect(reason: reason,
+                                             nextReconnectMode: nextReconnectMode,
+                                             restartInterface: restartInterface)
                 } catch {
                     log("[reconnect][net] failed to start reconnect, reason: \(reason), error: \(error)", .error)
                 }
