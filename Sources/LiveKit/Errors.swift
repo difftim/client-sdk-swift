@@ -203,6 +203,10 @@ extension LiveKitError {
             return LiveKitError(.timedOut, message: nsError.localizedDescription, internalError: error)
         }
 
+        if error.isTLSVerificationError {
+            return LiveKitError(.validation, message: nsError.localizedDescription, internalError: error)
+        }
+
         if error.isNetworkError {
             return LiveKitError(.network, internalError: error)
         }
@@ -239,6 +243,30 @@ extension Error {
         default:
             return false
         }
+    }
+
+    /// Returns `true` for TLS/SSL certificate validation failures.
+    var isTLSVerificationError: Bool {
+        let nsError = self as NSError
+        if nsError.domain == NSURLErrorDomain {
+            let tlsCodes: Set<Int> = [
+                NSURLErrorSecureConnectionFailed,
+                NSURLErrorServerCertificateHasBadDate,
+                NSURLErrorServerCertificateUntrusted,
+                NSURLErrorServerCertificateHasUnknownRoot,
+                NSURLErrorServerCertificateNotYetValid,
+                NSURLErrorClientCertificateRejected,
+                NSURLErrorClientCertificateRequired,
+            ]
+            if tlsCodes.contains(nsError.code) {
+                return true
+            }
+        }
+        if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? NSError {
+            let wrapped = underlying as Error
+            return wrapped.isTLSVerificationError
+        }
+        return false
     }
 
     /// Returns `true` for network/timeouts that should trigger region failover.

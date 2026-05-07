@@ -189,7 +189,9 @@ actor SignalClient: Loggable {
                 throw connectionError
             }
 
-            if let lkError = connectionError as? LiveKitError, lkError.type == .timedOut {
+            if let lkError = connectionError as? LiveKitError,
+               lkError.type == .timedOut || lkError.type == .validation
+            {
                 await cleanUp(withError: connectionError)
                 throw connectionError
             }

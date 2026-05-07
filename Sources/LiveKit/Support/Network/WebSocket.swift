@@ -58,9 +58,8 @@ actor WebSocket: Loggable, AsyncSequence {
         }
         #endif
 
-        delegate = Delegate()
+        delegate = try Delegate(caCertPem: connectOptions?.caCertPem)
         delegate.setSendAfterOpen(sendAfterOpen)
-        delegate.configureCustomTrust(caCertPem: connectOptions?.caCertPem)
         urlSession = URLSession(configuration: Self.makeSessionConfiguration(),
                                 delegate: delegate, delegateQueue: nil)
         task = urlSession.webSocketTask(with: request)
@@ -179,8 +178,28 @@ actor WebSocket: Loggable, AsyncSequence {
         private let _continuation = StateSync<CheckedContinuation<Void, Error>?>(nil)
         private let _receiveContinuation = StateSync<ReceiveContinuation?>(nil)
         private let _sendAfterOpen = StateSync<Data?>(nil)
+        private let _pendingCompletionError = StateSync<Error?>(nil)
         /// Custom CA anchors for WebSocket TLS when `ConnectOptions.caCertPem` is set; empty means default system trust.
-        private var anchorCertificates: [SecCertificate] = []
+        private let anchorCertificates: [SecCertificate]
+
+        init(caCertPem: String?) throws {
+            guard let pem = caCertPem?.trimmingCharacters(in: .whitespacesAndNewlines), !pem.isEmpty else {
+                anchorCertificates = []
+                super.init()
+                return
+            }
+
+            guard let certs = CertificateTrustEvaluator.certificates(fromPEM: pem), !certs.isEmpty else {
+                anchorCertificates = []
+                super.init()
+                log("Failed to parse caCertPem for WebSocket.", .warning)
+                throw LiveKitError(.validation, message: "Invalid caCertPem")
+            }
+
+            anchorCertificates = certs
+            super.init()
+            log("WebSocket TLS: loaded \(certs.count) custom CA anchor(s) from caCertPem; server trust will use anchor-only evaluation", .debug)
+        }
 
         func setConnectContinuation(_ continuation: CheckedContinuation<Void, Error>) {
             _continuation.mutate { $0 = continuation }
@@ -188,18 +207,6 @@ actor WebSocket: Loggable, AsyncSequence {
 
         func setSendAfterOpen(_ data: Data?) {
             _sendAfterOpen.mutate { $0 = data }
-        }
-
-        /// When [caCertPem] is non-empty, parse root CA(s) and use them as the only trust anchors for the WebSocket TLS handshake.
-        /// Malformed PEM logs a warning and leaves default system trust (matches Android ``WebSocketTransport`` fallback).
-        func configureCustomTrust(caCertPem: String?) {
-            guard let pem = caCertPem?.trimmingCharacters(in: .whitespacesAndNewlines), !pem.isEmpty else { return }
-            if let certs = CertificateTrustEvaluator.certificates(fromPEM: pem), !certs.isEmpty {
-                anchorCertificates = certs
-                log("WebSocket TLS: loaded \(certs.count) custom CA anchor(s) from caCertPem; server trust will use anchor-only evaluation", .debug)
-            } else {
-                log("Failed to parse caCertPem for WebSocket, falling back to default trust store.", .warning)
-            }
         }
 
         func setReceiveContinuation(_ continuation: ReceiveContinuation) {
@@ -239,7 +246,11 @@ actor WebSocket: Loggable, AsyncSequence {
         func urlSession(_: URLSession, task _: URLSessionTask, didCompleteWithError error: Error?) {
             log("didCompleteWithError: \(String(describing: error))", error != nil ? .error : .debug)
 
-            let lkError = LiveKitError.from(error: error) ?? LiveKitError(.unknown)
+            let lkError = _pendingCompletionError.mutate {
+                let pending = $0
+                $0 = nil
+                return pending
+            }.flatMap { LiveKitError.from(error: $0) } ?? LiveKitError.from(error: error) ?? LiveKitError(.unknown)
             _continuation.mutate {
                 if error != nil {
                     $0?.resume(throwing: lkError)
@@ -295,6 +306,9 @@ actor WebSocket: Loggable, AsyncSequence {
                 completionHandler(.useCredential, URLCredential(trust: serverTrust))
             } else {
                 log("WebSocket TLS trust evaluation failed for host \(host)", .warning)
+                _pendingCompletionError.mutate {
+                    $0 = LiveKitError(.validation, message: "WebSocket TLS trust evaluation failed for host \(host)")
+                }
                 completionHandler(.cancelAuthenticationChallenge, nil)
             }
         }

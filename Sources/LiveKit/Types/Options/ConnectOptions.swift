@@ -103,7 +103,7 @@ public final class ConnectOptions: NSObject, Sendable {
     ///
     /// When non-empty:
     /// - **WebSocket** validates the server certificate chain against these anchors only (hostname checks still apply
-    ///   for the URL host). Malformed PEM logs a warning and falls back to the system trust store.
+    ///   for the URL host). Malformed PEM fails the WebSocket connection before the TLS handshake starts.
     /// - **QUIC** passes the PEM to the ttsignal stack for custom CA and IP-direct scenarios.
     public let caCertPem: String?
 
