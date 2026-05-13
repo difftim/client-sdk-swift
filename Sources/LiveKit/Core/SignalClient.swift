@@ -51,11 +51,15 @@ actor SignalClient: Loggable {
 
     var disconnectError: LiveKitError? { _state.disconnectError }
 
+    var isQuicMarkedUnhealthy: Bool { quicMarkedUnhealthy }
+
     var lastConnectionError: LiveKitError?
 
     // MARK: - Private
 
     let _delegate = AsyncSerialDelegate<SignalClientDelegate>()
+
+    private var quicMarkedUnhealthy = false
 
     // Queue to store requests while reconnecting
     private lazy var _requestQueue = QueueActor<Livekit_SignalRequest>(onProcess: { [weak self] request in
@@ -149,7 +153,8 @@ actor SignalClient: Loggable {
                 return try? r.serializedData()
             }()
 
-            let selectedKind = connectOptions?.transportKind ?? .websocket
+            let requestedKind = connectOptions?.transportKind ?? .websocket
+            let selectedKind = quicMarkedUnhealthy ? .websocket : requestedKind
             log("Selected signaling transport: \(selectedKind)")
 
             let transport = try await SignalTransportFactory.create(kind: selectedKind,
@@ -157,6 +162,10 @@ actor SignalClient: Loggable {
                                                                     token: token,
                                                                     options: connectOptions,
                                                                     sendAfterOpen: sendAfterOpen)
+            if requestedKind == .quic, transport.transportKind == .websocket, !quicMarkedUnhealthy {
+                quicMarkedUnhealthy = true
+                log("[transport] marking QUIC unhealthy for this session; using WebSocket later", .warning)
+            }
 
             let messageLoopTask = transport.subscribe(self) { observer, message in
                 await observer.onTransportMessage(message)

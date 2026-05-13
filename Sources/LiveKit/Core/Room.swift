@@ -856,6 +856,7 @@ extension Room {
             guard await signalClient.connectionState != .disconnected else { return }
 
             if _state.connectOptions.transportKind == .quic,
+               !(await signalClient.isQuicMarkedUnhealthy),
                await signalClient.canRestartTransport()
             {
                 log("[reconnect][net] connectivity lost with QUIC signal, deferring reconnect without closing signal transport")

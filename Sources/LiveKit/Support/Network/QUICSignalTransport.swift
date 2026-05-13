@@ -29,6 +29,7 @@ actor QUICSignalTransport: SignalTransport {
     typealias Element = URLSessionWebSocketTask.Message
 
     private let bridge: QuicSignalBridge
+    nonisolated let transportKind: TransportKind = .quic
 
     private init(bridge: QuicSignalBridge) {
         self.bridge = bridge
@@ -588,6 +589,7 @@ import Foundation
 /// QUIC signaling is only available on iOS where the ttsignal binary is linked.
 actor QUICSignalTransport: SignalTransport {
     typealias Element = URLSessionWebSocketTask.Message
+    nonisolated let transportKind: TransportKind = .quic
 
     static func maybeCreate(url _: URL,
                             token _: String,

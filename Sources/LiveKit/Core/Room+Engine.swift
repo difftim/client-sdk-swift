@@ -314,8 +314,10 @@ extension Room {
             log("[Connect] Starting .quick reconnect sequence...")
 
             let signalClientConnected = await signalClient.connectionState == .connected
+            let quicMarkedUnhealthy = await signalClient.isQuicMarkedUnhealthy
             let shouldTryQuicRestart = restartInterface != nil &&
                 _state.connectOptions.transportKind == .quic &&
+                !quicMarkedUnhealthy &&
                 signalClientConnected
             if shouldTryQuicRestart {
                 log("[reconnect][quic] trying transport restart, interface: \(restartInterface?.name ?? "nil")")

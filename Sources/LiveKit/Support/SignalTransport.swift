@@ -22,6 +22,8 @@ import Network
 protocol SignalTransport: AsyncSequence, Sendable, Loggable
     where Element == URLSessionWebSocketTask.Message
 {
+    var transportKind: TransportKind { get }
+
     func send(data: Data) async throws
     func close()
     func restart(interface: NWInterface?) async -> Bool

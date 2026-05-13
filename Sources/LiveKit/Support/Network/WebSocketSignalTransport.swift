@@ -18,6 +18,7 @@ import Foundation
 
 actor WebSocketSignalTransport: SignalTransport {
     private let socket: WebSocket
+    nonisolated let transportKind: TransportKind = .websocket
 
     init(url: URL, token: String, connectOptions: ConnectOptions?, sendAfterOpen: Data?) async throws {
         socket = try await WebSocket(url: url, token: token, connectOptions: connectOptions, sendAfterOpen: sendAfterOpen)
