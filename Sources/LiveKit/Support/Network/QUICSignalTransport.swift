@@ -136,6 +136,7 @@ actor QUICSignalTransport: SignalTransport {
         base.pingOn = true
         base.numOfSenders = 1
         base.logLevel = QuicSignalLog.ttSignalLogLevel(from: LiveKitSDK.quicLogLevel)
+        base.disableAutoRestart = true
         guard let connector = TTSignalConnector(config: base) else {
             return nil
         }
