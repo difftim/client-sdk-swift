@@ -525,6 +525,7 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
         let disconnectId = UUID().uuidString
         var sw = Stopwatch(label: "disconnect")
         log("[disconnect]\(disconnectId): in", .info)
+        await signalClient.resetQuicHealthForNewSession()
         enum DisconnectIntent {
             case start
             case wait

@@ -154,7 +154,7 @@ actor SignalClient: Loggable {
             }()
 
             let requestedKind = connectOptions?.transportKind ?? .websocket
-            let selectedKind = quicMarkedUnhealthy ? .websocket : requestedKind
+            let selectedKind = selectedTransportKind(requestedKind: requestedKind, reconnectMode: reconnectMode)
             log("Selected signaling transport: \(selectedKind)")
 
             let transport = try await SignalTransportFactory.create(kind: selectedKind,
@@ -162,10 +162,7 @@ actor SignalClient: Loggable {
                                                                     token: token,
                                                                     options: connectOptions,
                                                                     sendAfterOpen: sendAfterOpen)
-            if requestedKind == .quic, transport.transportKind == .websocket, !quicMarkedUnhealthy {
-                quicMarkedUnhealthy = true
-                log("[transport] marking QUIC unhealthy for this session; using WebSocket later", .warning)
-            }
+            markQuicUnhealthyIfFallback(requestedKind: requestedKind, actualKind: transport.transportKind)
 
             let messageLoopTask = transport.subscribe(self) { observer, message in
                 await observer.onTransportMessage(message)
@@ -284,6 +281,26 @@ actor SignalClient: Loggable {
             $0.disconnectError = LiveKitError.from(error: disconnectError)
             $0.connectionState = .disconnected
         }
+    }
+
+    func selectedTransportKind(requestedKind: TransportKind, reconnectMode _: ReconnectMode?) -> TransportKind {
+        return quicMarkedUnhealthy ? .websocket : requestedKind
+    }
+
+    func resetQuicHealthForNewSession() {
+        guard quicMarkedUnhealthy else { return }
+
+        quicMarkedUnhealthy = false
+        log("[transport] resetting QUIC unhealthy marker for new session")
+    }
+
+    func markQuicUnhealthyIfFallback(requestedKind: TransportKind, actualKind: TransportKind) {
+        guard requestedKind == .quic, actualKind == .websocket, !quicMarkedUnhealthy else {
+            return
+        }
+
+        quicMarkedUnhealthy = true
+        log("[transport] marking QUIC unhealthy for this session; using WebSocket later", .warning)
     }
 }
 
