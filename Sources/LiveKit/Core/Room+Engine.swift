@@ -40,13 +40,26 @@ extension Room {
 
     // Resets state of transports
     func cleanUpRTC() async {
-        // Close data channels
+        // Release any in-flight waiters first so they don't race with the
+        // teardown below (`Transport.close()` -> `removeTrack` -> webrtc
+        // worker BlockingCall). Without this, callers blocked on the
+        // transport / data-channel completers can keep dispatching new work
+        // onto the worker thread while close() is freeing internal state,
+        // which is the worker-thread `NULL+0x28` crash signature tracked in
+        // Crashlytics issue `7d98c82c5fd6624ba2407487ca9dcf4e`.
+        // See Docs/reconnect-metrics-storm-and-worker-crash-fix.md (Fix-9).
+        primaryTransportConnectedCompleter.reset()
+        publisherTransportConnectedCompleter.reset()
+
+        // Close data channels (this also resets `openCompleter` internally).
         publisherDataChannel.reset()
         subscriberDataChannel.reset()
 
         let (subscriber, publisher) = _state.read { ($0.subscriber, $0.publisher) }
 
-        // Close transports
+        // Close transports. `Transport.close()` flips `_isClosing` first so
+        // any actor-isolated methods that were already suspended will bail
+        // out before issuing more BlockingCalls into webrtc.
         await publisher?.close()
         await subscriber?.close()
 

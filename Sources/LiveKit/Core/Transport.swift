@@ -60,6 +60,21 @@ actor Transport: NSObject, Loggable {
     private var _isRestartingIce: Bool = false
     private var _latestOfferId: UInt32 = 0
 
+    /// Set in `close()` before tearing down `_pc`. Methods that drive
+    /// the underlying `LKRTCPeerConnection` (BlockingCalls to webrtc
+    /// signaling/worker) check this and bail out so they don't race with
+    /// teardown and dereference half-freed internal state — the root cause
+    /// of the worker-thread `NULL+0x28` crash tracked by Crashlytics issue
+    /// `7d98c82c5fd6624ba2407487ca9dcf4e`.
+    /// See Docs/reconnect-metrics-storm-and-worker-crash-fix.md (Fix-9).
+    private var _isClosing: Bool = false
+
+    private func throwIfClosing(_ caller: String = #function) throws {
+        if _isClosing {
+            throw LiveKitError(.invalidState, message: "Transport is closing/closed (\(caller))")
+        }
+    }
+
     // forbid direct access to PeerConnection
     private let _pc: LKRTCPeerConnection
 
@@ -96,6 +111,9 @@ actor Transport: NSObject, Loggable {
     }
 
     func negotiate() async {
+        // close()-in-flight check: avoid scheduling a debounced offer that
+        // would call _pc.* after teardown started.
+        if _isClosing { return }
         await _debounce.schedule {
             try await self.createAndSendOffer()
         }
@@ -110,10 +128,12 @@ actor Transport: NSObject, Loggable {
     }
 
     func add(iceCandidate candidate: IceCandidate) async throws {
+        try throwIfClosing()
         await _iceCandidatesQueue.process(candidate, if: remoteDescription != nil && !_isRestartingIce)
     }
 
     func set(remoteDescription sd: LKRTCSessionDescription, offerId: UInt32) async throws {
+        try throwIfClosing()
         if signalingState != .haveLocalOffer {
             log("Received answer with unexpected signaling state: \(signalingState), expected .haveLocalOffer", .warning)
         }
@@ -128,6 +148,7 @@ actor Transport: NSObject, Loggable {
     }
 
     func set(remoteDescription sd: LKRTCSessionDescription) async throws {
+        try throwIfClosing()
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             _pc.setRemoteDescription(sd) { error in
                 if let error {
@@ -149,12 +170,14 @@ actor Transport: NSObject, Loggable {
     }
 
     func set(configuration: LKRTCConfiguration) throws {
+        try throwIfClosing()
         if !_pc.setConfiguration(configuration) {
             throw LiveKitError(.webRTC, message: "Failed to set configuration")
         }
     }
 
     func createAndSendOffer(iceRestart: Bool = false) async throws {
+        try throwIfClosing()
         guard let _onOffer else {
             log("_onOffer is nil", .error)
             return
@@ -190,6 +213,12 @@ actor Transport: NSObject, Loggable {
     }
 
     func close() async {
+        // Mark closing first so any actor methods that have already been
+        // suspended on the actor queue bail out before issuing more
+        // BlockingCalls into webrtc (see `throwIfClosing`).
+        guard !_isClosing else { return }
+        _isClosing = true
+
         // prevent debounced negotiate firing
         await _debounce.cancel()
 
@@ -208,7 +237,8 @@ actor Transport: NSObject, Loggable {
 
 extension Transport {
     func statistics(for sender: LKRTCRtpSender) async -> LKRTCStatisticsReport {
-        await withCheckedContinuation { (continuation: CheckedContinuation<LKRTCStatisticsReport, Never>) in
+        if _isClosing { return LKRTCStatisticsReport() }
+        return await withCheckedContinuation { (continuation: CheckedContinuation<LKRTCStatisticsReport, Never>) in
             _pc.statistics(for: sender) { sd in
                 continuation.resume(returning: sd)
             }
@@ -216,7 +246,8 @@ extension Transport {
     }
 
     func statistics(for receiver: LKRTCRtpReceiver) async -> LKRTCStatisticsReport {
-        await withCheckedContinuation { (continuation: CheckedContinuation<LKRTCStatisticsReport, Never>) in
+        if _isClosing { return LKRTCStatisticsReport() }
+        return await withCheckedContinuation { (continuation: CheckedContinuation<LKRTCStatisticsReport, Never>) in
             _pc.statistics(for: receiver) { sd in
                 continuation.resume(returning: sd)
             }
@@ -278,6 +309,7 @@ extension Transport: LKRTCPeerConnectionDelegate {
 
 private extension Transport {
     func createOffer(for constraints: [String: String]? = nil) async throws -> LKRTCSessionDescription {
+        try throwIfClosing()
         let mediaConstraints = LKRTCMediaConstraints(mandatoryConstraints: constraints,
                                                      optionalConstraints: nil)
 
@@ -299,6 +331,7 @@ private extension Transport {
 
 extension Transport {
     func createAnswer(for constraints: [String: String]? = nil) async throws -> LKRTCSessionDescription {
+        try throwIfClosing()
         let mediaConstraints = LKRTCMediaConstraints(mandatoryConstraints: constraints,
                                                      optionalConstraints: nil)
 
@@ -316,6 +349,7 @@ extension Transport {
     }
 
     func set(localDescription sd: LKRTCSessionDescription) async throws {
+        try throwIfClosing()
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             _pc.setLocalDescription(sd) { error in
                 if let error {
@@ -330,6 +364,7 @@ extension Transport {
     func addTransceiver(with track: LKRTCMediaStreamTrack,
                         transceiverInit: LKRTCRtpTransceiverInit) throws -> LKRTCRtpTransceiver
     {
+        try throwIfClosing()
         guard let transceiver = _pc.addTransceiver(with: track, init: transceiverInit) else {
             throw LiveKitError(.webRTC, message: "Failed to add transceiver")
         }
@@ -338,6 +373,7 @@ extension Transport {
     }
 
     func remove(track sender: LKRTCRtpSender) throws {
+        try throwIfClosing()
         guard _pc.removeTrack(sender) else {
             throw LiveKitError(.webRTC, message: "Failed to remove track")
         }
@@ -360,6 +396,7 @@ extension Transport {
                      configuration: LKRTCDataChannelConfiguration,
                      delegate: LKRTCDataChannelDelegate? = nil) -> LKRTCDataChannel?
     {
+        if _isClosing { return nil }
         let result = _pc.dataChannel(forLabel: label, configuration: configuration)
         result?.delegate = delegate
         return result
