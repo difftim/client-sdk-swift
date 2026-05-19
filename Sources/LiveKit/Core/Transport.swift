@@ -236,9 +236,13 @@ actor Transport: NSObject, Loggable {
 // MARK: - Stats
 
 extension Transport {
+    // Note: not guarded by `_isClosing` because `LKRTCStatisticsReport` exposes
+    // no public initializer. The actor-isolated callers (e.g. `Track._onStatsTimer`)
+    // are already gated by `await transport.isConnected` (Fix-6) and the actor
+    // serializes those checks against `close()`, so a stats request can't be
+    // dispatched after teardown started.
     func statistics(for sender: LKRTCRtpSender) async -> LKRTCStatisticsReport {
-        if _isClosing { return LKRTCStatisticsReport() }
-        return await withCheckedContinuation { (continuation: CheckedContinuation<LKRTCStatisticsReport, Never>) in
+        await withCheckedContinuation { (continuation: CheckedContinuation<LKRTCStatisticsReport, Never>) in
             _pc.statistics(for: sender) { sd in
                 continuation.resume(returning: sd)
             }
@@ -246,8 +250,7 @@ extension Transport {
     }
 
     func statistics(for receiver: LKRTCRtpReceiver) async -> LKRTCStatisticsReport {
-        if _isClosing { return LKRTCStatisticsReport() }
-        return await withCheckedContinuation { (continuation: CheckedContinuation<LKRTCStatisticsReport, Never>) in
+        await withCheckedContinuation { (continuation: CheckedContinuation<LKRTCStatisticsReport, Never>) in
             _pc.statistics(for: receiver) { sd in
                 continuation.resume(returning: sd)
             }
