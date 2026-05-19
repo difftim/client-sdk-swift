@@ -54,10 +54,9 @@ extension MetricsManager: TrackDelegate {
 
 /// An actor that converts track statistics into metrics and sends them to the server as data packets.
 actor MetricsManager: Loggable {
-    private typealias Transport = @Sendable (Livekit_DataPacket) async throws -> Void
     private struct TrackProperties {
         let identity: LocalParticipant.Identity?
-        let transport: Transport
+        weak var room: Room?
         var lastSentHash: Int?
     }
 
@@ -71,9 +70,7 @@ actor MetricsManager: Loggable {
 
     private func register(track: Track, in room: Room, localParticipant: LocalParticipant) {
         guard let sid = track.sid else { return }
-        trackProperties[sid] = TrackProperties(identity: localParticipant.identity) { [weak room] in
-            try await room?.send(dataPacket: $0)
-        }
+        trackProperties[sid] = TrackProperties(identity: localParticipant.identity, room: room)
         track.add(delegate: self)
     }
 
@@ -85,6 +82,14 @@ actor MetricsManager: Loggable {
 
     private func sendMetrics(track: Track, statistics: TrackStatistics) async {
         guard let sid = track.sid, let props = trackProperties[sid] else { return }
+        // Drop metrics whenever the Room is not in a steady connected state so
+        // that quick reconnect storms (publisher .failed, every dataPacket
+        // stacking a 10s `AsyncCompleter.wait`) don't pressure the WebRTC
+        // worker thread. Metrics are best-effort by design — losing a sample
+        // here is benign and the next sample will carry cumulative counters.
+        // See Docs/reconnect-metrics-storm-and-worker-crash-fix.md (Fix-5).
+        guard let room = props.room, room.isSteadyConnected else { return }
+
         let hash = statistics.hashValue
         guard hash != props.lastSentHash else { return }
 
@@ -92,7 +97,7 @@ actor MetricsManager: Loggable {
         dataPacket.kind = .reliable
         dataPacket.metrics = Livekit_MetricsBatch(statistics: statistics, identity: props.identity)
         do {
-            try await props.transport(dataPacket)
+            try await room.send(dataPacket: dataPacket)
             trackProperties[sid]?.lastSentHash = hash
         } catch {
             log("Failed to send metrics: \(error)", .warning)

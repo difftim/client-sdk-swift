@@ -90,6 +90,21 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
     /// Current ``ConnectionState`` of the ``Room``.
     public var connectionState: ConnectionState { _state.connectionState }
 
+    /// True only when the ``Room`` is in a steady, fully-connected state.
+    ///
+    /// Returns `false` during quick or full reconnect, even if
+    /// ``connectionState`` is still ``ConnectionState/connected``.
+    /// Quick reconnect intentionally keeps ``connectionState`` as
+    /// ``ConnectionState/connected`` and only flips an internal
+    /// `isReconnectingWithMode` flag, so this helper combines both for
+    /// internal callers that need to gate best-effort traffic (e.g. metrics)
+    /// without stacking publisher-negotiate completer waiters.
+    var isSteadyConnected: Bool {
+        _state.read {
+            $0.connectionState == .connected && $0.isReconnectingWithMode == nil
+        }
+    }
+
     public var disconnectError: LiveKitError? { _state.disconnectError }
 
     public var connectStopwatch: Stopwatch { _state.connectStopwatch }

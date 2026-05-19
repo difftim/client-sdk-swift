@@ -437,6 +437,15 @@ extension Track {
         // Transport is required...
         guard let transport else { return }
 
+        // Skip stats collection while the underlying PeerConnection is not
+        // healthy. `transport.connectionState` mirrors WebRTC's truth, so this
+        // turns to `.failed` immediately on ICE breakage / quick reconnect and
+        // suppresses the 1Hz `_pc.statistics(for:)` BlockingCall onto the
+        // WebRTC signaling/worker threads. The timer keeps running and resumes
+        // pulling stats once the transport recovers.
+        // See Docs/reconnect-metrics-storm-and-worker-crash-fix.md (Fix-6).
+        guard await transport.isConnected else { return }
+
         // Main statistics
 
         var statisticsReport: LKRTCStatisticsReport?
