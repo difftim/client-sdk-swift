@@ -300,15 +300,48 @@ public class VideoView: NativeView, Loggable {
             let renderModeDidUpdate = newState.renderMode != oldState.renderMode
             let trackDidUpdate = !Self.track(oldState.track as? VideoTrack, isEqualWith: newState.track as? VideoTrack)
 
-            // Always add/remove from the track asynchronously - even when called on @MainActor
+            // Always add/remove from the track asynchronously - even when called on @MainActor.
+            //
+            // Dispatch to the dedicated `liveKitWebRTCVideoRenderer` serial GCD queue rather
+            // than a default `Task { ... }` on Swift Concurrency's cooperative pool. Each call
+            // to `RemoteVideoTrack.add/remove(videoRenderer:)` internally issues a
+            // `BlockingCall` to the WebRTC worker thread (via `LKRTCVideoTrack.addRenderer:` /
+            // `removeRenderer:`). During a PeerConnection close — typically triggered by a
+            // full reconnect's `cleanUpRTC` path — the worker thread can be holding
+            // `Event::Wait(kForever)` inside `ChannelSend::~ChannelSend()` (channel_send.cc:562)
+            // while it waits for an audio encoder task queue (a GCD queue) to flush. Issuing
+            // additional BlockingCalls from the Swift cooperative pool at the same time
+            // competes for workers that other SDK Tasks (e.g. `Transport.close()`) also need,
+            // and on low-core devices can pile up enough blocked workers to deadlock a
+            // reconnect (see `Docs/tmp/app-stuck/`). Routing through a private GCD queue keeps
+            // these BlockingCalls off the cooperative pool entirely and collapses N concurrent
+            // VideoView mutations into one serial worker.
+            //
+            // The queue is intentionally separate from `DispatchQueue.liveKitWebRTC` (used by
+            // construction-style calls like `LKRTCConfiguration / peerConnection /
+            // RtpTransceiverInit / MediaConstraints / IceServer`) so that a renderer call
+            // stalled on the worker thread cannot head-of-line block the reconnect rebuild
+            // path. See `Docs/reconnect-videoview-renderer-deadlock-fix-review.md` (H1).
+            //
+            // `[weak self]` is intentional: when the serial queue is jammed (e.g. worker
+            // thread blocked inside `ChannelSend::~ChannelSend()`), pending closures can sit
+            // for seconds. Capturing `self` strongly would keep VideoView (and its Metal /
+            // CALayer / sample-buffer renderers) alive for that entire window. Letting
+            // VideoView deinit promptly is preferable; the only cost of skipping is one
+            // dangling `VideoRendererAdapter` left in `LKRTCVideoTrack`'s C++ sink list
+            // (`videoRendererAdapters` is a `weakToStrongObjects` NSMapTable and auto-prunes
+            // on VideoView deinit). The adapter holds `weak var renderer`, so frame delivery
+            // becomes a silent no-op, and the adapter is reclaimed when the track itself is
+            // destroyed (which happens promptly in the full-reconnect path). See `M1` in
+            // `Docs/reconnect-videoview-renderer-deadlock-fix-review.md`.
             if trackDidUpdate || shouldRenderDidUpdate {
-                Task {
-                    if let track = oldState.track as? VideoTrack {
-                        track.remove(videoRenderer: self)
-                    }
-                    if let track = newState.track as? VideoTrack, newState.shouldRender {
-                        track.add(videoRenderer: self)
-                    }
+                let oldTrack = oldState.track as? VideoTrack
+                let newTrack = newState.track as? VideoTrack
+                let shouldRender = newState.shouldRender
+                DispatchQueue.liveKitWebRTCVideoRenderer.async { [weak self] in
+                    guard let self else { return }
+                    oldTrack?.remove(videoRenderer: self)
+                    if shouldRender { newTrack?.add(videoRenderer: self) }
                 }
             }
 

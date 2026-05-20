@@ -19,4 +19,16 @@ import Foundation
 public extension DispatchQueue {
     // The queue which SDK uses to invoke WebRTC methods
     static let liveKitWebRTC = DispatchQueue(label: "LiveKitSDK.webRTC", qos: .default)
+
+    // Serializes synchronous BlockingCalls into LKRTCVideoTrack.addRenderer:/removeRenderer:.
+    //
+    // Kept separate from `liveKitWebRTC` because addRenderer/removeRenderer issue a
+    // BlockingCall to the WebRTC worker thread (potentially long, and during reconnect can
+    // stall while `ChannelSend::~ChannelSend()` waits on its encoder task queue). The
+    // existing `liveKitWebRTC` queue is used for microsecond-scale ObjC object construction
+    // (peer connection / transceiver / configuration / ice server / media constraints) that
+    // is heavily exercised on the reconnect rebuild path; sharing one serial queue would let
+    // a stalled renderer call head-of-line block those construction callsites and reintroduce
+    // cooperative-pool starvation through the back door.
+    static let liveKitWebRTCVideoRenderer = DispatchQueue(label: "LiveKitSDK.webRTC.videoRenderer", qos: .default)
 }
