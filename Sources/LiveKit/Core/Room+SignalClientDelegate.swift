@@ -29,6 +29,30 @@ extension Room: SignalClientDelegate {
     /// entry which will defer if `hasConnectivity` is now `false`.
     private static let networkErrorReconnectDelay: UInt64 = 300_000_000 // 300ms
 
+    /// True when the engine is in a state where *initiating* a new reconnect
+    /// from this delegate is meaningful. Two acceptable forms — kept in sync
+    /// with `requestReconnect`'s Layer 1:
+    ///
+    ///   - `.connected` (steady state)
+    ///   - `.reconnecting` while still in the deferred-on-connectivity stage
+    ///     (pending entry staged, no retry task armed, no start-pending flag)
+    ///
+    /// A `.reconnecting` state with a running retry cycle (`reconnectTask != nil`)
+    /// or a start-pending placeholder is intentionally rejected: in those cases
+    /// the cycle itself drives recovery, and admitting a stale signal disconnect
+    /// here can race with a successful retry — the 300 ms detached task below
+    /// could wake up *after* the cycle flipped state back to `.connected` and
+    /// then spawn a phantom quick reconnect on the fresh session.
+    private var _canRequestReconnectFromSignalDelegate: Bool {
+        _state.read { state in
+            if state.connectionState == .connected { return true }
+            return state.connectionState == .reconnecting
+                && state.pendingReconnectOnConnectivity != nil
+                && state.reconnectTask == nil
+                && !state.isReconnectStartPending
+        }
+    }
+
     func signalClient(_: SignalClient, didUpdateConnectionState connectionState: ConnectionState,
                       oldState: ConnectionState,
                       disconnectError: LiveKitError?) async
@@ -39,13 +63,10 @@ extension Room: SignalClientDelegate {
            case .disconnected = connectionState,
            // Only attempt re-connect if not cancelled
            let errorType = disconnectError?.type, errorType != .cancelled,
-           // Engine is in a state that still wants reconnects. `.reconnecting`
-           // is included so signal errors observed *after* we already deferred
-           // a reconnect (typical sequence: connectivity lost → deferred →
-           // QUIC idle timeout fires here) can still merge a fresher `reason`
-           // / mode into the pending entry. `requestReconnect`'s guards prevent
-           // re-entrancy when an actual retry cycle is already running.
-           _state.connectionState == .connected || _state.connectionState == .reconnecting
+           // Engine is eligible to start/merge a reconnect from here. See
+           // `_canRequestReconnectFromSignalDelegate` for why we reject
+           // `.reconnecting` whenever an actual retry cycle is already running.
+           _canRequestReconnectFromSignalDelegate
         {
             if errorType == .network {
                 log("[reconnect][net] websocket network error, delaying reconnect 300ms for path settle")
@@ -54,14 +75,18 @@ extension Room: SignalClientDelegate {
                 Task.detached { [weak self] in
                     try? await Task.sleep(nanoseconds: Room.networkErrorReconnectDelay)
                     guard let self else { return }
-                    // Re-check: user may have called `disconnect()` during the sleep,
-                    // or the engine may have transitioned to disconnected/disconnecting
-                    // via another path. `requestReconnect` itself double-checks under
-                    // `_state.mutate`, but this avoids the noisy "ignored" log for the
-                    // common case.
-                    let s = _state.connectionState
-                    guard s == .connected || s == .reconnecting else {
-                        log("[reconnect][net] skipping delayed websocket reconnect, engine state: \(s)")
+                    // Re-check using the *same* eligibility rule as the outer
+                    // guard. During the sleep the engine may have transitioned
+                    // to disconnected/disconnecting (user `disconnect()`), or a
+                    // running retry cycle may have completed and flipped state
+                    // back to `.connected` — in the latter case spawning a new
+                    // reconnect would be a phantom attempt on a fresh session.
+                    // `requestReconnect` itself double-checks under
+                    // `_state.mutate`, but this avoids the noisy "ignored" log
+                    // for the common case and prevents the rare post-success
+                    // race window.
+                    guard _canRequestReconnectFromSignalDelegate else {
+                        log("[reconnect][net] skipping delayed websocket reconnect, engine no longer eligible (state: \(_state.connectionState))")
                         return
                     }
                     requestReconnect(reason: .websocket)
