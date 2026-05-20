@@ -324,11 +324,18 @@ extension Room {
         }
 
         _state.mutate {
-            // Mark as Re-connecting internally. Quick is the optimistic starting
-            // mode; the retry cycle below will upgrade to `.full` if
-            // `nextReconnectMode == .full` or if a previously-merged pending
-            // entry recorded a `.full` requirement.
-            $0.isReconnectingWithMode = .quick
+            // Mark as Re-connecting internally. `.quick` is the optimistic
+            // starting mode for retry, but preserve any higher-priority mode
+            // already set by `requestReconnect`'s `.deferred` branch — form B
+            // resumes enter here with `isReconnectingWithMode == .full` and
+            // overwriting to `.quick` would emit a spurious
+            // `didUpdateReconnectMode(.quick)` followed by the retry cycle
+            // promoting back to `.full`. The retry cycle's mode picker still
+            // sees `.full` via `$0.nextReconnectMode` / `$0.isReconnectingWithMode`
+            // and selects the right sequence on the first attempt.
+            if $0.isReconnectingWithMode == nil {
+                $0.isReconnectingWithMode = .quick
+            }
             $0.nextReconnectMode = nextReconnectMode
         }
 
