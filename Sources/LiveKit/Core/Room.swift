@@ -1013,31 +1013,37 @@ extension Room {
                     reason: reason,
                     nextReconnectMode: mergedMode
                 )
-                // Externalize as `.reconnecting` ONLY when we've established that
-                // a full reconnect is required (i.e. `mergedMode == .full`,
-                // typically triggered by a `transport.failed` event). For
-                // optimistic-quick intents (`networkSwitch` / `websocket` with
-                // no `.full` upgrade yet) we keep `connectionState == .connected`
-                // to match the existing "quick reconnect is silent" UX — short
-                // WiFi blips won't flicker the UI's reconnecting banner.
+                // Externalize as `.reconnecting` on ANY deferred entry —
+                // regardless of whether the merged intent is `.full` or
+                // optimistic-quick. Rationale (UX over "don't bother user
+                // during quick paths"):
                 //
-                // We intentionally do NOT pre-set `isReconnectingWithMode` here.
-                // Form B is a "we *will* full-reconnect once the network is
-                // back" placeholder — no retry has actually started. Setting
-                // the mode now would:
-                //   - emit a premature `didStartReconnectWithMode(.full)` even
+                //   The deferred branch is reached only when `hasConnectivity
+                //   == false`, i.e. the OS network stack already reports no
+                //   path. That is strictly more severe than a sub-second ICE
+                //   blip — the user is about to talk into a dead mic and won't
+                //   hear the other side. Showing "Reconnecting…" immediately
+                //   is the honest signal; an extra UI banner that flickers for
+                //   a short WiFi recovery is far less harmful than silently
+                //   pretending we're still connected while audio is broken.
+                //
+                // We intentionally do NOT pre-set `isReconnectingWithMode`
+                // here. Form B is a "we *will* (re)connect once the network
+                // is back" placeholder — no retry has actually started.
+                // Setting the mode now would:
+                //   - emit a premature `didStartReconnectWithMode(...)` even
                 //     though no `startReconnect` ever ran, and
-                //   - emit a misleading `didCompleteReconnectWithMode(.full)`
+                //   - emit a misleading `didCompleteReconnectWithMode(...)`
                 //     if the user calls `disconnect()` from form B, since
                 //     `cleanUp` will reset `isReconnectingWithMode` and the
                 //     non-nil → nil edge would falsely signal "reconnect
                 //     completed".
                 // The real start/complete pair is emitted by `startReconnect`
                 // (Room+Engine.swift) when the retry task actually arms. The
-                // invariant log in `_state.onDidMutate` is relaxed below to
-                // permit `.reconnecting + nil mode` while a pending entry or a
+                // invariant log in `_state.onDidMutate` is relaxed to permit
+                // `.reconnecting + nil mode` while a pending entry or a
                 // start-pending flag is in flight.
-                if mergedMode == .full, state.connectionState == .connected {
+                if state.connectionState == .connected {
                     state.connectionState = .reconnecting
                 }
                 return .deferred
