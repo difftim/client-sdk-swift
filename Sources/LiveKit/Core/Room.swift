@@ -383,7 +383,16 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
                 }
             }
 
-            if newState.connectionState == .reconnecting, newState.isReconnectingWithMode == nil {
+            // `.reconnecting + nil mode` is legitimate only as a transient
+            // form B (deferred-on-connectivity) state or while we're between
+            // `requestReconnect`'s `.start` mutate and `startReconnect`'s mode
+            // mutate. Outside those, it's a real bug worth flagging.
+            if newState.connectionState == .reconnecting,
+               newState.isReconnectingWithMode == nil,
+               newState.pendingReconnectOnConnectivity == nil,
+               newState.reconnectTask == nil,
+               !newState.isReconnectStartPending
+            {
                 log("reconnectMode should not be .none", .error)
             }
 
@@ -1004,24 +1013,32 @@ extension Room {
                     reason: reason,
                     nextReconnectMode: mergedMode
                 )
-                // Externalize as `.reconnecting` ONLY when we've established that a
-                // full reconnect is required (i.e. `mergedMode == .full`, typically
-                // triggered by a `transport.failed` event). For optimistic-quick
-                // intents (`networkSwitch` / `websocket` with no `.full` upgrade
-                // yet) we keep `connectionState == .connected` to match the
-                // existing "quick reconnect is silent" UX — short WiFi blips
-                // won't flicker the UI's reconnecting banner.
+                // Externalize as `.reconnecting` ONLY when we've established that
+                // a full reconnect is required (i.e. `mergedMode == .full`,
+                // typically triggered by a `transport.failed` event). For
+                // optimistic-quick intents (`networkSwitch` / `websocket` with
+                // no `.full` upgrade yet) we keep `connectionState == .connected`
+                // to match the existing "quick reconnect is silent" UX — short
+                // WiFi blips won't flicker the UI's reconnecting banner.
                 //
-                // `isReconnectingWithMode` is kept consistent with the externalized
-                // state: only set when we flip to `.reconnecting`, so that the
-                // `connectionState == .reconnecting => mode != nil` invariant in
-                // `_state.onDidMutate` still holds, and `didStartReconnectWithMode`
-                // is emitted in lockstep with `roomIsReconnecting`.
-                if mergedMode == .full {
-                    if state.connectionState == .connected {
-                        state.connectionState = .reconnecting
-                    }
-                    state.isReconnectingWithMode = .full
+                // We intentionally do NOT pre-set `isReconnectingWithMode` here.
+                // Form B is a "we *will* full-reconnect once the network is
+                // back" placeholder — no retry has actually started. Setting
+                // the mode now would:
+                //   - emit a premature `didStartReconnectWithMode(.full)` even
+                //     though no `startReconnect` ever ran, and
+                //   - emit a misleading `didCompleteReconnectWithMode(.full)`
+                //     if the user calls `disconnect()` from form B, since
+                //     `cleanUp` will reset `isReconnectingWithMode` and the
+                //     non-nil → nil edge would falsely signal "reconnect
+                //     completed".
+                // The real start/complete pair is emitted by `startReconnect`
+                // (Room+Engine.swift) when the retry task actually arms. The
+                // invariant log in `_state.onDidMutate` is relaxed below to
+                // permit `.reconnecting + nil mode` while a pending entry or a
+                // start-pending flag is in flight.
+                if mergedMode == .full, state.connectionState == .connected {
+                    state.connectionState = .reconnecting
                 }
                 return .deferred
             }

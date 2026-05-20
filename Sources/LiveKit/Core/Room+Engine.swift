@@ -324,17 +324,19 @@ extension Room {
         }
 
         _state.mutate {
-            // Mark as Re-connecting internally. `.quick` is the optimistic
-            // starting mode for retry, but preserve any higher-priority mode
-            // already set by `requestReconnect`'s `.deferred` branch — form B
-            // resumes enter here with `isReconnectingWithMode == .full` and
-            // overwriting to `.quick` would emit a spurious
-            // `didUpdateReconnectMode(.quick)` followed by the retry cycle
-            // promoting back to `.full`. The retry cycle's mode picker still
-            // sees `.full` via `$0.nextReconnectMode` / `$0.isReconnectingWithMode`
-            // and selects the right sequence on the first attempt.
+            // Mark as Re-connecting internally. This is the *first* place a
+            // mode is set for the cycle (form B no longer pre-sets it). Pick
+            // the initial mode from the caller's hint so the
+            // `didStartReconnectWithMode` event below fires with the correct
+            // mode label — e.g. form B → resume passes
+            // `nextReconnectMode == .full`, and we want consumers to see
+            // `didStartReconnectWithMode(.full)` rather than a `.quick` that
+            // would be promoted to `.full` on the next mutate.
+            //
+            // If `isReconnectingWithMode` is already non-nil (defensive: future
+            // code paths may pre-set it), preserve it.
             if $0.isReconnectingWithMode == nil {
-                $0.isReconnectingWithMode = .quick
+                $0.isReconnectingWithMode = (nextReconnectMode == .full) ? .full : .quick
             }
             $0.nextReconnectMode = nextReconnectMode
         }
