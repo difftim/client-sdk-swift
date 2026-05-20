@@ -295,8 +295,11 @@ extension Room {
     {
         log("[Connect] Starting, reason: \(reason)")
 
-        guard case .connected = _state.connectionState else {
-            log("[Connect] Must be called with connected state", .error)
+        // Accept either `.connected` (no prior deferred state) or `.reconnecting`
+        // (entered via `requestReconnect`'s `.deferred` branch while offline —
+        // the externally-visible reconnecting state).
+        guard _state.connectionState == .connected || _state.connectionState == .reconnecting else {
+            log("[Connect] Must be called with connected/reconnecting state, got: \(_state.connectionState)", .error)
             throw LiveKitError(.invalidState)
         }
 
@@ -311,13 +314,20 @@ extension Room {
             throw LiveKitError(.invalidState)
         }
 
-        guard _state.isReconnectingWithMode == nil else {
+        // Re-entrancy guard: a `reconnectTask` armed means another `startReconnect`
+        // is already running. `isReconnectingWithMode` alone is no longer a reliable
+        // signal because `requestReconnect`'s `.deferred` branch sets it as a
+        // placeholder while waiting for connectivity.
+        guard _state.reconnectTask == nil else {
             log("[Connect] Reconnect already in progress...", .warning)
             throw LiveKitError(.invalidState)
         }
 
         _state.mutate {
-            // Mark as Re-connecting internally
+            // Mark as Re-connecting internally. Quick is the optimistic starting
+            // mode; the retry cycle below will upgrade to `.full` if
+            // `nextReconnectMode == .full` or if a previously-merged pending
+            // entry recorded a `.full` requirement.
             $0.isReconnectingWithMode = .quick
             $0.nextReconnectMode = nextReconnectMode
         }

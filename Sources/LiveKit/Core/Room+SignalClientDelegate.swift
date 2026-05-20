@@ -39,8 +39,13 @@ extension Room: SignalClientDelegate {
            case .disconnected = connectionState,
            // Only attempt re-connect if not cancelled
            let errorType = disconnectError?.type, errorType != .cancelled,
-           // engine is currently connected state
-           case .connected = _state.connectionState
+           // Engine is in a state that still wants reconnects. `.reconnecting`
+           // is included so signal errors observed *after* we already deferred
+           // a reconnect (typical sequence: connectivity lost → deferred →
+           // QUIC idle timeout fires here) can still merge a fresher `reason`
+           // / mode into the pending entry. `requestReconnect`'s guards prevent
+           // re-entrancy when an actual retry cycle is already running.
+           _state.connectionState == .connected || _state.connectionState == .reconnecting
         {
             if errorType == .network {
                 log("[reconnect][net] websocket network error, delaying reconnect 300ms for path settle")
@@ -50,12 +55,13 @@ extension Room: SignalClientDelegate {
                     try? await Task.sleep(nanoseconds: Room.networkErrorReconnectDelay)
                     guard let self else { return }
                     // Re-check: user may have called `disconnect()` during the sleep,
-                    // or the engine may have transitioned to reconnecting via another
-                    // path (transport, networkSwitch). `requestReconnect` itself
-                    // double-checks under `_state.mutate`, but this avoids the noisy
-                    // "ignored" log for the common case.
-                    guard _state.connectionState == .connected else {
-                        log("[reconnect][net] skipping delayed websocket reconnect, engine no longer connected")
+                    // or the engine may have transitioned to disconnected/disconnecting
+                    // via another path. `requestReconnect` itself double-checks under
+                    // `_state.mutate`, but this avoids the noisy "ignored" log for the
+                    // common case.
+                    let s = _state.connectionState
+                    guard s == .connected || s == .reconnecting else {
+                        log("[reconnect][net] skipping delayed websocket reconnect, engine state: \(s)")
                         return
                     }
                     requestReconnect(reason: .websocket)

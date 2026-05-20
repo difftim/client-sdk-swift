@@ -916,17 +916,23 @@ extension Room {
 
     @discardableResult
     func resumeReconnectAfterConnectivityRestored(source: String, restartInterface: NWInterface? = nil) -> Bool {
-        let pendingReconnect = _state.mutate { state -> State.PendingReconnect? in
-            guard state.connectionState == .connected,
-                  state.isReconnectingWithMode == nil,
+        // Snapshot the pending reconnect under the lock, but DO NOT clear it here.
+        // `requestReconnect` below needs `pendingReconnectOnConnectivity != nil`
+        // to recognize the "deferred-reconnecting" state in its Layer 1 guard.
+        // The `.start` branch inside `requestReconnect` clears it atomically when
+        // it actually launches the retry; if a racing caller beats us to it, our
+        // call collapses to a no-op (Layer 2 guard) and that's fine.
+        let pendingReconnect = _state.read { state -> State.PendingReconnect? in
+            let isInDeferred = state.connectionState == .reconnecting
+                && state.reconnectTask == nil
+                && !state.isReconnectStartPending
+            guard state.connectionState == .connected || isInDeferred,
                   state.reconnectTask == nil,
                   !state.isReconnectStartPending,
                   let pendingReconnect = state.pendingReconnectOnConnectivity
             else {
                 return nil
             }
-
-            state.pendingReconnectOnConnectivity = nil
             return pendingReconnect
         }
 
@@ -959,11 +965,24 @@ extension Room {
         }
 
         let decision = _state.mutate { state -> Decision in
-            guard state.connectionState == .connected else {
-                return .skip("not in connected state")
+            // Layer 1: gate by externally-visible connection state.
+            // Allow:
+            //   - .connected (steady state)
+            //   - .reconnecting while still in deferred-on-connectivity stage
+            //     (no retry task running yet); this is the new "offline waiting"
+            //     state introduced so consumers can see we're not really connected.
+            let isInDeferred = state.connectionState == .reconnecting
+                && state.pendingReconnectOnConnectivity != nil
+                && state.reconnectTask == nil
+                && !state.isReconnectStartPending
+            guard state.connectionState == .connected || isInDeferred else {
+                return .skip("not in connected or deferred-reconnecting state")
             }
-            guard state.isReconnectingWithMode == nil,
-                  state.reconnectTask == nil,
+            // Layer 2: hard re-entrancy guard. Once an actual retry cycle has
+            // started (`isReconnectStartPending` set or `reconnectTask` armed),
+            // no other caller may launch a second one — regardless of what
+            // `connectionState` looks like.
+            guard state.reconnectTask == nil,
                   !state.isReconnectStartPending
             else {
                 return .skip("reconnect already in progress or pending")
@@ -985,6 +1004,25 @@ extension Room {
                     reason: reason,
                     nextReconnectMode: mergedMode
                 )
+                // Externalize as `.reconnecting` ONLY when we've established that a
+                // full reconnect is required (i.e. `mergedMode == .full`, typically
+                // triggered by a `transport.failed` event). For optimistic-quick
+                // intents (`networkSwitch` / `websocket` with no `.full` upgrade
+                // yet) we keep `connectionState == .connected` to match the
+                // existing "quick reconnect is silent" UX — short WiFi blips
+                // won't flicker the UI's reconnecting banner.
+                //
+                // `isReconnectingWithMode` is kept consistent with the externalized
+                // state: only set when we flip to `.reconnecting`, so that the
+                // `connectionState == .reconnecting => mode != nil` invariant in
+                // `_state.onDidMutate` still holds, and `didStartReconnectWithMode`
+                // is emitted in lockstep with `roomIsReconnecting`.
+                if mergedMode == .full {
+                    if state.connectionState == .connected {
+                        state.connectionState = .reconnecting
+                    }
+                    state.isReconnectingWithMode = .full
+                }
                 return .deferred
             }
 

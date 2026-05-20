@@ -51,7 +51,13 @@ extension Room: TransportDelegate {
             }
         }
 
-        if _state.connectionState == .connected {
+        // Allow `.reconnecting` too: when we previously deferred a reconnect
+        // due to lost connectivity we are now externally `.reconnecting`, but a
+        // subsequent transport failure should still merge into the pending
+        // reconnect (upgrading `mode` to `.full` via `requestReconnect`'s merge
+        // policy). `requestReconnect`'s own Layer 2 guard prevents re-entering
+        // an actively running retry cycle.
+        if _state.connectionState == .connected || _state.connectionState == .reconnecting {
             // Attempt re-connect if primary or publisher transport failed
             if transport.isPrimary || (_state.hasPublished && transport.target == .publisher), pcState.isDisconnected {
                 requestReconnect(reason: .transport, nextReconnectMode: .full)
