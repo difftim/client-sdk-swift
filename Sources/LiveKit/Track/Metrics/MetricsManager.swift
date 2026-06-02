@@ -53,7 +53,7 @@ extension MetricsManager: TrackDelegate {
 // MARK: - Actor
 
 /// An actor that converts track statistics into metrics and sends them to the server as data packets.
-actor MetricsManager: Loggable {
+actor MetricsManager {
     private struct TrackProperties {
         let identity: LocalParticipant.Identity?
         weak var room: Room?
@@ -95,12 +95,11 @@ actor MetricsManager: Loggable {
 
         var dataPacket = Livekit_DataPacket()
         dataPacket.kind = .reliable
-        dataPacket.metrics = Livekit_MetricsBatch(statistics: statistics, identity: props.identity)
+        dataPacket.metrics = Livekit_MetricsBatch(statistics: statistics, identity: props.identity, trackSid: sid)
         do {
             try await room.send(dataPacket: dataPacket)
             trackProperties[sid]?.lastSentHash = hash
         } catch {
-            log("Failed to send metrics: \(error)", .warning)
         }
     }
 }
@@ -108,23 +107,52 @@ actor MetricsManager: Loggable {
 // MARK: - Statistics -> protobufs
 
 private extension Livekit_MetricsBatch {
-    init(statistics: TrackStatistics, identity: Participant.Identity?) {
+    init(statistics: TrackStatistics, identity: Participant.Identity?, trackSid: Track.Sid?) {
         var strings = OrderedSet<String>()
         defer { strData = strings.elements }
 
-        addOutboundMetrics(from: statistics.outboundRtpStream, strings: &strings, identity: identity)
+        addOutboundMetrics(from: statistics.outboundRtpStream, strings: &strings, identity: identity, sid: trackSid?.stringValue)
         addInboundMetrics(from: statistics.inboundRtpStream, strings: &strings, identity: identity)
 
         addRemoteOutboundMetrics(from: statistics.remoteOutboundRtpStream, strings: &strings, identity: identity)
         addRemoteInboundMetrics(from: statistics.remoteInboundRtpStream, strings: &strings, identity: identity)
     }
 
-    mutating func addOutboundMetrics(from statistics: [OutboundRtpStreamStatistics], strings: inout OrderedSet<String>, identity: Participant.Identity?) {
-        for stat in statistics where stat.kind == "video" {
-            if let durations = stat.qualityLimitationDurations {
-                addMetric(durations.cpu, at: stat.timestamp, label: .clientVideoPublisherQualityLimitationDurationCpu, strings: &strings, identity: identity, rid: stat.rid)
-                addMetric(durations.bandwidth, at: stat.timestamp, label: .clientVideoPublisherQualityLimitationDurationBandwidth, strings: &strings, identity: identity, rid: stat.rid)
-                addMetric(durations.other, at: stat.timestamp, label: .clientVideoPublisherQualityLimitationDurationOther, strings: &strings, identity: identity, rid: stat.rid)
+    mutating func addOutboundMetrics(from statistics: [OutboundRtpStreamStatistics], strings: inout OrderedSet<String>, identity: Participant.Identity?, sid: String?) {
+        for stat in statistics {
+            if stat.kind == "video" {
+                if let durations = stat.qualityLimitationDurations {
+                    addMetric(durations.cpu, at: stat.timestamp, label: .clientVideoPublisherQualityLimitationDurationCpu, strings: &strings, identity: identity, sid: sid, rid: stat.rid)
+                    addMetric(durations.bandwidth, at: stat.timestamp, label: .clientVideoPublisherQualityLimitationDurationBandwidth, strings: &strings, identity: identity, sid: sid, rid: stat.rid)
+                    addMetric(durations.other, at: stat.timestamp, label: .clientVideoPublisherQualityLimitationDurationOther, strings: &strings, identity: identity, sid: sid, rid: stat.rid)
+                }
+
+                addMetric(stat.packetsSent, at: stat.timestamp, label: .clientVideoPublisherPacketsSent, strings: &strings, identity: identity, sid: sid, rid: stat.rid)
+                addMetric(stat.bytesSent, at: stat.timestamp, label: .clientVideoPublisherBytesSent, strings: &strings, identity: identity, sid: sid, rid: stat.rid)
+                addMetric(stat.retransmittedPacketsSent, at: stat.timestamp, label: .clientVideoPublisherRetransmittedPacketsSent, strings: &strings, identity: identity, sid: sid, rid: stat.rid)
+                addMetric(stat.retransmittedBytesSent, at: stat.timestamp, label: .clientVideoPublisherRetransmittedBytesSent, strings: &strings, identity: identity, sid: sid, rid: stat.rid)
+                addMetric(stat.targetBitrate, at: stat.timestamp, label: .clientVideoPublisherTargetBitrate, strings: &strings, identity: identity, sid: sid, rid: stat.rid)
+                addMetric(stat.framesEncoded, at: stat.timestamp, label: .clientVideoPublisherFramesEncoded, strings: &strings, identity: identity, sid: sid, rid: stat.rid)
+                addMetric(stat.keyFramesEncoded, at: stat.timestamp, label: .clientVideoPublisherKeyFramesEncoded, strings: &strings, identity: identity, sid: sid, rid: stat.rid)
+                addMetric(stat.framesSent, at: stat.timestamp, label: .clientVideoPublisherFramesSent, strings: &strings, identity: identity, sid: sid, rid: stat.rid)
+                addMetric(stat.hugeFramesSent, at: stat.timestamp, label: .clientVideoPublisherHugeFramesSent, strings: &strings, identity: identity, sid: sid, rid: stat.rid)
+                addMetric(stat.frameWidth, at: stat.timestamp, label: .clientVideoPublisherFrameWidth, strings: &strings, identity: identity, sid: sid, rid: stat.rid)
+                addMetric(stat.frameHeight, at: stat.timestamp, label: .clientVideoPublisherFrameHeight, strings: &strings, identity: identity, sid: sid, rid: stat.rid)
+                addMetric(stat.framesPerSecond, at: stat.timestamp, label: .clientVideoPublisherFramesPerSecond, strings: &strings, identity: identity, sid: sid, rid: stat.rid)
+                addMetric(stat.totalEncodeTime, at: stat.timestamp, label: .clientVideoPublisherTotalEncodeTime, strings: &strings, identity: identity, sid: sid, rid: stat.rid)
+                addMetric(stat.totalPacketSendDelay, at: stat.timestamp, label: .clientVideoPublisherTotalPacketSendDelay, strings: &strings, identity: identity, sid: sid, rid: stat.rid)
+                addMetric(stat.pliCount, at: stat.timestamp, label: .clientVideoPublisherPliCount, strings: &strings, identity: identity, sid: sid, rid: stat.rid)
+                addMetric(stat.firCount, at: stat.timestamp, label: .clientVideoPublisherFirCount, strings: &strings, identity: identity, sid: sid, rid: stat.rid)
+                addMetric(stat.nackCount, at: stat.timestamp, label: .clientVideoPublisherNackCount, strings: &strings, identity: identity, sid: sid, rid: stat.rid)
+                addMetric(stat.qpSum, at: stat.timestamp, label: .clientVideoPublisherQpSum, strings: &strings, identity: identity, sid: sid, rid: stat.rid)
+                addMetric(stat.qualityLimitationResolutionChanges, at: stat.timestamp, label: .clientVideoPublisherQualityLimitationResolutionChanges, strings: &strings, identity: identity, sid: sid, rid: stat.rid)
+            } else if stat.kind == "audio" {
+                addMetric(stat.packetsSent, at: stat.timestamp, label: .clientAudioPublisherPacketsSent, strings: &strings, identity: identity, sid: sid)
+                addMetric(stat.bytesSent, at: stat.timestamp, label: .clientAudioPublisherBytesSent, strings: &strings, identity: identity, sid: sid)
+                addMetric(stat.retransmittedPacketsSent, at: stat.timestamp, label: .clientAudioPublisherRetransmittedPacketsSent, strings: &strings, identity: identity, sid: sid)
+                addMetric(stat.retransmittedBytesSent, at: stat.timestamp, label: .clientAudioPublisherRetransmittedBytesSent, strings: &strings, identity: identity, sid: sid)
+                addMetric(stat.targetBitrate, at: stat.timestamp, label: .clientAudioPublisherTargetBitrate, strings: &strings, identity: identity, sid: sid)
+                addMetric(stat.totalPacketSendDelay, at: stat.timestamp, label: .clientAudioPublisherTotalPacketSendDelay, strings: &strings, identity: identity, sid: sid)
             }
         }
     }
@@ -135,11 +163,32 @@ private extension Livekit_MetricsBatch {
                 addMetric(stat.concealedSamples, at: stat.timestamp, label: .clientAudioSubscriberConcealedSamples, strings: &strings, identity: identity, sid: stat.trackIdentifier)
                 addMetric(stat.concealmentEvents, at: stat.timestamp, label: .clientAudioSubscriberConcealmentEvents, strings: &strings, identity: identity, sid: stat.trackIdentifier)
                 addMetric(stat.silentConcealedSamples, at: stat.timestamp, label: .clientAudioSubscriberSilentConcealedSamples, strings: &strings, identity: identity, sid: stat.trackIdentifier)
+                addMetric(stat.interruptionCount, at: stat.timestamp, label: .clientAudioSubscriberInterruptionCount, strings: &strings, identity: identity, sid: stat.trackIdentifier)
+                addMetric(stat.totalInterruptionDuration, at: stat.timestamp, label: .clientAudioSubscriberTotalInterruptionDuration, strings: &strings, identity: identity, sid: stat.trackIdentifier)
             } else if stat.kind == "video" {
                 addMetric(stat.freezeCount, at: stat.timestamp, label: .clientVideoSubscriberFreezeCount, strings: &strings, identity: identity, sid: stat.trackIdentifier)
                 addMetric(stat.totalFreezesDuration, at: stat.timestamp, label: .clientVideoSubscriberTotalFreezeDuration, strings: &strings, identity: identity, sid: stat.trackIdentifier)
                 addMetric(stat.pauseCount, at: stat.timestamp, label: .clientVideoSubscriberPauseCount, strings: &strings, identity: identity, sid: stat.trackIdentifier)
                 addMetric(stat.totalPausesDuration, at: stat.timestamp, label: .clientVideoSubscriberTotalPausesDuration, strings: &strings, identity: identity, sid: stat.trackIdentifier)
+                addMetric(stat.packetsReceived, at: stat.timestamp, label: .clientVideoSubscriberPacketsReceived, strings: &strings, identity: identity, sid: stat.trackIdentifier)
+                addMetric(stat.bytesReceived, at: stat.timestamp, label: .clientVideoSubscriberBytesReceived, strings: &strings, identity: identity, sid: stat.trackIdentifier)
+                addMetric(stat.packetsLost, at: stat.timestamp, label: .clientVideoSubscriberPacketsLost, strings: &strings, identity: identity, sid: stat.trackIdentifier)
+                addMetric(stat.jitter, at: stat.timestamp, label: .clientVideoSubscriberJitter, strings: &strings, identity: identity, sid: stat.trackIdentifier)
+                addMetric(stat.framesReceived, at: stat.timestamp, label: .clientVideoSubscriberFramesReceived, strings: &strings, identity: identity, sid: stat.trackIdentifier)
+                addMetric(stat.framesDecoded, at: stat.timestamp, label: .clientVideoSubscriberFramesDecoded, strings: &strings, identity: identity, sid: stat.trackIdentifier)
+                addMetric(stat.keyFramesDecoded, at: stat.timestamp, label: .clientVideoSubscriberKeyFramesDecoded, strings: &strings, identity: identity, sid: stat.trackIdentifier)
+                addMetric(stat.framesDropped, at: stat.timestamp, label: .clientVideoSubscriberFramesDropped, strings: &strings, identity: identity, sid: stat.trackIdentifier)
+                addMetric(stat.frameWidth, at: stat.timestamp, label: .clientVideoSubscriberFrameWidth, strings: &strings, identity: identity, sid: stat.trackIdentifier)
+                addMetric(stat.frameHeight, at: stat.timestamp, label: .clientVideoSubscriberFrameHeight, strings: &strings, identity: identity, sid: stat.trackIdentifier)
+                addMetric(stat.framesPerSecond, at: stat.timestamp, label: .clientVideoSubscriberFramesPerSecond, strings: &strings, identity: identity, sid: stat.trackIdentifier)
+                addMetric(stat.jitterBufferTargetDelay, at: stat.timestamp, label: .clientVideoSubscriberJitterBufferTargetDelay, strings: &strings, identity: identity, sid: stat.trackIdentifier)
+                addMetric(stat.jitterBufferMinimumDelay, at: stat.timestamp, label: .clientVideoSubscriberJitterBufferMinimumDelay, strings: &strings, identity: identity, sid: stat.trackIdentifier)
+                addMetric(stat.totalDecodeTime, at: stat.timestamp, label: .clientVideoSubscriberTotalDecodeTime, strings: &strings, identity: identity, sid: stat.trackIdentifier)
+                addMetric(stat.totalProcessingDelay, at: stat.timestamp, label: .clientVideoSubscriberTotalProcessingDelay, strings: &strings, identity: identity, sid: stat.trackIdentifier)
+                addMetric(stat.totalAssemblyTime, at: stat.timestamp, label: .clientVideoSubscriberTotalAssemblyTime, strings: &strings, identity: identity, sid: stat.trackIdentifier)
+                addMetric(stat.pliCount, at: stat.timestamp, label: .clientVideoSubscriberPliCount, strings: &strings, identity: identity, sid: stat.trackIdentifier)
+                addMetric(stat.firCount, at: stat.timestamp, label: .clientVideoSubscriberFirCount, strings: &strings, identity: identity, sid: stat.trackIdentifier)
+                addMetric(stat.nackCount, at: stat.timestamp, label: .clientVideoSubscriberNackCount, strings: &strings, identity: identity, sid: stat.trackIdentifier)
             }
 
             // Common metrics
@@ -232,9 +281,8 @@ private extension Livekit_MetricsBatch {
         let index = set.append(string).index
         return UInt32(index + offset)
     }
-}
 
-// MARK: - Extensions
+}
 
 private extension Numeric {
     var floatValue: Float? {

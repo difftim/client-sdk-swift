@@ -83,6 +83,144 @@ enum Livekit_MetricLabel: SwiftProtobuf.Enum, Swift.CaseIterable {
 
   /// Subscribe RTT (server -> participant)
   case subscriberRtt // = 19
+
+  /// inbound video RTP packets received
+  case clientVideoSubscriberPacketsReceived // = 20
+
+  /// inbound video RTP bytes received
+  case clientVideoSubscriberBytesReceived // = 21
+
+  /// inbound video RTP packets lost
+  case clientVideoSubscriberPacketsLost // = 22
+
+  /// inbound video RTP jitter
+  case clientVideoSubscriberJitter // = 23
+
+  /// inbound video frames received
+  case clientVideoSubscriberFramesReceived // = 24
+
+  /// inbound video frames decoded
+  case clientVideoSubscriberFramesDecoded // = 25
+
+  /// inbound video key frames decoded
+  case clientVideoSubscriberKeyFramesDecoded // = 26
+
+  /// inbound video frames dropped
+  case clientVideoSubscriberFramesDropped // = 27
+
+  /// inbound video frame width
+  case clientVideoSubscriberFrameWidth // = 28
+
+  /// inbound video frame height
+  case clientVideoSubscriberFrameHeight // = 29
+
+  /// inbound video frames per second
+  case clientVideoSubscriberFramesPerSecond // = 30
+
+  /// inbound video jitter buffer target delay
+  case clientVideoSubscriberJitterBufferTargetDelay // = 31
+
+  /// inbound video jitter buffer minimum delay
+  case clientVideoSubscriberJitterBufferMinimumDelay // = 32
+
+  /// inbound video total decode time
+  case clientVideoSubscriberTotalDecodeTime // = 33
+
+  /// inbound video total processing delay
+  case clientVideoSubscriberTotalProcessingDelay // = 34
+
+  /// inbound video total frame assembly time
+  case clientVideoSubscriberTotalAssemblyTime // = 35
+
+  /// inbound video PLI count
+  case clientVideoSubscriberPliCount // = 36
+
+  /// inbound video FIR count
+  case clientVideoSubscriberFirCount // = 37
+
+  /// inbound video NACK count
+  case clientVideoSubscriberNackCount // = 38
+
+  /// selected candidate pair current RTT
+  case clientSubscriberCurrentRoundTripTime // = 39
+
+  /// selected candidate pair available incoming bitrate
+  case clientSubscriberAvailableIncomingBitrate // = 40
+
+  /// outbound video RTP packets sent
+  case clientVideoPublisherPacketsSent // = 41
+
+  /// outbound video RTP bytes sent
+  case clientVideoPublisherBytesSent // = 42
+
+  /// outbound video retransmitted packets sent
+  case clientVideoPublisherRetransmittedPacketsSent // = 43
+
+  /// outbound video retransmitted bytes sent
+  case clientVideoPublisherRetransmittedBytesSent // = 44
+
+  /// outbound video target bitrate
+  case clientVideoPublisherTargetBitrate // = 45
+
+  /// outbound video frames encoded
+  case clientVideoPublisherFramesEncoded // = 46
+
+  /// outbound video key frames encoded
+  case clientVideoPublisherKeyFramesEncoded // = 47
+
+  /// outbound video frames sent
+  case clientVideoPublisherFramesSent // = 48
+
+  /// outbound video huge frames sent
+  case clientVideoPublisherHugeFramesSent // = 49
+
+  /// outbound video frame width
+  case clientVideoPublisherFrameWidth // = 50
+
+  /// outbound video frame height
+  case clientVideoPublisherFrameHeight // = 51
+
+  /// outbound video frames per second
+  case clientVideoPublisherFramesPerSecond // = 52
+
+  /// outbound video total encode time
+  case clientVideoPublisherTotalEncodeTime // = 53
+
+  /// outbound video total packet send delay
+  case clientVideoPublisherTotalPacketSendDelay // = 54
+
+  /// outbound video PLI count
+  case clientVideoPublisherPliCount // = 55
+
+  /// outbound video FIR count
+  case clientVideoPublisherFirCount // = 56
+
+  /// outbound video NACK count
+  case clientVideoPublisherNackCount // = 57
+
+  /// outbound video QP sum
+  case clientVideoPublisherQpSum // = 58
+
+  /// outbound video quality limitation resolution changes
+  case clientVideoPublisherQualityLimitationResolutionChanges // = 59
+
+  /// outbound audio RTP packets sent
+  case clientAudioPublisherPacketsSent // = 60
+
+  /// outbound audio RTP bytes sent
+  case clientAudioPublisherBytesSent // = 61
+
+  /// outbound audio retransmitted packets sent
+  case clientAudioPublisherRetransmittedPacketsSent // = 62
+
+  /// outbound audio retransmitted bytes sent
+  case clientAudioPublisherRetransmittedBytesSent // = 63
+
+  /// outbound audio target bitrate
+  case clientAudioPublisherTargetBitrate // = 64
+
+  /// outbound audio total packet send delay
+  case clientAudioPublisherTotalPacketSendDelay // = 65
   case predefinedMaxValue // = 4096
   case UNRECOGNIZED(Int)
 
@@ -112,6 +250,52 @@ enum Livekit_MetricLabel: SwiftProtobuf.Enum, Swift.CaseIterable {
     case 17: self = .publisherRtt
     case 18: self = .serverMeshRtt
     case 19: self = .subscriberRtt
+    case 20: self = .clientVideoSubscriberPacketsReceived
+    case 21: self = .clientVideoSubscriberBytesReceived
+    case 22: self = .clientVideoSubscriberPacketsLost
+    case 23: self = .clientVideoSubscriberJitter
+    case 24: self = .clientVideoSubscriberFramesReceived
+    case 25: self = .clientVideoSubscriberFramesDecoded
+    case 26: self = .clientVideoSubscriberKeyFramesDecoded
+    case 27: self = .clientVideoSubscriberFramesDropped
+    case 28: self = .clientVideoSubscriberFrameWidth
+    case 29: self = .clientVideoSubscriberFrameHeight
+    case 30: self = .clientVideoSubscriberFramesPerSecond
+    case 31: self = .clientVideoSubscriberJitterBufferTargetDelay
+    case 32: self = .clientVideoSubscriberJitterBufferMinimumDelay
+    case 33: self = .clientVideoSubscriberTotalDecodeTime
+    case 34: self = .clientVideoSubscriberTotalProcessingDelay
+    case 35: self = .clientVideoSubscriberTotalAssemblyTime
+    case 36: self = .clientVideoSubscriberPliCount
+    case 37: self = .clientVideoSubscriberFirCount
+    case 38: self = .clientVideoSubscriberNackCount
+    case 39: self = .clientSubscriberCurrentRoundTripTime
+    case 40: self = .clientSubscriberAvailableIncomingBitrate
+    case 41: self = .clientVideoPublisherPacketsSent
+    case 42: self = .clientVideoPublisherBytesSent
+    case 43: self = .clientVideoPublisherRetransmittedPacketsSent
+    case 44: self = .clientVideoPublisherRetransmittedBytesSent
+    case 45: self = .clientVideoPublisherTargetBitrate
+    case 46: self = .clientVideoPublisherFramesEncoded
+    case 47: self = .clientVideoPublisherKeyFramesEncoded
+    case 48: self = .clientVideoPublisherFramesSent
+    case 49: self = .clientVideoPublisherHugeFramesSent
+    case 50: self = .clientVideoPublisherFrameWidth
+    case 51: self = .clientVideoPublisherFrameHeight
+    case 52: self = .clientVideoPublisherFramesPerSecond
+    case 53: self = .clientVideoPublisherTotalEncodeTime
+    case 54: self = .clientVideoPublisherTotalPacketSendDelay
+    case 55: self = .clientVideoPublisherPliCount
+    case 56: self = .clientVideoPublisherFirCount
+    case 57: self = .clientVideoPublisherNackCount
+    case 58: self = .clientVideoPublisherQpSum
+    case 59: self = .clientVideoPublisherQualityLimitationResolutionChanges
+    case 60: self = .clientAudioPublisherPacketsSent
+    case 61: self = .clientAudioPublisherBytesSent
+    case 62: self = .clientAudioPublisherRetransmittedPacketsSent
+    case 63: self = .clientAudioPublisherRetransmittedBytesSent
+    case 64: self = .clientAudioPublisherTargetBitrate
+    case 65: self = .clientAudioPublisherTotalPacketSendDelay
     case 4096: self = .predefinedMaxValue
     default: self = .UNRECOGNIZED(rawValue)
     }
@@ -139,6 +323,52 @@ enum Livekit_MetricLabel: SwiftProtobuf.Enum, Swift.CaseIterable {
     case .publisherRtt: return 17
     case .serverMeshRtt: return 18
     case .subscriberRtt: return 19
+    case .clientVideoSubscriberPacketsReceived: return 20
+    case .clientVideoSubscriberBytesReceived: return 21
+    case .clientVideoSubscriberPacketsLost: return 22
+    case .clientVideoSubscriberJitter: return 23
+    case .clientVideoSubscriberFramesReceived: return 24
+    case .clientVideoSubscriberFramesDecoded: return 25
+    case .clientVideoSubscriberKeyFramesDecoded: return 26
+    case .clientVideoSubscriberFramesDropped: return 27
+    case .clientVideoSubscriberFrameWidth: return 28
+    case .clientVideoSubscriberFrameHeight: return 29
+    case .clientVideoSubscriberFramesPerSecond: return 30
+    case .clientVideoSubscriberJitterBufferTargetDelay: return 31
+    case .clientVideoSubscriberJitterBufferMinimumDelay: return 32
+    case .clientVideoSubscriberTotalDecodeTime: return 33
+    case .clientVideoSubscriberTotalProcessingDelay: return 34
+    case .clientVideoSubscriberTotalAssemblyTime: return 35
+    case .clientVideoSubscriberPliCount: return 36
+    case .clientVideoSubscriberFirCount: return 37
+    case .clientVideoSubscriberNackCount: return 38
+    case .clientSubscriberCurrentRoundTripTime: return 39
+    case .clientSubscriberAvailableIncomingBitrate: return 40
+    case .clientVideoPublisherPacketsSent: return 41
+    case .clientVideoPublisherBytesSent: return 42
+    case .clientVideoPublisherRetransmittedPacketsSent: return 43
+    case .clientVideoPublisherRetransmittedBytesSent: return 44
+    case .clientVideoPublisherTargetBitrate: return 45
+    case .clientVideoPublisherFramesEncoded: return 46
+    case .clientVideoPublisherKeyFramesEncoded: return 47
+    case .clientVideoPublisherFramesSent: return 48
+    case .clientVideoPublisherHugeFramesSent: return 49
+    case .clientVideoPublisherFrameWidth: return 50
+    case .clientVideoPublisherFrameHeight: return 51
+    case .clientVideoPublisherFramesPerSecond: return 52
+    case .clientVideoPublisherTotalEncodeTime: return 53
+    case .clientVideoPublisherTotalPacketSendDelay: return 54
+    case .clientVideoPublisherPliCount: return 55
+    case .clientVideoPublisherFirCount: return 56
+    case .clientVideoPublisherNackCount: return 57
+    case .clientVideoPublisherQpSum: return 58
+    case .clientVideoPublisherQualityLimitationResolutionChanges: return 59
+    case .clientAudioPublisherPacketsSent: return 60
+    case .clientAudioPublisherBytesSent: return 61
+    case .clientAudioPublisherRetransmittedPacketsSent: return 62
+    case .clientAudioPublisherRetransmittedBytesSent: return 63
+    case .clientAudioPublisherTargetBitrate: return 64
+    case .clientAudioPublisherTotalPacketSendDelay: return 65
     case .predefinedMaxValue: return 4096
     case .UNRECOGNIZED(let i): return i
     }
@@ -166,6 +396,52 @@ enum Livekit_MetricLabel: SwiftProtobuf.Enum, Swift.CaseIterable {
     .publisherRtt,
     .serverMeshRtt,
     .subscriberRtt,
+    .clientVideoSubscriberPacketsReceived,
+    .clientVideoSubscriberBytesReceived,
+    .clientVideoSubscriberPacketsLost,
+    .clientVideoSubscriberJitter,
+    .clientVideoSubscriberFramesReceived,
+    .clientVideoSubscriberFramesDecoded,
+    .clientVideoSubscriberKeyFramesDecoded,
+    .clientVideoSubscriberFramesDropped,
+    .clientVideoSubscriberFrameWidth,
+    .clientVideoSubscriberFrameHeight,
+    .clientVideoSubscriberFramesPerSecond,
+    .clientVideoSubscriberJitterBufferTargetDelay,
+    .clientVideoSubscriberJitterBufferMinimumDelay,
+    .clientVideoSubscriberTotalDecodeTime,
+    .clientVideoSubscriberTotalProcessingDelay,
+    .clientVideoSubscriberTotalAssemblyTime,
+    .clientVideoSubscriberPliCount,
+    .clientVideoSubscriberFirCount,
+    .clientVideoSubscriberNackCount,
+    .clientSubscriberCurrentRoundTripTime,
+    .clientSubscriberAvailableIncomingBitrate,
+    .clientVideoPublisherPacketsSent,
+    .clientVideoPublisherBytesSent,
+    .clientVideoPublisherRetransmittedPacketsSent,
+    .clientVideoPublisherRetransmittedBytesSent,
+    .clientVideoPublisherTargetBitrate,
+    .clientVideoPublisherFramesEncoded,
+    .clientVideoPublisherKeyFramesEncoded,
+    .clientVideoPublisherFramesSent,
+    .clientVideoPublisherHugeFramesSent,
+    .clientVideoPublisherFrameWidth,
+    .clientVideoPublisherFrameHeight,
+    .clientVideoPublisherFramesPerSecond,
+    .clientVideoPublisherTotalEncodeTime,
+    .clientVideoPublisherTotalPacketSendDelay,
+    .clientVideoPublisherPliCount,
+    .clientVideoPublisherFirCount,
+    .clientVideoPublisherNackCount,
+    .clientVideoPublisherQpSum,
+    .clientVideoPublisherQualityLimitationResolutionChanges,
+    .clientAudioPublisherPacketsSent,
+    .clientAudioPublisherBytesSent,
+    .clientAudioPublisherRetransmittedPacketsSent,
+    .clientAudioPublisherRetransmittedBytesSent,
+    .clientAudioPublisherTargetBitrate,
+    .clientAudioPublisherTotalPacketSendDelay,
     .predefinedMaxValue,
   ]
 
@@ -344,7 +620,7 @@ struct Livekit_MetricsRecordingHeader: Sendable {
 fileprivate let _protobuf_package = "livekit"
 
 extension Livekit_MetricLabel: SwiftProtobuf._ProtoNameProviding {
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0AGENTS_LLM_TTFT\0\u{1}AGENTS_STT_TTFT\0\u{1}AGENTS_TTS_TTFB\0\u{1}CLIENT_VIDEO_SUBSCRIBER_FREEZE_COUNT\0\u{1}CLIENT_VIDEO_SUBSCRIBER_TOTAL_FREEZE_DURATION\0\u{1}CLIENT_VIDEO_SUBSCRIBER_PAUSE_COUNT\0\u{1}CLIENT_VIDEO_SUBSCRIBER_TOTAL_PAUSES_DURATION\0\u{1}CLIENT_AUDIO_SUBSCRIBER_CONCEALED_SAMPLES\0\u{1}CLIENT_AUDIO_SUBSCRIBER_SILENT_CONCEALED_SAMPLES\0\u{1}CLIENT_AUDIO_SUBSCRIBER_CONCEALMENT_EVENTS\0\u{1}CLIENT_AUDIO_SUBSCRIBER_INTERRUPTION_COUNT\0\u{1}CLIENT_AUDIO_SUBSCRIBER_TOTAL_INTERRUPTION_DURATION\0\u{1}CLIENT_SUBSCRIBER_JITTER_BUFFER_DELAY\0\u{1}CLIENT_SUBSCRIBER_JITTER_BUFFER_EMITTED_COUNT\0\u{1}CLIENT_VIDEO_PUBLISHER_QUALITY_LIMITATION_DURATION_BANDWIDTH\0\u{1}CLIENT_VIDEO_PUBLISHER_QUALITY_LIMITATION_DURATION_CPU\0\u{1}CLIENT_VIDEO_PUBLISHER_QUALITY_LIMITATION_DURATION_OTHER\0\u{1}PUBLISHER_RTT\0\u{1}SERVER_MESH_RTT\0\u{1}SUBSCRIBER_RTT\0\u{2}m?METRIC_LABEL_PREDEFINED_MAX_VALUE\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0AGENTS_LLM_TTFT\0\u{1}AGENTS_STT_TTFT\0\u{1}AGENTS_TTS_TTFB\0\u{1}CLIENT_VIDEO_SUBSCRIBER_FREEZE_COUNT\0\u{1}CLIENT_VIDEO_SUBSCRIBER_TOTAL_FREEZE_DURATION\0\u{1}CLIENT_VIDEO_SUBSCRIBER_PAUSE_COUNT\0\u{1}CLIENT_VIDEO_SUBSCRIBER_TOTAL_PAUSES_DURATION\0\u{1}CLIENT_AUDIO_SUBSCRIBER_CONCEALED_SAMPLES\0\u{1}CLIENT_AUDIO_SUBSCRIBER_SILENT_CONCEALED_SAMPLES\0\u{1}CLIENT_AUDIO_SUBSCRIBER_CONCEALMENT_EVENTS\0\u{1}CLIENT_AUDIO_SUBSCRIBER_INTERRUPTION_COUNT\0\u{1}CLIENT_AUDIO_SUBSCRIBER_TOTAL_INTERRUPTION_DURATION\0\u{1}CLIENT_SUBSCRIBER_JITTER_BUFFER_DELAY\0\u{1}CLIENT_SUBSCRIBER_JITTER_BUFFER_EMITTED_COUNT\0\u{1}CLIENT_VIDEO_PUBLISHER_QUALITY_LIMITATION_DURATION_BANDWIDTH\0\u{1}CLIENT_VIDEO_PUBLISHER_QUALITY_LIMITATION_DURATION_CPU\0\u{1}CLIENT_VIDEO_PUBLISHER_QUALITY_LIMITATION_DURATION_OTHER\0\u{1}PUBLISHER_RTT\0\u{1}SERVER_MESH_RTT\0\u{1}SUBSCRIBER_RTT\0\u{1}CLIENT_VIDEO_SUBSCRIBER_PACKETS_RECEIVED\0\u{1}CLIENT_VIDEO_SUBSCRIBER_BYTES_RECEIVED\0\u{1}CLIENT_VIDEO_SUBSCRIBER_PACKETS_LOST\0\u{1}CLIENT_VIDEO_SUBSCRIBER_JITTER\0\u{1}CLIENT_VIDEO_SUBSCRIBER_FRAMES_RECEIVED\0\u{1}CLIENT_VIDEO_SUBSCRIBER_FRAMES_DECODED\0\u{1}CLIENT_VIDEO_SUBSCRIBER_KEY_FRAMES_DECODED\0\u{1}CLIENT_VIDEO_SUBSCRIBER_FRAMES_DROPPED\0\u{1}CLIENT_VIDEO_SUBSCRIBER_FRAME_WIDTH\0\u{1}CLIENT_VIDEO_SUBSCRIBER_FRAME_HEIGHT\0\u{1}CLIENT_VIDEO_SUBSCRIBER_FRAMES_PER_SECOND\0\u{1}CLIENT_VIDEO_SUBSCRIBER_JITTER_BUFFER_TARGET_DELAY\0\u{1}CLIENT_VIDEO_SUBSCRIBER_JITTER_BUFFER_MINIMUM_DELAY\0\u{1}CLIENT_VIDEO_SUBSCRIBER_TOTAL_DECODE_TIME\0\u{1}CLIENT_VIDEO_SUBSCRIBER_TOTAL_PROCESSING_DELAY\0\u{1}CLIENT_VIDEO_SUBSCRIBER_TOTAL_ASSEMBLY_TIME\0\u{1}CLIENT_VIDEO_SUBSCRIBER_PLI_COUNT\0\u{1}CLIENT_VIDEO_SUBSCRIBER_FIR_COUNT\0\u{1}CLIENT_VIDEO_SUBSCRIBER_NACK_COUNT\0\u{1}CLIENT_SUBSCRIBER_CURRENT_ROUND_TRIP_TIME\0\u{1}CLIENT_SUBSCRIBER_AVAILABLE_INCOMING_BITRATE\0\u{1}CLIENT_VIDEO_PUBLISHER_PACKETS_SENT\0\u{1}CLIENT_VIDEO_PUBLISHER_BYTES_SENT\0\u{1}CLIENT_VIDEO_PUBLISHER_RETRANSMITTED_PACKETS_SENT\0\u{1}CLIENT_VIDEO_PUBLISHER_RETRANSMITTED_BYTES_SENT\0\u{1}CLIENT_VIDEO_PUBLISHER_TARGET_BITRATE\0\u{1}CLIENT_VIDEO_PUBLISHER_FRAMES_ENCODED\0\u{1}CLIENT_VIDEO_PUBLISHER_KEY_FRAMES_ENCODED\0\u{1}CLIENT_VIDEO_PUBLISHER_FRAMES_SENT\0\u{1}CLIENT_VIDEO_PUBLISHER_HUGE_FRAMES_SENT\0\u{1}CLIENT_VIDEO_PUBLISHER_FRAME_WIDTH\0\u{1}CLIENT_VIDEO_PUBLISHER_FRAME_HEIGHT\0\u{1}CLIENT_VIDEO_PUBLISHER_FRAMES_PER_SECOND\0\u{1}CLIENT_VIDEO_PUBLISHER_TOTAL_ENCODE_TIME\0\u{1}CLIENT_VIDEO_PUBLISHER_TOTAL_PACKET_SEND_DELAY\0\u{1}CLIENT_VIDEO_PUBLISHER_PLI_COUNT\0\u{1}CLIENT_VIDEO_PUBLISHER_FIR_COUNT\0\u{1}CLIENT_VIDEO_PUBLISHER_NACK_COUNT\0\u{1}CLIENT_VIDEO_PUBLISHER_QP_SUM\0\u{1}CLIENT_VIDEO_PUBLISHER_QUALITY_LIMITATION_RESOLUTION_CHANGES\0\u{1}CLIENT_AUDIO_PUBLISHER_PACKETS_SENT\0\u{1}CLIENT_AUDIO_PUBLISHER_BYTES_SENT\0\u{1}CLIENT_AUDIO_PUBLISHER_RETRANSMITTED_PACKETS_SENT\0\u{1}CLIENT_AUDIO_PUBLISHER_RETRANSMITTED_BYTES_SENT\0\u{1}CLIENT_AUDIO_PUBLISHER_TARGET_BITRATE\0\u{1}CLIENT_AUDIO_PUBLISHER_TOTAL_PACKET_SEND_DELAY\0\u{2}\u{7f}>METRIC_LABEL_PREDEFINED_MAX_VALUE\0")
 }
 
 extension Livekit_MetricsBatch: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {

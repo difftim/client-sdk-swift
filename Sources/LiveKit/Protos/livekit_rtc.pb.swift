@@ -912,11 +912,11 @@ struct Livekit_JoinResponse: @unchecked Sendable {
 
   /// temptalk integration
   var ttCallResponse: Livekit_TTCallResponse {
-    get {return _storage._ttCallResponse ?? Livekit_TTCallResponse()}
+    get {_storage._ttCallResponse ?? Livekit_TTCallResponse()}
     set {_uniqueStorage()._ttCallResponse = newValue}
   }
   /// Returns true if `ttCallResponse` has been explicitly set.
-  var hasTtCallResponse: Bool {return _storage._ttCallResponse != nil}
+  var hasTtCallResponse: Bool {_storage._ttCallResponse != nil}
   /// Clears the value of `ttCallResponse`. Subsequent reads from it will return its default value.
   mutating func clearTtCallResponse() {_uniqueStorage()._ttCallResponse = nil}
 

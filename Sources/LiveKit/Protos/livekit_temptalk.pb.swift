@@ -86,88 +86,88 @@ public struct Livekit_TTCallResponseBody: @unchecked Sendable {
   // methods supported on all messages.
 
   public var needsSync: Bool {
-    get {return _storage._needsSync}
+    get {_storage._needsSync}
     set {_uniqueStorage()._needsSync = newValue}
   }
 
   public var invalidUids: [String] {
-    get {return _storage._invalidUids}
+    get {_storage._invalidUids}
     set {_uniqueStorage()._invalidUids = newValue}
   }
 
   public var stale: [Livekit_TTExceptionRecipient] {
-    get {return _storage._stale}
+    get {_storage._stale}
     set {_uniqueStorage()._stale = newValue}
   }
 
   public var missing: [Livekit_TTExceptionRecipient] {
-    get {return _storage._missing}
+    get {_storage._missing}
     set {_uniqueStorage()._missing = newValue}
   }
 
   public var extra: [Livekit_TTExceptionRecipient] {
-    get {return _storage._extra}
+    get {_storage._extra}
     set {_uniqueStorage()._extra = newValue}
   }
 
   public var encMeta: Dictionary<String,String> {
-    get {return _storage._encMeta}
+    get {_storage._encMeta}
     set {_uniqueStorage()._encMeta = newValue}
   }
 
   public var roomID: String {
-    get {return _storage._roomID}
+    get {_storage._roomID}
     set {_uniqueStorage()._roomID = newValue}
   }
 
   /// in milliseconds
   public var createdAt: Int64 {
-    get {return _storage._createdAt}
+    get {_storage._createdAt}
     set {_uniqueStorage()._createdAt = newValue}
   }
 
   public var serviceURL: String {
-    get {return _storage._serviceURL}
+    get {_storage._serviceURL}
     set {_uniqueStorage()._serviceURL = newValue}
   }
 
   public var token: String {
-    get {return _storage._token}
+    get {_storage._token}
     set {_uniqueStorage()._token = newValue}
   }
 
   public var caller: Livekit_TTCaller {
-    get {return _storage._caller ?? Livekit_TTCaller()}
+    get {_storage._caller ?? Livekit_TTCaller()}
     set {_uniqueStorage()._caller = newValue}
   }
   /// Returns true if `caller` has been explicitly set.
-  public var hasCaller: Bool {return _storage._caller != nil}
+  public var hasCaller: Bool {_storage._caller != nil}
   /// Clears the value of `caller`. Subsequent reads from it will return its default value.
   public mutating func clearCaller() {_uniqueStorage()._caller = nil}
 
   public var version: Int32 {
-    get {return _storage._version}
+    get {_storage._version}
     set {_uniqueStorage()._version = newValue}
   }
 
   public var emk: String {
-    get {return _storage._emk}
+    get {_storage._emk}
     set {_uniqueStorage()._emk = newValue}
   }
 
   public var publicKey: String {
-    get {return _storage._publicKey}
+    get {_storage._publicKey}
     set {_uniqueStorage()._publicKey = newValue}
   }
 
   public var serviceUrls: [String] {
-    get {return _storage._serviceUrls}
+    get {_storage._serviceUrls}
     set {_uniqueStorage()._serviceUrls = newValue}
   }
 
   /// in milliseconds
   public var systemShowTimestamp: UInt64 {
-    get {return _storage._systemShowTimestamp}
+    get {_storage._systemShowTimestamp}
     set {_uniqueStorage()._systemShowTimestamp = newValue}
   }
 
@@ -205,29 +205,29 @@ public struct Livekit_TTCallResponse: Sendable {
   // methods supported on all messages.
 
   public var base: Livekit_TTBaseResponse {
-    get {return _base ?? Livekit_TTBaseResponse()}
+    get {_base ?? Livekit_TTBaseResponse()}
     set {_base = newValue}
   }
   /// Returns true if `base` has been explicitly set.
-  public var hasBase: Bool {return self._base != nil}
+  public var hasBase: Bool {self._base != nil}
   /// Clears the value of `base`. Subsequent reads from it will return its default value.
   public mutating func clearBase() {self._base = nil}
 
   public var body: Livekit_TTCallResponseBody {
-    get {return _body ?? Livekit_TTCallResponseBody()}
+    get {_body ?? Livekit_TTCallResponseBody()}
     set {_body = newValue}
   }
   /// Returns true if `body` has been explicitly set.
-  public var hasBody: Bool {return self._body != nil}
+  public var hasBody: Bool {self._body != nil}
   /// Clears the value of `body`. Subsequent reads from it will return its default value.
   public mutating func clearBody() {self._body = nil}
 
   public var callOptions: Livekit_TTCallOptions {
-    get {return _callOptions ?? Livekit_TTCallOptions()}
+    get {_callOptions ?? Livekit_TTCallOptions()}
     set {_callOptions = newValue}
   }
   /// Returns true if `callOptions` has been explicitly set.
-  public var hasCallOptions: Bool {return self._callOptions != nil}
+  public var hasCallOptions: Bool {self._callOptions != nil}
   /// Clears the value of `callOptions`. Subsequent reads from it will return its default value.
   public mutating func clearCallOptions() {self._callOptions = nil}
 
@@ -278,11 +278,11 @@ public struct Livekit_TTNotification: Sendable {
   public var type: Int32 = 0
 
   public var args: Livekit_TTNotification.TTArgs {
-    get {return _args ?? Livekit_TTNotification.TTArgs()}
+    get {_args ?? Livekit_TTNotification.TTArgs()}
     set {_args = newValue}
   }
   /// Returns true if `args` has been explicitly set.
-  public var hasArgs: Bool {return self._args != nil}
+  public var hasArgs: Bool {self._args != nil}
   /// Clears the value of `args`. Subsequent reads from it will return its default value.
   public mutating func clearArgs() {self._args = nil}
 
@@ -330,11 +330,11 @@ public struct Livekit_TTStartCall: Sendable {
   public var timestamp: Int64 = 0
 
   public var notification: Livekit_TTNotification {
-    get {return _notification ?? Livekit_TTNotification()}
+    get {_notification ?? Livekit_TTNotification()}
     set {_notification = newValue}
   }
   /// Returns true if `notification` has been explicitly set.
-  public var hasNotification: Bool {return self._notification != nil}
+  public var hasNotification: Bool {self._notification != nil}
   /// Clears the value of `notification`. Subsequent reads from it will return its default value.
   public mutating func clearNotification() {self._notification = nil}
 
@@ -356,11 +356,11 @@ public struct Livekit_TTCallRequest: Sendable {
   public var token: String = String()
 
   public var startCall: Livekit_TTStartCall {
-    get {return _startCall ?? Livekit_TTStartCall()}
+    get {_startCall ?? Livekit_TTStartCall()}
     set {_startCall = newValue}
   }
   /// Returns true if `startCall` has been explicitly set.
-  public var hasStartCall: Bool {return self._startCall != nil}
+  public var hasStartCall: Bool {self._startCall != nil}
   /// Clears the value of `startCall`. Subsequent reads from it will return its default value.
   public mutating func clearStartCall() {self._startCall = nil}
 

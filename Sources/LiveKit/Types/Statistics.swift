@@ -563,6 +563,8 @@ public class InboundRtpStreamStatistics: ReceivedRtpStreamStatistics {
     public let totalAssemblyTime: Double?
     public let retransmittedPacketsReceived: UInt64?
     public let retransmittedBytesReceived: UInt64?
+    public let interruptionCount: UInt?
+    public let totalInterruptionDuration: Double?
 
     // Weak reference to previous stat so we can compare later.
     public weak var previous: InboundRtpStreamStatistics?
@@ -624,6 +626,8 @@ public class InboundRtpStreamStatistics: ReceivedRtpStreamStatistics {
         totalAssemblyTime = rawValues.readOptional("totalAssemblyTime")
         retransmittedPacketsReceived = rawValues.readOptional("retransmittedPacketsReceived")
         retransmittedBytesReceived = rawValues.readOptional("retransmittedBytesReceived")
+        interruptionCount = rawValues.readOptional("interruptionCount")
+        totalInterruptionDuration = rawValues.readOptional("totalInterruptionDuration")
 
         self.previous = previous
 
