@@ -22,7 +22,7 @@ import OrderedCollections
 extension MetricsManager: RoomDelegate {
     nonisolated func room(_ room: Room, participant: LocalParticipant, didPublishTrack publication: LocalTrackPublication) {
         guard let track = publication.track else { return }
-        Task { await register(track: track, in: room, localParticipant: participant) }
+        Task { await register(track: track, in: room, localParticipant: participant, isPublisher: true) }
     }
 
     nonisolated func room(_: Room, participant _: LocalParticipant, didUnpublishTrack publication: LocalTrackPublication) {
@@ -32,7 +32,7 @@ extension MetricsManager: RoomDelegate {
 
     nonisolated func room(_ room: Room, participant _: RemoteParticipant, didSubscribeTrack publication: RemoteTrackPublication) {
         guard let track = publication.track else { return }
-        Task { await register(track: track, in: room, localParticipant: room.localParticipant) } // send from local participant
+        Task { await register(track: track, in: room, localParticipant: room.localParticipant, isPublisher: false) } // send from local participant
     }
 
     nonisolated func room(_: Room, participant _: RemoteParticipant, didUnsubscribeTrack publication: RemoteTrackPublication) {
@@ -57,6 +57,7 @@ actor MetricsManager {
     private struct TrackProperties {
         let identity: LocalParticipant.Identity?
         weak var room: Room?
+        let isPublisher: Bool
         var lastSentHash: Int?
     }
 
@@ -68,9 +69,9 @@ actor MetricsManager {
         room.add(delegate: self)
     }
 
-    private func register(track: Track, in room: Room, localParticipant: LocalParticipant) {
+    private func register(track: Track, in room: Room, localParticipant: LocalParticipant, isPublisher: Bool) {
         guard let sid = track.sid else { return }
-        trackProperties[sid] = TrackProperties(identity: localParticipant.identity, room: room)
+        trackProperties[sid] = TrackProperties(identity: localParticipant.identity, room: room, isPublisher: isPublisher)
         track.add(delegate: self)
     }
 
@@ -95,7 +96,7 @@ actor MetricsManager {
 
         var dataPacket = Livekit_DataPacket()
         dataPacket.kind = .reliable
-        dataPacket.metrics = Livekit_MetricsBatch(statistics: statistics, identity: props.identity, trackSid: sid)
+        dataPacket.metrics = Livekit_MetricsBatch(statistics: statistics, identity: props.identity, trackSid: sid, isPublisher: props.isPublisher)
         do {
             try await room.send(dataPacket: dataPacket)
             trackProperties[sid]?.lastSentHash = hash
@@ -106,16 +107,37 @@ actor MetricsManager {
 
 // MARK: - Statistics -> protobufs
 
-private extension Livekit_MetricsBatch {
-    init(statistics: TrackStatistics, identity: Participant.Identity?, trackSid: Track.Sid?) {
+extension Livekit_MetricsBatch {
+    init(statistics: TrackStatistics, identity: Participant.Identity?, trackSid: Track.Sid?, isPublisher: Bool) {
         var strings = OrderedSet<String>()
         defer { strData = strings.elements }
 
         addOutboundMetrics(from: statistics.outboundRtpStream, strings: &strings, identity: identity, sid: trackSid?.stringValue)
         addInboundMetrics(from: statistics.inboundRtpStream, strings: &strings, identity: identity)
+        addPublisherStreamRttMetrics(
+            from: statistics.remoteInboundRtpStream,
+            outboundRtpStreams: statistics.outboundRtpStream,
+            strings: &strings,
+            identity: identity,
+            sid: trackSid?.stringValue
+        )
+        addSubscriberStreamRttMetrics(
+            from: statistics.remoteOutboundRtpStream,
+            inboundRtpStreams: statistics.inboundRtpStream,
+            strings: &strings,
+            identity: identity
+        )
+        addConnectionRttMetrics(from: statistics.iceCandidatePair, strings: &strings, identity: identity, isPublisher: isPublisher)
+        if !isPublisher {
+            addSubscriberNetworkMetrics(from: statistics.iceCandidatePair, strings: &strings, identity: identity)
+        }
+    }
 
-        addRemoteOutboundMetrics(from: statistics.remoteOutboundRtpStream, strings: &strings, identity: identity)
-        addRemoteInboundMetrics(from: statistics.remoteInboundRtpStream, strings: &strings, identity: identity)
+    init(candidatePairStatistics: [IceCandidatePairStatistics], identity: Participant.Identity?) {
+        var strings = OrderedSet<String>()
+        defer { strData = strings.elements }
+
+        addSubscriberNetworkMetrics(from: candidatePairStatistics, strings: &strings, identity: identity)
     }
 
     mutating func addOutboundMetrics(from statistics: [OutboundRtpStreamStatistics], strings: inout OrderedSet<String>, identity: Participant.Identity?, sid: String?) {
@@ -197,15 +219,42 @@ private extension Livekit_MetricsBatch {
         }
     }
 
-    mutating func addRemoteOutboundMetrics(from statistics: [RemoteOutboundRtpStreamStatistics], strings: inout OrderedSet<String>, identity: Participant.Identity?) {
+    mutating func addConnectionRttMetrics(from statistics: [IceCandidatePairStatistics], strings: inout OrderedSet<String>, identity: Participant.Identity?, isPublisher: Bool) {
+        let label: Livekit_MetricLabel = isPublisher ? .publisherRtt : .subscriberRtt
         for stat in statistics {
-            addMetric(stat.roundTripTime, at: stat.timestamp, label: .publisherRtt, strings: &strings, identity: identity)
+            addMetric(stat.currentRoundTripTime, at: stat.timestamp, label: label, strings: &strings, identity: identity)
         }
     }
 
-    mutating func addRemoteInboundMetrics(from statistics: [RemoteInboundRtpStreamStatistics], strings: inout OrderedSet<String>, identity: Participant.Identity?) {
+    mutating func addPublisherStreamRttMetrics(
+        from statistics: [RemoteInboundRtpStreamStatistics],
+        outboundRtpStreams: [OutboundRtpStreamStatistics],
+        strings: inout OrderedSet<String>,
+        identity: Participant.Identity?,
+        sid: String?
+    ) {
         for stat in statistics {
-            addMetric(stat.roundTripTime, at: stat.timestamp, label: .subscriberRtt, strings: &strings, identity: identity)
+            let outbound = outboundRtpStreams.first { $0.id == stat.localId }
+            addMetric(stat.roundTripTime, at: stat.timestamp, label: .clientPublisherStreamRtt, strings: &strings, identity: identity, sid: sid, rid: outbound?.rid)
+        }
+    }
+
+    mutating func addSubscriberStreamRttMetrics(
+        from statistics: [RemoteOutboundRtpStreamStatistics],
+        inboundRtpStreams: [InboundRtpStreamStatistics],
+        strings: inout OrderedSet<String>,
+        identity: Participant.Identity?
+    ) {
+        for stat in statistics {
+            let inbound = inboundRtpStreams.first { $0.id == stat.localId }
+            addMetric(stat.roundTripTime, at: stat.timestamp, label: .clientSubscriberStreamRtt, strings: &strings, identity: identity, sid: inbound?.trackIdentifier)
+        }
+    }
+
+    mutating func addSubscriberNetworkMetrics(from statistics: [IceCandidatePairStatistics], strings: inout OrderedSet<String>, identity: Participant.Identity?) {
+        for stat in statistics {
+            addMetric(stat.currentRoundTripTime, at: stat.timestamp, label: .clientSubscriberCurrentRoundTripTime, strings: &strings, identity: identity)
+            addMetric(stat.availableIncomingBitrate, at: stat.timestamp, label: .clientSubscriberAvailableIncomingBitrate, strings: &strings, identity: identity)
         }
     }
 
