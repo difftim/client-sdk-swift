@@ -73,7 +73,7 @@ public final class RoomOptions: NSObject, Sendable, Loggable {
         suspendLocalVideoTracksInBackground = true
         e2eeOptions = nil
         encryptionOptions = nil
-        reportRemoteTrackStatistics = false
+        reportRemoteTrackStatistics = true
     }
 
     public init(defaultCameraCaptureOptions: CameraCaptureOptions = CameraCaptureOptions(),
@@ -88,7 +88,7 @@ public final class RoomOptions: NSObject, Sendable, Loggable {
                 suspendLocalVideoTracksInBackground: Bool = true,
                 e2eeOptions: E2EEOptions? = nil,
                 encryptionOptions: EncryptionOptions? = nil,
-                reportRemoteTrackStatistics: Bool = false)
+                reportRemoteTrackStatistics: Bool = true)
     {
         self.defaultCameraCaptureOptions = defaultCameraCaptureOptions
         self.defaultScreenShareCaptureOptions = defaultScreenShareCaptureOptions

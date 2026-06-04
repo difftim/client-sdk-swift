@@ -281,7 +281,6 @@ extension Livekit_MetricsBatch {
 
     func createSample(timestampUs: Double, value: (some Numeric)?) -> Livekit_MetricSample? {
         guard let floatValue = value?.floatValue else { return nil }
-        guard floatValue != .zero else { return nil }
 
         var sample = Livekit_MetricSample()
         sample.timestampMs = Int64(timestampUs / 1000)
