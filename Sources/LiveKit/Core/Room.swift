@@ -994,6 +994,10 @@ extension Room {
             guard state.reconnectTask == nil,
                   !state.isReconnectStartPending
             else {
+                if nextReconnectMode == .full {
+                    state.nextReconnectMode = .full
+                    return .skip("reconnect already in progress or pending, merged full mode")
+                }
                 return .skip("reconnect already in progress or pending")
             }
 

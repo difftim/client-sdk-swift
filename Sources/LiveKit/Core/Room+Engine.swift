@@ -324,6 +324,10 @@ extension Room {
         }
 
         _state.mutate {
+            let pendingMode = $0.nextReconnectMode
+            let mergedMode: ReconnectMode? = (pendingMode == .full || nextReconnectMode == .full)
+                ? .full
+                : (pendingMode ?? nextReconnectMode)
             // Mark as Re-connecting internally. This is the *first* place a
             // mode is set for the cycle (form B no longer pre-sets it). Pick
             // the initial mode from the caller's hint so the
@@ -336,9 +340,9 @@ extension Room {
             // If `isReconnectingWithMode` is already non-nil (defensive: future
             // code paths may pre-set it), preserve it.
             if $0.isReconnectingWithMode == nil {
-                $0.isReconnectingWithMode = (nextReconnectMode == .full) ? .full : .quick
+                $0.isReconnectingWithMode = (mergedMode == .full) ? .full : .quick
             }
-            $0.nextReconnectMode = nextReconnectMode
+            $0.nextReconnectMode = mergedMode
         }
 
         // quick connect sequence, does not update connection state
