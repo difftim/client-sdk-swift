@@ -80,6 +80,13 @@ public class LocalParticipant: Participant, @unchecked Sendable {
     /// unpublish an existing published track
     /// this will also stop the track
     public func unpublish(publication: LocalTrackPublication, notify _notify: Bool = true) async throws {
+        try await unpublish(publication: publication, notify: _notify, stopTrack: nil)
+    }
+
+    private func unpublish(publication: LocalTrackPublication,
+                           notify _notify: Bool = true,
+                           stopTrack: ((LocalTrackPublication, LocalTrack) -> Bool?)?) async throws
+    {
         let room = try requireRoom()
 
         func _notifyDidUnpublish() async {
@@ -113,7 +120,8 @@ public class LocalParticipant: Participant, @unchecked Sendable {
         }
 
         // Wait for track to stop (if required)
-        if room._state.roomOptions.stopLocalTrackOnUnpublish {
+        let shouldStopTrack = stopTrack?(publication, track) ?? room._state.roomOptions.stopLocalTrackOnUnpublish
+        if shouldStopTrack {
             try await track.stop()
         }
 
@@ -322,15 +330,43 @@ extension LocalParticipant {
     }
 
     func republishAllTracks() async throws {
-        let mediaTracks = _state.trackPublications.values.map { $0.track as? LocalTrack }.compactMap { $0 }
-
-        await unpublishAll()
-
-        for mediaTrack in mediaTracks {
-            // Don't re-publish muted tracks
-            if mediaTrack.isMuted, mediaTrack.source != .microphone { continue }
-            try await _publish(track: mediaTrack, options: mediaTrack.publishOptions, publishMuted: mediaTrack.isMuted)
+        let publications = _state.trackPublications.values.compactMap { $0 as? LocalTrackPublication }
+        let tracks = publications.compactMap { publication -> LocalTrack? in
+            publication.track as? LocalTrack
         }
+        let hasMicrophoneTrack = tracks.contains { $0 is LocalAudioTrack }
+        log("[republish] start publications=\(publications.count), tracks=\(tracks.map { "\($0.source)/\($0.sid?.stringValue ?? "nil")/muted=\($0.isMuted)" }.joined(separator: ",")), hasMicrophoneTrack=\(hasMicrophoneTrack)")
+
+        let operation = {
+            for publication in publications {
+                do {
+                    let stopTrackDescription: String = {
+                        guard let track = publication.track as? LocalTrack else { return "nil-track" }
+                        return "\(track is LocalAudioTrack ? "keep-audio-track" : "stop-non-audio-track") source=\(track.source), sid=\(track.sid?.stringValue ?? "nil"), muted=\(track.isMuted)"
+                    }()
+                    self.log("[republish] unpublish publication=\(publication.sid), \(stopTrackDescription)")
+                    try await self.unpublish(
+                        publication: publication,
+                        notify: true,
+                        stopTrack: { _, track in !(track is LocalAudioTrack) }
+                    )
+                } catch {
+                    self.log("Failed to unpublish track \(publication.sid) during re-publish, error: \(error)", .error)
+                }
+
+                publication.cleanUp()
+            }
+
+            for mediaTrack in tracks {
+                // Don't re-publish muted tracks
+                if mediaTrack.isMuted, mediaTrack.source != .microphone { continue }
+                self.log("[republish] publishing source=\(mediaTrack.source), previousSid=\(mediaTrack.sid?.stringValue ?? "nil"), muted=\(mediaTrack.isMuted)")
+                try await self._publish(track: mediaTrack, options: mediaTrack.publishOptions, publishMuted: mediaTrack.isMuted)
+            }
+        }
+
+        try await operation()
+        log("[republish] completed")
     }
 }
 

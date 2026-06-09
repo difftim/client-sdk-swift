@@ -320,6 +320,34 @@ public class AudioManager: Loggable {
         try checkAdmResult(code: result)
     }
 
+    var isTemporaryRecordingKeepAliveMode: Bool {
+        RTC.audioDeviceModule.isTemporaryRecordingKeepAliveMode
+    }
+
+    func setTemporaryRecordingKeepAliveMode(_ enabled: Bool) throws {
+        let result = RTC.audioDeviceModule.setTemporaryRecordingKeepAliveMode(enabled)
+        try checkAdmResult(code: result)
+    }
+
+    func withTemporaryRecordingKeepAlive<T>(_ operation: () async throws -> T) async throws -> T {
+        log("[republish] enabling temporary recording keepAlive")
+        try setTemporaryRecordingKeepAliveMode(true)
+        do {
+            let result = try await operation()
+            try setTemporaryRecordingKeepAliveMode(false)
+            log("[republish] disabled temporary recording keepAlive")
+            return result
+        } catch {
+            do {
+                try setTemporaryRecordingKeepAliveMode(false)
+                log("[republish] disabled temporary recording keepAlive after failure")
+            } catch {
+                log("Failed to disable temporary recording keepAlive: \(error)", .error)
+            }
+            throw error
+        }
+    }
+
     /// Starts mic input to the SDK even without any ``Room`` or a connection.
     /// Audio buffers will flow into ``LocalAudioTrack/add(audioRenderer:)`` and ``capturePostProcessingDelegate``.
     public func startLocalRecording() throws {
@@ -462,6 +490,9 @@ let kAudioEngineErrorAudioSessionCategoryRecordingRequired = -4102
 
 let kAudioEngineErrorInsufficientDevicePermission = -4101
 
+// WebRTC AVAudioEngine ADM error codes.
+private let kAudioEnginePlayoutStartError = -3001
+
 extension AudioManager {
     func checkAdmResult(code: Int) throws {
         if code == kAudioEngineErrorFailedToConfigureAudioSession {
@@ -471,7 +502,17 @@ extension AudioManager {
         } else if code == kAudioEngineErrorAudioSessionCategoryRecordingRequired {
             throw LiveKitError(.audioSession, message: "Recording category required for audio session")
         } else if code != 0 {
-            throw LiveKitError(.audioEngine, message: "Audio engine returned error code: \(code)")
+            let description = Self.description(forAudioEngineErrorCode: code)
+            throw LiveKitError(.audioEngine, message: "Audio engine returned error code: \(code) (\(description))")
+        }
+    }
+
+    private static func description(forAudioEngineErrorCode code: Int) -> String {
+        switch code {
+        case kAudioEnginePlayoutStartError:
+            "AVAudioEngine playout start failed"
+        default:
+            "unknown"
         }
     }
 }

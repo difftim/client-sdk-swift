@@ -345,6 +345,10 @@ extension Room {
             $0.nextReconnectMode = mergedMode
         }
 
+        // Protect the whole reconnect retry cycle. A failed quick reconnect can
+        // still perform full cleanup before the next full reconnect attempt.
+        enableTemporaryRecordingKeepAliveForReconnectIfNeeded()
+
         // quick connect sequence, does not update connection state
         @Sendable func quickReconnectSequence() async throws {
             log("[Connect] Starting .quick reconnect sequence...")
@@ -415,6 +419,7 @@ extension Room {
         // as a last resort, try to do a clean re-connection and re-publish existing tracks
         @Sendable func fullReconnectSequence() async throws {
             log("[Connect] starting .full reconnect sequence...")
+            enableTemporaryRecordingKeepAliveForReconnectIfNeeded()
 
             _state.mutate {
                 // Mark as Re-connecting
@@ -531,6 +536,8 @@ extension Room {
                 throw error
             }
 
+            let completedMode = _state.isReconnectingWithMode
+
             // Re-connect sequence successful
             log("[Connect] Sequence completed")
             _state.mutate {
@@ -544,6 +551,10 @@ extension Room {
                 // Clear failed region attempts after a successful reconnect.
                 await regionManager.resetAttempts()
             }
+
+            if completedMode != .full {
+                disableTemporaryRecordingKeepAliveForReconnectIfNeeded()
+            }
         } catch {
             log("[Connect] Sequence failed with error: \(error)")
 
@@ -552,6 +563,7 @@ extension Room {
             if !Task.isCancelled {
                 await cleanUp(withError: error)
             }
+            disableTemporaryRecordingKeepAliveForReconnectIfNeeded()
         }
     }
 }

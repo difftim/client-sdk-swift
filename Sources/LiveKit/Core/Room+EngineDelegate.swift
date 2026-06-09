@@ -75,6 +75,7 @@ extension Room {
             log("Re-publishing local tracks...")
             Task.detached { [weak self] in
                 guard let self else { return }
+                defer { disableTemporaryRecordingKeepAliveForReconnectIfNeeded() }
                 do {
                     try await localParticipant.republishAllTracks()
                 } catch {

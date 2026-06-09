@@ -112,6 +112,7 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
     // MARK: - Internal
 
     private let _e2eeManager = StateSync<E2EEManager?>(nil)
+    private var isTemporaryRecordingKeepAliveForReconnect = false
 
     public var e2eeManager: E2EEManager? {
         get { _e2eeManager.copy() }
@@ -128,6 +129,32 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
     let activeParticipantCompleters = CompleterMapActor<Void>(label: "Participant active", defaultTimeout: .defaultParticipantActiveTimeout)
 
     let signalClient = SignalClient()
+
+    func enableTemporaryRecordingKeepAliveForReconnectIfNeeded() {
+        guard localParticipant.localAudioTracks.contains(where: { $0.track is LocalAudioTrack }),
+              !isTemporaryRecordingKeepAliveForReconnect
+        else { return }
+
+        do {
+            try AudioManager.shared.setTemporaryRecordingKeepAliveMode(true)
+            isTemporaryRecordingKeepAliveForReconnect = true
+            log("[reconnect][audio] enabled temporary recording keepAlive")
+        } catch {
+            log("[reconnect][audio] failed to enable temporary recording keepAlive: \(error)", .error)
+        }
+    }
+
+    func disableTemporaryRecordingKeepAliveForReconnectIfNeeded() {
+        guard isTemporaryRecordingKeepAliveForReconnect else { return }
+
+        do {
+            try AudioManager.shared.setTemporaryRecordingKeepAliveMode(false)
+            log("[reconnect][audio] disabled temporary recording keepAlive")
+        } catch {
+            log("[reconnect][audio] failed to disable temporary recording keepAlive: \(error)", .error)
+        }
+        isTemporaryRecordingKeepAliveForReconnect = false
+    }
 
     // MARK: - DataChannels
 
