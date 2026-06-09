@@ -149,11 +149,11 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
 
         do {
             try AudioManager.shared.setTemporaryRecordingKeepAliveMode(false)
+            isTemporaryRecordingKeepAliveForReconnect = false
             log("[reconnect][audio] disabled temporary recording keepAlive")
         } catch {
             log("[reconnect][audio] failed to disable temporary recording keepAlive: \(error)", .error)
         }
-        isTemporaryRecordingKeepAliveForReconnect = false
     }
 
     // MARK: - DataChannels
