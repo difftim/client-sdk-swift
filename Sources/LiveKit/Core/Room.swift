@@ -131,7 +131,7 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
     let signalClient = SignalClient()
 
     func enableTemporaryRecordingKeepAliveForReconnectIfNeeded() {
-        guard localParticipant.localAudioTracks.contains(where: { $0.track is LocalAudioTrack }),
+        guard localParticipant.localAudioTracks.contains(where: { $0.source == .microphone && $0.track is LocalAudioTrack }),
               !isTemporaryRecordingKeepAliveForReconnect
         else { return }
 
