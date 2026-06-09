@@ -329,25 +329,6 @@ public class AudioManager: Loggable {
         try checkAdmResult(code: result)
     }
 
-    func withTemporaryRecordingKeepAlive<T>(_ operation: () async throws -> T) async throws -> T {
-        log("[republish] enabling temporary recording keepAlive")
-        try setTemporaryRecordingKeepAliveMode(true)
-        do {
-            let result = try await operation()
-            try setTemporaryRecordingKeepAliveMode(false)
-            log("[republish] disabled temporary recording keepAlive")
-            return result
-        } catch {
-            do {
-                try setTemporaryRecordingKeepAliveMode(false)
-                log("[republish] disabled temporary recording keepAlive after failure")
-            } catch {
-                log("Failed to disable temporary recording keepAlive: \(error)", .error)
-            }
-            throw error
-        }
-    }
-
     /// Starts mic input to the SDK even without any ``Room`` or a connection.
     /// Audio buffers will flow into ``LocalAudioTrack/add(audioRenderer:)`` and ``capturePostProcessingDelegate``.
     public func startLocalRecording() throws {
