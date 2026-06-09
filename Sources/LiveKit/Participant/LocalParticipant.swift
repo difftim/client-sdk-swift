@@ -342,13 +342,13 @@ extension LocalParticipant {
                 do {
                     let stopTrackDescription: String = {
                         guard let track = publication.track as? LocalTrack else { return "nil-track" }
-                        return "\(track is LocalAudioTrack ? "keep-audio-track" : "stop-non-audio-track") source=\(track.source), sid=\(track.sid?.stringValue ?? "nil"), muted=\(track.isMuted)"
+                        return "\(track is LocalAudioTrack ? "keep-audio-track" : "default-stop-policy") source=\(track.source), sid=\(track.sid?.stringValue ?? "nil"), muted=\(track.isMuted)"
                     }()
                     self.log("[republish] unpublish publication=\(publication.sid), \(stopTrackDescription)")
                     try await self.unpublish(
                         publication: publication,
                         notify: true,
-                        stopTrack: { _, track in !(track is LocalAudioTrack) }
+                        stopTrack: { _, track in track is LocalAudioTrack ? false : nil }
                     )
                 } catch {
                     self.log("Failed to unpublish track \(publication.sid) during re-publish, error: \(error)", .error)
