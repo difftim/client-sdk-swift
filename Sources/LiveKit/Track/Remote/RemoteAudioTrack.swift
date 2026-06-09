@@ -53,7 +53,10 @@ public class RemoteAudioTrack: Track, RemoteTrackProtocol, AudioTrackProtocol, @
 
     deinit {
         if let audioTrack = mediaTrack as? LKRTCAudioTrack {
-            audioTrack.remove(_adapter)
+            let adapter = _adapter
+            DispatchQueue.liveKitWebRTC.async {
+                audioTrack.remove(adapter)
+            }
         }
     }
 
