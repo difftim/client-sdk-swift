@@ -669,6 +669,7 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
     }
 
     private func cancelReconnect() {
+        disableTemporaryRecordingKeepAliveForReconnectIfNeeded()
         _state.mutate {
             $0.reconnectTask = nil
         }
@@ -716,6 +717,10 @@ extension Room {
                           stopTrackCaptureImmediately: Bool = false) async
     {
         log("withError: \(String(describing: disconnectError)), isFullReconnect: \(isFullReconnect), stopTrackCaptureImmediately: \(stopTrackCaptureImmediately)")
+
+        if !isFullReconnect {
+            disableTemporaryRecordingKeepAliveForReconnectIfNeeded()
+        }
 
         // Reset completers
         _sidCompleter.reset()
