@@ -361,7 +361,12 @@ extension LocalParticipant {
                 // Don't re-publish muted tracks
                 if mediaTrack.isMuted, mediaTrack.source != .microphone { continue }
                 self.log("[republish] publishing source=\(mediaTrack.source), previousSid=\(mediaTrack.sid?.stringValue ?? "nil"), muted=\(mediaTrack.isMuted)")
-                try await self._publish(track: mediaTrack, options: mediaTrack.publishOptions, publishMuted: mediaTrack.isMuted)
+                try await self._publish(
+                    track: mediaTrack,
+                    options: mediaTrack.publishOptions,
+                    publishMuted: mediaTrack.isMuted,
+                    stopTrackOnFailure: !(mediaTrack is LocalAudioTrack)
+                )
             }
         }
 
@@ -625,7 +630,11 @@ public extension LocalParticipant {
 extension LocalParticipant {
     @discardableResult
     // swiftlint:disable:next cyclomatic_complexity function_body_length
-    func _publish(track: LocalTrack, options: TrackPublishOptions? = nil, publishMuted: Bool = false) async throws -> LocalTrackPublication {
+    func _publish(track: LocalTrack,
+                  options: TrackPublishOptions? = nil,
+                  publishMuted: Bool = false,
+                  stopTrackOnFailure: Bool = true) async throws -> LocalTrackPublication
+    {
         log("[publish] \(track) options: \(String(describing: options ?? nil)), publishMuted: \(publishMuted)...", .info)
 
         try checkPermissions(toPublish: track)
@@ -853,8 +862,13 @@ extension LocalParticipant {
             return publication
         } catch {
             log("[publish] failed \(track), error: \(error)", .error)
-            // Stop track when publish fails
-            try await track.stop()
+            if stopTrackOnFailure {
+                // Stop newly-started tracks for normal publish failures. Re-publish
+                // keeps microphone capture alive so reconnect can recover audio.
+                try await track.stop()
+            } else {
+                log("[publish] keeping track alive after publish failure: \(track)")
+            }
             // Rethrow
             throw error
         }
