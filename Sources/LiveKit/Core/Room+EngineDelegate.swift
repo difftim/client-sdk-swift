@@ -74,7 +74,12 @@ extension Room {
             // Did complete a full reconnect
             log("Re-publishing local tracks...")
             Task.detached { [weak self] in
-                guard let self else { return }
+                guard let self else {
+                    Self.log("[reconnect][audio] room released before republish; disabling temporary recording keepAlive")
+                    try? AudioManager.shared.setTemporaryRecordingKeepAliveMode(false)
+                    return
+                }
+                log("[reconnect][audio] running full reconnect republish before disabling temporary recording keepAlive")
                 defer { disableTemporaryRecordingKeepAliveForReconnectIfNeeded() }
                 do {
                     try await localParticipant.republishAllTracks()
