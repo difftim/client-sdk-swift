@@ -44,6 +44,8 @@ public class LocalParticipant: Participant, @unchecked Sendable {
 
     private var trackPermissions: [ParticipantTrackPermission] = []
 
+    private let _prewarmedMicrophoneTrack = StateSync<LocalAudioTrack?>(nil)
+
     /// publish a new audio track to the Room
     @discardableResult
     public func publish(audioTrack: LocalAudioTrack, options: AudioPublishOptions? = nil) async throws -> LocalTrackPublication {
@@ -64,7 +66,59 @@ public class LocalParticipant: Participant, @unchecked Sendable {
         return result
     }
 
+    /// Creates and starts a local muted microphone track without publishing it.
+    ///
+    /// A later ``setMicrophone(enabled:)`` call will publish this prewarmed track
+    /// instead of creating a fresh one.
+    public func prewarmMicrophone(captureOptions: AudioCaptureOptions? = nil) async throws {
+        guard _prewarmedMicrophoneTrack.copy() == nil else {
+            log("[prewarm] microphone track already exists")
+            return
+        }
+
+        guard getTrackPublication(source: .microphone) == nil else {
+            log("[prewarm] microphone publication already exists")
+            return
+        }
+
+        let room = try requireRoom()
+        let track = LocalAudioTrack.createTrack(
+            options: captureOptions ?? room._state.roomOptions.defaultAudioCaptureOptions,
+            reportStatistics: room._state.roomOptions.reportRemoteTrackStatistics
+        )
+
+        do {
+            try await track.mute(shouldSendSignal: false)
+            try await track.start()
+            _prewarmedMicrophoneTrack.mutate { $0 = track }
+            log("[prewarm] microphone track started")
+        } catch {
+            try? await track.stop()
+            log("[prewarm] microphone track failed: \(error)", .error)
+            throw error
+        }
+    }
+
+    /// Stops and clears a local microphone track created by ``prewarmMicrophone(captureOptions:)``.
+    public func clearPrewarmedMicrophone() async {
+        guard let track = _prewarmedMicrophoneTrack.mutate({
+            let existing = $0
+            $0 = nil
+            return existing
+        }) else { return }
+
+        do {
+            try await track.stop()
+            try AudioManager.shared.stopLocalRecording()
+            log("[prewarm] microphone track stopped")
+        } catch {
+            log("[prewarm] microphone track stop failed: \(error)", .error)
+        }
+    }
+
     override public func unpublishAll(notify _notify: Bool = true) async {
+        await clearPrewarmedMicrophone()
+
         // Build a list of Publications
         let publications = _state.trackPublications.values.compactMap { $0 as? LocalTrackPublication }
         for publication in publications {
@@ -409,6 +463,9 @@ public extension LocalParticipant {
                     }
                     return publication
                 }
+            } else if source == .microphone, !enabled {
+                await self.clearPrewarmedMicrophone()
+                return nil
             } else if enabled {
                 // Try to create a new track
                 if source == .camera {
@@ -419,8 +476,19 @@ public extension LocalParticipant {
                     #endif
                     return try await self._publish(track: localTrack, options: publishOptions)
                 } else if source == .microphone {
-                    let localTrack = LocalAudioTrack.createTrack(options: (captureOptions as? AudioCaptureOptions) ?? room._state.roomOptions.defaultAudioCaptureOptions,
+                    let localTrack: LocalAudioTrack
+                    if !publishMuted, let prewarmedTrack = self._prewarmedMicrophoneTrack.mutate({
+                        let existing = $0
+                        $0 = nil
+                        return existing
+                    }) {
+                        try await prewarmedTrack.unmute()
+                        localTrack = prewarmedTrack
+                        self.log("[prewarm] publishing prewarmed microphone track")
+                    } else {
+                        localTrack = LocalAudioTrack.createTrack(options: (captureOptions as? AudioCaptureOptions) ?? room._state.roomOptions.defaultAudioCaptureOptions,
                                                                  reportStatistics: room._state.roomOptions.reportRemoteTrackStatistics)
+                    }
                     if publishMuted {
                         try await localTrack.mute(shouldSendSignal: false)
                     }
