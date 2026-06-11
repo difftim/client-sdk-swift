@@ -114,6 +114,19 @@ public final class ConnectOptions: NSObject, Sendable {
     /// QUIC-to-WebSocket fallback). For domain-based WebSocket URLs, this field is ignored.
     public let serverHost: String?
 
+    /// Custom verifier for the TURN-TLS (transport) certificate of an ICE relay server, enabling SPKI certificate
+    /// pinning of the outer `turns:` TLS layer (e.g. a self-hosted, self-signed coturn used as a media relay/proxy).
+    ///
+    /// When provided, the media `PeerConnection` is constructed so the native stack invokes
+    /// ``SSLCertificateVerifier/verify(certificate:)`` with the peer leaf certificate (X.509 DER) during the
+    /// TURN TLS handshake. When `nil`, the default behavior is used and no custom verification is performed.
+    ///
+    /// Pair with an ``IceServer`` whose `tlsCertPolicy` is `.secure` (the default) and ``iceTransportPolicy`` `.relay`
+    /// to force relay-only media through the operator's TURN server. Media itself stays DTLS-SRTP end-to-end; this only
+    /// hardens the TURN transport-camouflage TLS.
+    @nonobjc
+    public let sslCertificateVerifier: (any SSLCertificateVerifier)?
+
     override public init() {
         autoSubscribe = true
         reconnectAttempts = 10
@@ -134,6 +147,7 @@ public final class ConnectOptions: NSObject, Sendable {
         quicCidTag = ""
         caCertPem = nil
         serverHost = nil
+        sslCertificateVerifier = nil
     }
 
     public init(autoSubscribe: Bool = true,
@@ -154,7 +168,8 @@ public final class ConnectOptions: NSObject, Sendable {
                 quicDeviceType: Int = 0,
                 quicCidTag: String = "",
                 caCertPem: String? = nil,
-                serverHost: String? = nil)
+                serverHost: String? = nil,
+                sslCertificateVerifier: (any SSLCertificateVerifier)? = nil)
     {
         self.autoSubscribe = autoSubscribe
         self.reconnectAttempts = reconnectAttempts
@@ -175,9 +190,13 @@ public final class ConnectOptions: NSObject, Sendable {
         self.quicCidTag = quicCidTag
         self.caCertPem = caCertPem
         self.serverHost = serverHost
+        self.sslCertificateVerifier = sslCertificateVerifier
     }
 
     // MARK: - Equal
+    // Note: `sslCertificateVerifier` is intentionally excluded from `isEqual`/`hash`
+    // (it is a non-Hashable closure-like verifier; identity is not meaningful for
+    // option equality/caching).
 
     override public func isEqual(_ object: Any?) -> Bool {
         guard let other = object as? Self else { return false }

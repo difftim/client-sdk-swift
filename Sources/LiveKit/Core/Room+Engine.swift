@@ -170,15 +170,19 @@ extension Room {
             let isSubscriberPrimary = joinResponse.subscriberPrimary
             log("subscriberPrimary: \(isSubscriberPrimary), fastPublish: \(joinResponse.fastPublish)")
 
+            let certificateVerifier = _state.connectOptions.sslCertificateVerifier
+
             let subscriber = try Transport(config: rtcConfiguration,
                                            target: .subscriber,
                                            primary: isSubscriberPrimary,
-                                           delegate: self)
+                                           delegate: self,
+                                           certificateVerifier: certificateVerifier)
 
             let publisher = try Transport(config: rtcConfiguration,
                                           target: .publisher,
                                           primary: !isSubscriberPrimary,
-                                          delegate: self)
+                                          delegate: self,
+                                          certificateVerifier: certificateVerifier)
 
             await publisher.set { [weak self] offer, offerId in
                 guard let self else { return }

@@ -21,17 +21,30 @@ internal import LiveKitWebRTC
 /// Options used when establishing a connection.
 @objcMembers
 public final class IceServer: NSObject, Sendable {
+    /// TLS certificate policy for `turns:` (TURN-over-TLS) servers.
+    @objc
+    public enum TlsCertPolicy: Int, Sendable {
+        /// Verify the server certificate (default). Combine with
+        /// ``ConnectOptions/sslCertificateVerifier`` to pin a self-signed cert.
+        case secure
+        /// Skip certificate verification (insecure; not recommended).
+        case insecureNoCheck
+    }
+
     public let urls: [String]
     public let username: String?
     public let credential: String?
+    public let tlsCertPolicy: TlsCertPolicy
 
     public init(urls: [String],
                 username: String?,
-                credential: String?)
+                credential: String?,
+                tlsCertPolicy: TlsCertPolicy = .secure)
     {
         self.urls = urls
         self.username = username
         self.credential = credential
+        self.tlsCertPolicy = tlsCertPolicy
     }
 }
 
@@ -39,7 +52,17 @@ extension IceServer {
     func toRTCType() -> LKRTCIceServer {
         DispatchQueue.liveKitWebRTC.sync { LKRTCIceServer(urlStrings: urls,
                                                           username: username,
-                                                          credential: credential) }
+                                                          credential: credential,
+                                                          tlsCertPolicy: tlsCertPolicy.toRTCType()) }
+    }
+}
+
+extension IceServer.TlsCertPolicy {
+    func toRTCType() -> LKRTCTlsCertPolicy {
+        switch self {
+        case .secure: .secure
+        case .insecureNoCheck: .insecureNoCheck
+        }
     }
 }
 

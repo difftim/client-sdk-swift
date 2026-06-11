@@ -110,11 +110,22 @@ actor RTC {
     }
 
     static func createPeerConnection(_ configuration: LKRTCConfiguration,
-                                     constraints: LKRTCMediaConstraints) -> LKRTCPeerConnection?
+                                     constraints: LKRTCMediaConstraints,
+                                     certificateVerifier: (any SSLCertificateVerifier)? = nil) -> LKRTCPeerConnection?
     {
-        DispatchQueue.liveKitWebRTC.sync { peerConnectionFactory.peerConnection(with: configuration,
-                                                                                constraints: constraints,
-                                                                                delegate: nil) }
+        DispatchQueue.liveKitWebRTC.sync {
+            if let certificateVerifier {
+                // SPKI-pinned path: native receives the verifier and invokes it during
+                // the TURN-TLS handshake (used for self-hosted relay/proxy, see ConnectOptions).
+                return peerConnectionFactory.peerConnection(with: configuration,
+                                                            constraints: constraints,
+                                                            certificateVerifier: RTCSSLCertificateVerifierAdapter(certificateVerifier),
+                                                            delegate: nil)
+            }
+            return peerConnectionFactory.peerConnection(with: configuration,
+                                                        constraints: constraints,
+                                                        delegate: nil)
+        }
     }
 
     static func createVideoSource(forScreenShare: Bool) -> LKRTCVideoSource {

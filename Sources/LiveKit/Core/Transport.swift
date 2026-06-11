@@ -91,10 +91,11 @@ actor Transport: NSObject, Loggable {
     init(config: LKRTCConfiguration,
          target: Livekit_SignalTarget,
          primary: Bool,
-         delegate: TransportDelegate) throws
+         delegate: TransportDelegate,
+         certificateVerifier: (any SSLCertificateVerifier)? = nil) throws
     {
         // try create peerConnection
-        guard let pc = RTC.createPeerConnection(config, constraints: .defaultPCConstraints) else {
+        guard let pc = RTC.createPeerConnection(config, constraints: .defaultPCConstraints, certificateVerifier: certificateVerifier) else {
             // log("[WebRTC] Failed to create PeerConnection", .error)
             throw LiveKitError(.webRTC, message: "Failed to create PeerConnection")
         }
