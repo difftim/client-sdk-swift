@@ -114,6 +114,29 @@ public final class ConnectOptions: NSObject, Sendable {
     /// QUIC-to-WebSocket fallback). For domain-based WebSocket URLs, this field is ignored.
     public let serverHost: String?
 
+    // MARK: - QUIC-over-proxy (MASQUE CONNECT-UDP)
+
+    /// Per-connection outbound proxy for the QUIC signaling transport (RFC 9298 CONNECT-UDP / MASQUE).
+    /// When set, the QUIC connection is tunnelled through the proxy. Only used when ``transportKind`` is `.quic`.
+    /// A raw proxy URL or the split host/port fields may be supplied.
+    ///
+    /// - Note: Requires an iOS `ttsignal` build with CONNECT-UDP support; ignored otherwise.
+    public let quicProxyUrl: String?
+    public let quicProxyHost: String?
+    public let quicProxyPort: Int
+    public let quicProxySni: String?
+
+    /// Outer-hop (proxy) CA certificate in PEM format, separate from the inner SFU ``caCertPem``. When empty, the
+    /// proxy certificate is accepted unverified (acceptable for a self-signed Mode-B proxy on a trusted path);
+    /// supply this to enforce verification of the proxy's TLS certificate.
+    public let quicProxyCaCertPem: String?
+
+    /// Outer-hop (proxy) SPKI pin: base64 SHA-256 of the proxy leaf's SubjectPublicKeyInfo. When set, the
+    /// QUIC-over-proxy OUTER hop pins the proxy's TLS certificate to this value (the same pin used for the
+    /// TURN-TLS relay), instead of CA-chain verification. The inner connection (client↔SFU) is unaffected and
+    /// keeps verifying via ``caCertPem``.
+    public let quicProxySpkiPin: String?
+
     /// Custom verifier for the TURN-TLS (transport) certificate of an ICE relay server, enabling SPKI certificate
     /// pinning of the outer `turns:` TLS layer (e.g. a self-hosted, self-signed coturn used as a media relay/proxy).
     ///
@@ -147,6 +170,12 @@ public final class ConnectOptions: NSObject, Sendable {
         quicCidTag = ""
         caCertPem = nil
         serverHost = nil
+        quicProxyUrl = nil
+        quicProxyHost = nil
+        quicProxyPort = 0
+        quicProxySni = nil
+        quicProxyCaCertPem = nil
+        quicProxySpkiPin = nil
         sslCertificateVerifier = nil
     }
 
@@ -169,6 +198,12 @@ public final class ConnectOptions: NSObject, Sendable {
                 quicCidTag: String = "",
                 caCertPem: String? = nil,
                 serverHost: String? = nil,
+                quicProxyUrl: String? = nil,
+                quicProxyHost: String? = nil,
+                quicProxyPort: Int = 0,
+                quicProxySni: String? = nil,
+                quicProxyCaCertPem: String? = nil,
+                quicProxySpkiPin: String? = nil,
                 sslCertificateVerifier: (any SSLCertificateVerifier)? = nil)
     {
         self.autoSubscribe = autoSubscribe
@@ -190,6 +225,12 @@ public final class ConnectOptions: NSObject, Sendable {
         self.quicCidTag = quicCidTag
         self.caCertPem = caCertPem
         self.serverHost = serverHost
+        self.quicProxyUrl = quicProxyUrl
+        self.quicProxyHost = quicProxyHost
+        self.quicProxyPort = quicProxyPort
+        self.quicProxySni = quicProxySni
+        self.quicProxyCaCertPem = quicProxyCaCertPem
+        self.quicProxySpkiPin = quicProxySpkiPin
         self.sslCertificateVerifier = sslCertificateVerifier
     }
 
@@ -218,7 +259,13 @@ public final class ConnectOptions: NSObject, Sendable {
             quicDeviceType == other.quicDeviceType &&
             quicCidTag == other.quicCidTag &&
             caCertPem == other.caCertPem &&
-            serverHost == other.serverHost
+            serverHost == other.serverHost &&
+            quicProxyUrl == other.quicProxyUrl &&
+            quicProxyHost == other.quicProxyHost &&
+            quicProxyPort == other.quicProxyPort &&
+            quicProxySni == other.quicProxySni &&
+            quicProxyCaCertPem == other.quicProxyCaCertPem &&
+            quicProxySpkiPin == other.quicProxySpkiPin
     }
 
     override public var hash: Int {
@@ -242,6 +289,12 @@ public final class ConnectOptions: NSObject, Sendable {
         hasher.combine(quicCidTag)
         hasher.combine(caCertPem)
         hasher.combine(serverHost)
+        hasher.combine(quicProxyUrl)
+        hasher.combine(quicProxyHost)
+        hasher.combine(quicProxyPort)
+        hasher.combine(quicProxySni)
+        hasher.combine(quicProxyCaCertPem)
+        hasher.combine(quicProxySpkiPin)
         return hasher.finalize()
     }
 }

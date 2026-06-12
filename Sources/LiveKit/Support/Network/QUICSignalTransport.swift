@@ -163,6 +163,17 @@ actor QUICSignalTransport: SignalTransport {
         cfg.serverHost = Self.serverHost(url: url, connectOptions: connectOptions)
         cfg.caCertPem = connectOptions?.caCertPem ?? ""
         cfg.disableAutoRestart = true
+
+        // QUIC-over-proxy (MASQUE CONNECT-UDP): tunnel the QUIC signaling through a
+        // per-connection proxy. The outer hop is SPKI-pinned via quicProxySpkiPin
+        // (Mode-B self-signed proxy); the inner client↔SFU TLS still verifies via
+        // caCertPem. Empty values leave the proxy disabled (direct dial).
+        cfg.proxyUrl = connectOptions?.quicProxyUrl ?? ""
+        cfg.proxyHost = connectOptions?.quicProxyHost ?? ""
+        cfg.proxyPort = Int32(connectOptions?.quicProxyPort ?? 0)
+        cfg.proxySni = connectOptions?.quicProxySni ?? ""
+        cfg.proxyCaCertPem = connectOptions?.quicProxyCaCertPem ?? ""
+        cfg.spkiPin = connectOptions?.quicProxySpkiPin ?? ""
         return cfg
     }
 
