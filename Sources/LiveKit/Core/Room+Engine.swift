@@ -433,7 +433,9 @@ extension Room {
             }
 
             let finalUrl: URL
-            await cleanUp(isFullReconnect: true)
+            // Normal full reconnect: preserve the remote roster + cryptors so the UI can freeze the
+            // last frame and remote E2EE re-attaches on re-subscribe (weak-network optimization).
+            await cleanUp(isFullReconnect: true, preserveRemoteParticipants: true)
             if providedUrl.isCloud {
                 guard let regionManager = await regionManager(for: providedUrl) else {
                     throw LiveKitError(.onlyForCloud)

@@ -684,11 +684,19 @@ extension Room {
     // @nonobjc is required: Room is @objcMembers, which causes async method
     // calls to create a new task context — silently breaking Task.isCancelled
     // propagation. This method is internal and never called from ObjC.
+    /// - Parameters:
+    ///   - isFullReconnect: keep connection-related states and skip cleaning the local participant
+    ///     (it is re-published by the full reconnect sequence).
+    ///   - preserveRemoteParticipants: keep the remote roster + their frame cryptors across the
+    ///     cleanup (weak-network "freeze last frame" path; mirrors Android `onFullReconnecting`).
+    ///     Only the normal full reconnect sets this; failure/region-failover cleanups do NOT, so
+    ///     they still start from a clean slate.
     @nonobjc func cleanUp(withError disconnectError: Error? = nil,
                           isFullReconnect: Bool = false,
+                          preserveRemoteParticipants: Bool = false,
                           stopTrackCaptureImmediately: Bool = false) async
     {
-        log("withError: \(String(describing: disconnectError)), isFullReconnect: \(isFullReconnect), stopTrackCaptureImmediately: \(stopTrackCaptureImmediately)")
+        log("withError: \(String(describing: disconnectError)), isFullReconnect: \(isFullReconnect), preserveRemoteParticipants: \(preserveRemoteParticipants), stopTrackCaptureImmediately: \(stopTrackCaptureImmediately)")
 
         // Reset completers
         _sidCompleter.reset()
@@ -708,20 +716,20 @@ extension Room {
         // stats collection from accessing destroyed WebRTC channels.
         cancelTimers()
 
-        // Cleanup for E2EE
-        // On full reconnect, mirror Android: do NOT tear down frame cryptors. Remote tracks are
-        // re-subscribed on the new subscriber PC (didSubscribeTrack -> addRtpReceiver), which
-        // overwrites each cryptor (keyed by identity+sid) with one bound to the new receiver.
-        // Tearing them down here while keeping participants leaves remote decryptors detached
-        // (noise audio / undecryptable frozen video). On normal disconnect we still clean up.
-        if let e2eeManager, !isFullReconnect {
+        // Cleanup for E2EE.
+        // When preserving the remote roster (normal full reconnect), keep frame cryptors too:
+        // remote tracks re-subscribe on the new subscriber PC and re-attach decryptors bound to
+        // the new receivers (see E2EEManager.addRtpReceiver). Tearing them down here while keeping
+        // participants would leave remote decryptors detached → noise audio / frozen video.
+        // For normal disconnect and failure/region cleanups we still tear them down (clean slate).
+        if let e2eeManager, !preserveRemoteParticipants {
             log("[cleanup] e2eeManager.cleanUp begin")
             e2eeManager.cleanUp()
             log("[cleanup] e2eeManager.cleanUp end")
         }
 
         log("[cleanup] cleanUpParticipants begin")
-        await cleanUpParticipants(isFullReconnect: isFullReconnect)
+        await cleanUpParticipants(isFullReconnect: isFullReconnect, preserveRemoteParticipants: preserveRemoteParticipants)
         log("[cleanup] cleanUpParticipants end")
 
         log("[cleanup] cleanUpRTC begin")
@@ -734,9 +742,10 @@ extension Room {
             $0 = isFullReconnect ? State(
                 connectOptions: $0.connectOptions,
                 roomOptions: $0.roomOptions,
-                // Keep the remote roster across full reconnect (mirrors Android). Reused by
-                // identity on rejoin; left-during-outage participants removed via server updates.
-                remoteParticipants: $0.remoteParticipants,
+                // Keep the remote roster only when preserving across reconnect (reused by identity
+                // on rejoin; left-during-outage participants removed via server updates). Failure/
+                // region-failover full reconnects clear it for a clean slate.
+                remoteParticipants: preserveRemoteParticipants ? $0.remoteParticipants : [:],
                 providedUrl: $0.providedUrl,
                 connectedUrl: $0.connectedUrl,
                 token: $0.token,
@@ -768,22 +777,20 @@ extension Room {
 // MARK: - Internal
 
 extension Room {
-    func cleanUpParticipants(isFullReconnect: Bool = false, notify _notify: Bool = true) async {
-        log("notify: \(_notify), isFullReconnect: \(isFullReconnect)")
+    func cleanUpParticipants(isFullReconnect: Bool = false, preserveRemoteParticipants: Bool = false, notify _notify: Bool = true) async {
+        log("notify: \(_notify), isFullReconnect: \(isFullReconnect), preserveRemoteParticipants: \(preserveRemoteParticipants)")
 
-        // Full reconnect: keep remote participants (mirrors Android `onFullReconnecting`, whose
-        // disconnect loop is commented out). Their objects/publications are reused by identity on
-        // rejoin and tracks are swapped in when media re-arrives; participants that left during the
-        // outage are removed later via server `didUpdateParticipants(.disconnected)`.
-        // Local republish is handled by the full reconnect sequence, not here (local was already
-        // excluded from cleanup on full reconnect).
-        if isFullReconnect {
-            return
+        // Decide which participants to tear down:
+        // - preserveRemoteParticipants: keep the remote roster (mirrors Android `onFullReconnecting`,
+        //   whose disconnect loop is commented out). Remotes are reused by identity on rejoin and
+        //   tracks are swapped in when media re-arrives; participants that actually left are removed
+        //   later via server `didUpdateParticipants(.disconnected)`.
+        // - isFullReconnect: the local participant is re-published by the full reconnect sequence,
+        //   so it is excluded here.
+        var allParticipants: [Participant] = preserveRemoteParticipants ? [] : Array(_state.remoteParticipants.values)
+        if !isFullReconnect {
+            allParticipants.append(localParticipant)
         }
-
-        // Stop all local & remote tracks
-        var allParticipants: [Participant] = Array(_state.remoteParticipants.values)
-        allParticipants.append(localParticipant)
 
         // Clean up Participants concurrently
         await withTaskGroup(of: Void.self) { group in
@@ -796,8 +803,10 @@ extension Room {
             await group.waitForAll()
         }
 
-        _state.mutate {
-            $0.remoteParticipants = [:]
+        if !preserveRemoteParticipants {
+            _state.mutate {
+                $0.remoteParticipants = [:]
+            }
         }
     }
 
