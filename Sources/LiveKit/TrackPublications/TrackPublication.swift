@@ -161,8 +161,12 @@ public class TrackPublication: NSObject, @unchecked Sendable, ObservableObject, 
     func set(track newValue: Track?) async -> Track? {
         // keep ref to old value
         let oldValue = track
-        // continue only if updated
-        guard track != newValue else { return oldValue }
+        // Continue only if the *object* changed. Compare by identity (`!==`) rather than
+        // `Track.isEqual` (which compares `mediaTrack.trackId`): on a full reconnect the SFU
+        // reuses the same trackId, so a freshly-subscribed track is `isEqual` to the stale one.
+        // A trackId-based guard would short-circuit here and leave the publication (and any
+        // renderer bound through it) pointing at the dead track — garbled audio / frozen video.
+        guard oldValue !== newValue else { return oldValue }
         log("\(String(describing: oldValue)) -> \(String(describing: newValue))")
 
         // listen for visibility updates

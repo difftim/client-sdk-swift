@@ -117,8 +117,10 @@ public class VideoView: NativeView, Loggable {
         get { _state.track as? VideoTrack }
         set {
             _state.mutate {
-                // reset states if track updated
-                if !Self.track($0.track as? VideoTrack, isEqualWith: newValue) {
+                // Reset/rebind on *object identity* change, not `Track.isEqual` (trackId). A full
+                // reconnect re-subscribes a brand-new track object that keeps the same trackId, so
+                // a trackId-based check would never move the renderer onto the live track.
+                if ($0.track as Track?) !== (newValue as Track?) {
                     if $0.keepLastFrameOnTrackChange, $0.didRenderFirstFrame {
                         // Keep last frame: enter the waiting window and do NOT reset
                         // didRenderFirstFrame / isRendering, so consumers don't show a
@@ -323,7 +325,9 @@ public class VideoView: NativeView, Loggable {
 
             let shouldRenderDidUpdate = newState.shouldRender != oldState.shouldRender
             let renderModeDidUpdate = newState.renderMode != oldState.renderMode
-            let trackDidUpdate = !Self.track(oldState.track as? VideoTrack, isEqualWith: newState.track as? VideoTrack)
+            // Identity comparison (not `Track.isEqual`/trackId): a reconnect swaps in a new track
+            // object with the same trackId, and the renderer must follow the live object.
+            let trackDidUpdate = oldState.track !== newState.track
 
             // Always add/remove from the track asynchronously - even when called on @MainActor.
             //

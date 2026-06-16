@@ -141,7 +141,11 @@ public class RemoteTrackPublication: TrackPublication, @unchecked Sendable {
         log("RemoteTrackPublication set track(pubSid:\(sid)): \(String(describing: newValue))")
 
         let oldValue = await super.set(track: newValue)
-        if newValue != oldValue {
+        // Compare by object identity (`!==`), not `Track.isEqual` (trackId). On a full reconnect
+        // the re-subscribed track keeps the same trackId, so a trackId-based check would skip the
+        // adaptiveStream restart / trackSettings reset and the SFU would never be told to resume
+        // forwarding video (frozen remote video).
+        if newValue !== oldValue {
             // always suspend adaptiveStream timer first
             _asTimer.cancel()
 
