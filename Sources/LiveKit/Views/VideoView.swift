@@ -87,6 +87,16 @@ public class VideoView: NativeView, Loggable {
         set { _state.mutate { $0.renderMode = newValue } }
     }
 
+    /// When `true`, setting ``track`` to nil or replacing it with another track does **not**
+    /// immediately remove/clear the underlying renderer; the last rendered frame stays visible
+    /// until the new track renders its first frame. Useful to avoid black/placeholder flashes
+    /// during reconnect. Defaults to `false` (original behavior).
+    @objc
+    public nonisolated var keepLastFrameOnTrackChange: Bool {
+        get { _state.keepLastFrameOnTrackChange }
+        set { _state.mutate { $0.keepLastFrameOnTrackChange = newValue } }
+    }
+
     /// When `true` and ``renderMode`` is `.sampleBuffer`, the renderer automatically
     /// pauses frame enqueue on background and flushes + resumes on foreground.
     /// Prevents `AVSampleBufferDisplayLayer` from going black after extended backgrounding.
@@ -109,10 +119,19 @@ public class VideoView: NativeView, Loggable {
             _state.mutate {
                 // reset states if track updated
                 if !Self.track($0.track as? VideoTrack, isEqualWith: newValue) {
-                    $0.renderDate = nil
-                    $0.didRenderFirstFrame = false
-                    $0.isRendering = false
-                    $0.rendererSize = nil
+                    if $0.keepLastFrameOnTrackChange, $0.didRenderFirstFrame {
+                        // Keep last frame: enter the waiting window and do NOT reset
+                        // didRenderFirstFrame / isRendering, so consumers don't show a
+                        // spinner / placeholder during a brief track nil/replace (reconnect).
+                        $0.isWaitingForNewTrackFirstFrame = true
+                        $0.renderDate = nil
+                        $0.rendererSize = nil
+                    } else {
+                        $0.renderDate = nil
+                        $0.didRenderFirstFrame = false
+                        $0.isRendering = false
+                        $0.rendererSize = nil
+                    }
                 }
                 $0.track = newValue
             }
@@ -231,6 +250,12 @@ public class VideoView: NativeView, Loggable {
         var renderDate: Date?
         var didRenderFirstFrame: Bool = false
         var isRendering: Bool = false
+
+        // Weak-network: keep the last rendered frame when the track is set to nil or
+        // replaced (e.g. during reconnect), until the new track delivers its first frame.
+        var keepLastFrameOnTrackChange: Bool = false
+        // True while holding the old frame and waiting for the new track's first frame.
+        var isWaitingForNewTrackFirstFrame: Bool = false
 
         // Transition related
         var renderTarget: RenderTarget = .primary
@@ -351,26 +376,37 @@ public class VideoView: NativeView, Loggable {
                     var didReCreateNativeRenderer = false
 
                     if trackDidUpdate || shouldRenderDidUpdate {
-                        // Clean up old renderers
-                        if let r = self._primaryRenderer {
-                            r.removeFromSuperview()
-                            self._primaryRenderer = nil
-                        }
+                        let keepLast = newState.keepLastFrameOnTrackChange && newState.isWaitingForNewTrackFirstFrame
+                        let newTrackHasCachedFrame = (newState.track as? VideoTrack)?._state.videoFrame != nil
 
-                        if let r = self._secondaryRenderer {
-                            r.removeFromSuperview()
-                            self._secondaryRenderer = nil
-                        }
+                        // Only tear down the old renderer when we are NOT keeping the last frame,
+                        // or when the new track already has a cached frame to show immediately.
+                        // Otherwise leave the old `_primaryRenderer` in place showing the last frame;
+                        // it gets overwritten when the new track's first frame arrives in `render(_:)`.
+                        if !keepLast || newTrackHasCachedFrame {
+                            // Clean up old renderers
+                            if let r = self._primaryRenderer {
+                                r.removeFromSuperview()
+                                self._primaryRenderer = nil
+                            }
 
-                        // Set up new renderer if needed
-                        if let track = newState.track as? VideoTrack, newState.shouldRender {
-                            let nr = self.recreatePrimaryRenderer(for: newState.renderMode, isAutoPauseResumeSampleBuffer: newState.isAutoPauseResumeSampleBuffer)
-                            didReCreateNativeRenderer = true
+                            if let r = self._secondaryRenderer {
+                                r.removeFromSuperview()
+                                self._secondaryRenderer = nil
+                            }
 
-                            if let frame = track._state.videoFrame {
-                                self.log("rendering cached frame track: \(String(describing: track._state.sid))")
-                                nr.renderFrame(frame.toRTCType())
-                                self.setNeedsLayout()
+                            // Set up new renderer if needed
+                            if let track = newState.track as? VideoTrack, newState.shouldRender {
+                                let nr = self.recreatePrimaryRenderer(for: newState.renderMode, isAutoPauseResumeSampleBuffer: newState.isAutoPauseResumeSampleBuffer)
+                                didReCreateNativeRenderer = true
+
+                                if let frame = track._state.videoFrame {
+                                    self.log("rendering cached frame track: \(String(describing: track._state.sid))")
+                                    nr.renderFrame(frame.toRTCType())
+                                    self.setNeedsLayout()
+                                    // Replaced with the new track's cached frame; exit waiting window.
+                                    self._state.mutate { $0.isWaitingForNewTrackFirstFrame = false }
+                                }
                             }
                         }
                     }
@@ -699,6 +735,8 @@ extension VideoView: VideoRenderer {
             $0.didRenderFirstFrame = true
             $0.isRendering = true
             $0.renderDate = Date()
+            // New track delivered a frame; leave the keep-last-frame waiting window.
+            $0.isWaitingForNewTrackFirstFrame = false
 
             // Update renderTarget if capture position changes
             if let oldCaptureDevicePosition, oldCaptureDevicePosition != captureDevice?.position {
