@@ -716,13 +716,12 @@ extension Room {
         // stats collection from accessing destroyed WebRTC channels.
         cancelTimers()
 
-        // Cleanup for E2EE.
-        // When preserving the remote roster (normal full reconnect), keep frame cryptors too:
-        // remote tracks re-subscribe on the new subscriber PC and re-attach decryptors bound to
-        // the new receivers (see E2EEManager.addRtpReceiver). Tearing them down here while keeping
-        // participants would leave remote decryptors detached → noise audio / frozen video.
-        // For normal disconnect and failure/region cleanups we still tear them down (clean slate).
-        if let e2eeManager, !preserveRemoteParticipants {
+        // Cleanup for E2EE. Always tear down frame cryptors here, even on a roster-preserving full
+        // reconnect: remote tracks re-subscribe on the new subscriber PC and create fresh cryptors
+        // bound to the live receivers (see E2EEManager.addRtpReceiver; the publication now holds the
+        // new track via identity-based replacement). Disposing here avoids leaking stale cryptors
+        // (bound to torn-down receivers) across reconnects.
+        if let e2eeManager {
             log("[cleanup] e2eeManager.cleanUp begin")
             e2eeManager.cleanUp()
             log("[cleanup] e2eeManager.cleanUp end")
