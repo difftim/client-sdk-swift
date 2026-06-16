@@ -350,25 +350,6 @@ extension Room: SignalClientDelegate {
             guard let trackPublication = participant._state.trackPublications[trackSid] as? RemoteTrackPublication else { continue }
             // Update streamState (and notify)
             trackPublication._state.mutate { $0.streamState = update.state.toLKType() }
-
-            // Weak-network / Route B fix: on a full reconnect the remote roster + publications are
-            // preserved and the receiver frame cryptor is (re)attached on re-subscribe (didSubscribe).
-            // But at that moment the freshly negotiated receiver's media channel / ssrc may not be
-            // wired yet (observed: VideoRtpReceiver media_channel=nil, stale signaled_ssrc), so
-            // RTCFrameCryptor.SetFrameTransformer lands on a nil channel / wrong ssrc and is dropped
-            // by WebRtcVideoReceiveChannel::SetDepacketizerToDecoderFrameTransformer — remote media
-            // then reaches the decoder still encrypted (noise audio / undecryptable VP9 keyframes,
-            // remote frameCryptor never reaches OK). The `.active` stream state arrives once the
-            // receive stream is live (ssrc + media channel ready), so re-attach this participant's
-            // receiver cryptors here to bind the transformer to the correct receiver/ssrc. Audio
-            // tracks don't get their own stream-state update, so re-attach all of the participant's
-            // remote publications, not just the one that flipped active.
-            if update.state == .active, let e2eeManager, let participantIdentity = participant.identity {
-                let remotePublications = participant._state.trackPublications.values.compactMap { $0 as? RemoteTrackPublication }
-                for remotePublication in remotePublications where remotePublication.track != nil {
-                    e2eeManager.addRtpReceiver(publication: remotePublication, participantIdentity: participantIdentity)
-                }
-            }
         }
     }
 

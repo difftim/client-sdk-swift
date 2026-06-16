@@ -116,21 +116,8 @@ public class RemoteParticipant: Participant, @unchecked Sendable {
             throw error
         }
 
-        // Replace the publication's track. When the remote roster is preserved across a full
-        // reconnect, the previous (stale) track is kept here instead of being torn down by
-        // participant cleanup, so we must stop it explicitly — otherwise it keeps feeding
-        // audio/video from its now-dead receiver (noise audio / frozen video).
-        let previousTrack = await publication.set(track: track)
+        await publication.set(track: track)
         publication.set(subscriptionAllowed: true)
-
-        if let previousTrack, previousTrack !== track,
-           previousTrack.mediaTrack.trackId != track.mediaTrack.trackId
-        {
-            // Guard against WebRTC reusing the same underlying media track (same mid): only stop
-            // when it's truly a different RTC track, so we don't kill the new track's media.
-            log("stopping stale track replaced on re-subscribe: \(String(describing: previousTrack.sid))")
-            try? await previousTrack.stop()
-        }
 
         if let transport = room._state.subscriber {
             await track.set(transport: transport, rtpReceiver: rtpReceiver)
