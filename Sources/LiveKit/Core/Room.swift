@@ -729,7 +729,9 @@ extension Room {
             $0 = isFullReconnect ? State(
                 connectOptions: $0.connectOptions,
                 roomOptions: $0.roomOptions,
-                // remoteParticipants: removePar ? [:] : $0.remoteParticipants,
+                // Keep the remote roster across full reconnect (mirrors Android). Reused by
+                // identity on rejoin; left-during-outage participants removed via server updates.
+                remoteParticipants: $0.remoteParticipants,
                 providedUrl: $0.providedUrl,
                 connectedUrl: $0.connectedUrl,
                 token: $0.token,
@@ -764,11 +766,19 @@ extension Room {
     func cleanUpParticipants(isFullReconnect: Bool = false, notify _notify: Bool = true) async {
         log("notify: \(_notify), isFullReconnect: \(isFullReconnect)")
 
+        // Full reconnect: keep remote participants (mirrors Android `onFullReconnecting`, whose
+        // disconnect loop is commented out). Their objects/publications are reused by identity on
+        // rejoin and tracks are swapped in when media re-arrives; participants that left during the
+        // outage are removed later via server `didUpdateParticipants(.disconnected)`.
+        // Local republish is handled by the full reconnect sequence, not here (local was already
+        // excluded from cleanup on full reconnect).
+        if isFullReconnect {
+            return
+        }
+
         // Stop all local & remote tracks
         var allParticipants: [Participant] = Array(_state.remoteParticipants.values)
-        if !isFullReconnect {
-            allParticipants.append(localParticipant)
-        }
+        allParticipants.append(localParticipant)
 
         // Clean up Participants concurrently
         await withTaskGroup(of: Void.self) { group in
