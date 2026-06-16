@@ -357,7 +357,11 @@ private extension SignalClient {
             if joinResponse.hasTtCallResponse == true {
                 let tt = joinResponse.ttCallResponse
                 if tt.base.status != 0 {
-                    lastConnectionError = LiveKitError(.startCall, message: "[\(tt.base.status)]\(tt.base.reason)", response: tt)
+                    let error = LiveKitError(.startCall, message: "[\(tt.base.status)]\(tt.base.reason)", response: tt)
+                    lastConnectionError = error
+                    // Server already rejected the call: resume the join-response completer with the
+                    // error so connect() fails immediately instead of waiting out the join timeout.
+                    _connectResponseCompleter.resume(throwing: error)
                     return
                 }
             }
