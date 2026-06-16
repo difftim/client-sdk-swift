@@ -444,7 +444,8 @@ extension Room {
                 finalUrl = try await connectWithCloudRegionFailover(regionManager: regionManager,
                                                                     initialUrl: connectedUrl,
                                                                     initialRegion: nil,
-                                                                    token: token)
+                                                                    token: token,
+                                                                    preserveRemoteParticipants: true)
             } else {
                 try await fullConnectSequence(connectedUrl, token)
                 finalUrl = connectedUrl
@@ -512,9 +513,11 @@ extension Room {
                     self.log("[Connect] Reconnect mode: \(mode) failed with error: \(error)", .error)
 
                     // If the subscriber transport times out during reconnect and the old transport isn’t torn down immediately, the next attempt can overlap with that stale session,
-                    // leaving partially decrypted tracks that produce noise. Cleaning up right after a failed reconnect guarantees the next cycle starts from a clean slate.
+                    // leaving partially decrypted tracks that produce noise. Cleaning up right after a failed reconnect tears down the stale transports (cleanUpRTC runs regardless) so the
+                    // next cycle starts clean. We still PRESERVE the remote roster + cryptors here: we are about to retry the reconnect, so keeping them lets the UI hold the last frame across
+                    // attempts, and they are overwritten on re-subscribe by the next successful attempt.
                     self.log("immediately cleaning up after failed reconnect...")
-                    await cleanUp(isFullReconnect: true)
+                    await cleanUp(isFullReconnect: true, preserveRemoteParticipants: true)
                     // throw
                     if let err = error as? LiveKitError {
                         throw LiveKitError(.reconnectFailure, message: err.message, internalError: err.internalError)

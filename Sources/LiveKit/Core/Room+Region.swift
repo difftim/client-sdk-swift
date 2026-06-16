@@ -122,7 +122,10 @@ extension Room {
         regionManager: RegionManager,
         initialUrl: URL,
         initialRegion: RegionInfo?,
-        token: String
+        token: String,
+        // When this failover runs as part of a full reconnect, preserve the remote roster + cryptors
+        // between region attempts so the UI can hold the last frame. Initial connect passes false.
+        preserveRemoteParticipants: Bool = false
     ) async throws -> URL {
         var nextUrl = initialUrl
         var nextRegion = initialRegion
@@ -154,7 +157,7 @@ extension Room {
 
                 try Task.checkCancellation()
 
-                await cleanUp(isFullReconnect: true)
+                await cleanUp(isFullReconnect: true, preserveRemoteParticipants: preserveRemoteParticipants)
 
                 let region = try await regionManager.resolveBest(token: token)
                 nextUrl = region.url
