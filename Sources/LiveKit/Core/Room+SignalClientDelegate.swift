@@ -202,6 +202,7 @@ extension Room: SignalClientDelegate {
                 e2eeManager?.keyProvider.setSifTrailer(trailer: joinResponse.sifTrailer)
             }
 
+            var staleParticipantIdentities: [Participant.Identity] = []
             _state.mutate {
                 $0.apply(roomInfo: joinResponse.room)
                 $0.serverInfo = joinResponse.serverInfo
@@ -209,10 +210,26 @@ extension Room: SignalClientDelegate {
                 localParticipant.set(info: joinResponse.participant, connectionState: $0.connectionState)
                 localParticipant.set(enabledPublishCodecs: joinResponse.enabledPublishCodecs)
 
-                if !joinResponse.otherParticipants.isEmpty {
-                    for otherParticipant in joinResponse.otherParticipants {
-                        $0.updateRemoteParticipant(info: otherParticipant, room: self, ignoreUpdate: false)
-                    }
+                // Reconcile the remote roster against the (re)join response. On a roster-preserving
+                // full reconnect the previous remotes are kept across the reconnect, so anyone who
+                // left while we were disconnected is absent from `otherParticipants` and must be
+                // pruned here — otherwise the roster keeps showing a ghost participant. On a fresh
+                // connect the roster is empty, so this is a no-op.
+                let joinedIdentities = Set(joinResponse.otherParticipants.map { Participant.Identity(from: $0.identity) })
+                staleParticipantIdentities = $0.remoteParticipants.keys.filter { !joinedIdentities.contains($0) }
+
+                for otherParticipant in joinResponse.otherParticipants {
+                    $0.updateRemoteParticipant(info: otherParticipant, room: self, ignoreUpdate: false)
+                }
+            }
+
+            // Remove participants that left during the disconnect. Done outside the state mutation
+            // because participant cleanup is async and notifies delegates (so the UI roster updates).
+            for identity in staleParticipantIdentities {
+                do {
+                    try await _onParticipantDidDisconnect(identity: identity)
+                } catch {
+                    log("Failed to prune stale participant \(identity) on (re)connect, error: \(error)", .warning)
                 }
             }
 
