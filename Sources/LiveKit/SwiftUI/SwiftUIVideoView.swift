@@ -31,6 +31,7 @@ public struct SwiftUIVideoView: NativeViewRepresentable {
     let rotationOverride: VideoRotation?
     let pinchToZoomOptions: VideoView.PinchToZoomOptions
     let isDebugMode: Bool
+    let keepLastFrameOnTrackChange: Bool
 
     let videoViewDelegateReceiver: VideoViewDelegateReceiver
 
@@ -42,6 +43,7 @@ public struct SwiftUIVideoView: NativeViewRepresentable {
                 rotationOverride: VideoRotation? = nil,
                 pinchToZoomOptions: VideoView.PinchToZoomOptions = [],
                 isDebugMode: Bool = false,
+                keepLastFrameOnTrackChange: Bool = false,
                 isRendering: Binding<Bool>? = nil,
                 didRenderFirstFrame: Binding<Bool>? = nil)
     {
@@ -53,6 +55,7 @@ public struct SwiftUIVideoView: NativeViewRepresentable {
         self.rotationOverride = rotationOverride
         self.isDebugMode = isDebugMode
         self.pinchToZoomOptions = pinchToZoomOptions
+        self.keepLastFrameOnTrackChange = keepLastFrameOnTrackChange
 
         videoViewDelegateReceiver = VideoViewDelegateReceiver(isRendering: isRendering,
                                                               didRenderFirstFrame: didRenderFirstFrame)
@@ -65,6 +68,8 @@ public struct SwiftUIVideoView: NativeViewRepresentable {
     }
 
     public func updateView(_ videoView: VideoView, context _: Context) {
+        // Set before `track` so the track setter observes the flag when the track changes.
+        videoView.keepLastFrameOnTrackChange = keepLastFrameOnTrackChange
         videoView.track = track
         videoView.layoutMode = layoutMode
         videoView.mirrorMode = mirrorMode
