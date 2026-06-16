@@ -166,10 +166,18 @@ public class E2EEManager: NSObject, @unchecked Sendable, ObservableObject, Logga
             return
         }
 
-        guard let receiver = publication.track?._state.rtpReceiver else {
+        // Prefer the receiver held by the CURRENT subscriber peer connection's transceiver, keyed by
+        // the server track id. After a full reconnect the publication/track can still cache the
+        // previous connection's dead receiver (stale ssrc, media_channel=nil, never re-wired); the
+        // cryptor must attach to the live receiver actually feeding the decode pipeline, otherwise
+        // remote media reaches the decoder still encrypted (noise audio / undecryptable VP9). Fall
+        // back to the track's cached receiver if the lookup fails (e.g. before transceivers exist).
+        let liveReceiver = _room?._state.subscriber?.receiver(forTrackId: publication.sid.stringValue)
+        guard let receiver = liveReceiver ?? publication.track?._state.rtpReceiver else {
             log("receiver is nil, skipping creating frame cryptor...", .warning)
             return
         }
+        log("[e2ee] addRtpReceiver \(publication.sid): usingLiveReceiver=\(liveReceiver != nil)")
 
         guard let frameCryptor = LKRTCFrameCryptor(factory: RTC.peerConnectionFactory,
                                                    rtpReceiver: receiver,

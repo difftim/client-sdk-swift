@@ -386,6 +386,20 @@ extension Transport {
         releaseTransceiver(sender: sender)
     }
 
+    /// Returns the receiver of the current transceiver whose remote track id matches `trackId`.
+    ///
+    /// On a full reconnect the remote `RemoteTrackPublication`/`Track` may still cache the previous
+    /// connection's `rtpReceiver` (a dead `VideoRtpReceiver` with a stale ssrc and no media channel),
+    /// so E2EE attaches its frame transformer to that dead receiver and remote media is never
+    /// decrypted. The live receiver is the one held by THIS (current) peer connection's transceiver
+    /// list, keyed by the server-assigned track id. Used to (re)attach the E2EE cryptor to the
+    /// receiver that is actually feeding the decode pipeline.
+    nonisolated func receiver(forTrackId trackId: String) -> LKRTCRtpReceiver? {
+        DispatchQueue.liveKitWebRTC.sync {
+            _pc.transceivers.first(where: { $0.receiver.track?.trackId == trackId })?.receiver
+        }
+    }
+
     // Try to stop the transceiver and free the resources
     // Workaround: https://groups.google.com/g/discuss-webrtc/c/WDsGuVucBjQ?pli=1
     private func releaseTransceiver(sender: LKRTCRtpSender) {
