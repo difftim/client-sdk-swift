@@ -709,7 +709,12 @@ extension Room {
         cancelTimers()
 
         // Cleanup for E2EE
-        if let e2eeManager {
+        // On full reconnect, mirror Android: do NOT tear down frame cryptors. Remote tracks are
+        // re-subscribed on the new subscriber PC (didSubscribeTrack -> addRtpReceiver), which
+        // overwrites each cryptor (keyed by identity+sid) with one bound to the new receiver.
+        // Tearing them down here while keeping participants leaves remote decryptors detached
+        // (noise audio / undecryptable frozen video). On normal disconnect we still clean up.
+        if let e2eeManager, !isFullReconnect {
             log("[cleanup] e2eeManager.cleanUp begin")
             e2eeManager.cleanUp()
             log("[cleanup] e2eeManager.cleanUp end")

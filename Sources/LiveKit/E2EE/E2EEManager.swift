@@ -146,10 +146,18 @@ public class E2EEManager: NSObject, @unchecked Sendable, ObservableObject, Logga
         frameCryptor.delegate = delegateAdapter
 
         _state.mutate {
+            // Replace any previous cryptor for this key (e.g. re-publish after reconnect): detach
+            // its delegate and drop the (cryptor-keyed) trackPublications entry to avoid leaking it
+            // and to stop stale callbacks from a cryptor bound to a torn-down sender.
+            if let old = $0.frameCryptors[[participantIdentity: publication.sid]] {
+                old.delegate = nil
+                $0.trackPublications.removeValue(forKey: old)
+            }
             $0.frameCryptors[[participantIdentity: publication.sid]] = frameCryptor
             $0.trackPublications[frameCryptor] = publication
             frameCryptor.enabled = $0.enabled
         }
+        log("[e2ee] attached sender cryptor for \(participantIdentity)/\(publication.sid)")
     }
 
     func addRtpReceiver(publication: RemoteTrackPublication, participantIdentity: Participant.Identity) {
@@ -176,10 +184,18 @@ public class E2EEManager: NSObject, @unchecked Sendable, ObservableObject, Logga
         frameCryptor.delegate = delegateAdapter
 
         _state.mutate {
+            // Replace any previous cryptor for this key (e.g. re-subscribe after reconnect): detach
+            // its delegate and drop the (cryptor-keyed) trackPublications entry to avoid leaking it
+            // and to stop stale callbacks from a cryptor bound to a torn-down receiver.
+            if let old = $0.frameCryptors[[participantIdentity: publication.sid]] {
+                old.delegate = nil
+                $0.trackPublications.removeValue(forKey: old)
+            }
             $0.frameCryptors[[participantIdentity: publication.sid]] = frameCryptor
             $0.trackPublications[frameCryptor] = publication
             frameCryptor.enabled = $0.enabled
         }
+        log("[e2ee] attached receiver cryptor for \(participantIdentity)/\(publication.sid)")
     }
 
     func addDataChannelCryptor() {
