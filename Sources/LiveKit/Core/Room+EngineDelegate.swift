@@ -53,7 +53,10 @@ extension Room {
                     delegates.notify { $0.roomDidConnect?(self) }
                 }
             } else if case .reconnecting = state.connectionState {
-                // Re-connecting
+                // Re-connecting: while the local connection is unstable we won't
+                // receive remote reconnect updates, so suspend any pending delayed
+                // participant removals to avoid wrongly removing still-present peers.
+                cancelAllPendingParticipantRemovals()
                 delegates.notify { $0.roomIsReconnecting?(self) }
             } else if case .disconnected = state.connectionState {
                 // Clear out e2eeManager instance
