@@ -303,6 +303,16 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
     private let _sidCompleter = AsyncCompleter<Sid>(label: "sid", defaultTimeout: .resolveSid)
     private let _disconnectCompleter = AsyncCompleter<Void>(label: "disconnect", defaultTimeout: .defaultDisconnectCompletion)
 
+    /// How long to keep a remote participant locally after a non client-initiated
+    /// disconnect (e.g. a network drop), giving them a chance to reconnect before
+    /// we actually remove them and notify delegates.
+    static let participantRemovalGraceNanoseconds: UInt64 = 40_000_000_000 // 40s
+
+    /// Pending delayed removals for remote participants that disconnected for a
+    /// reason other than `clientInitiated`. Keyed by identity so the timer can be
+    /// cancelled if the participant reconnects within the grace period.
+    let _pendingParticipantRemovals = StateSync<[Participant.Identity: Task<Void, Never>]>([:])
+
     // MARK: - Region
 
     let _regionManager = StateSync<RegionManager?>(nil)
@@ -779,6 +789,10 @@ extension Room {
     func cleanUpParticipants(isFullReconnect: Bool = false, preserveRemoteParticipants: Bool = false, notify _notify: Bool = true) async {
         log("notify: \(_notify), isFullReconnect: \(isFullReconnect), preserveRemoteParticipants: \(preserveRemoteParticipants)")
 
+        // Any pending delayed participant removals are no longer meaningful here;
+        // the roster is either torn down or rebuilt from fresh participant updates.
+        cancelAllPendingParticipantRemovals()
+
         // Decide which participants to tear down:
         // - preserveRemoteParticipants: keep the remote roster (mirrors Android `onFullReconnecting`,
         //   whose disconnect loop is commented out). Remotes are reused by identity on rejoin and
@@ -810,11 +824,63 @@ extension Room {
     }
 
     func _onParticipantDidDisconnect(identity: Participant.Identity) async throws {
+        // Any pending delayed removal for this identity is now moot.
+        cancelPendingParticipantRemoval(identity: identity)
+
         guard let participant = _state.mutate({ $0.remoteParticipants.removeValue(forKey: identity) }) else {
             throw LiveKitError(.invalidState, message: "Participant not found for \(identity)")
         }
 
         await participant.cleanUp(notify: true)
+    }
+
+    /// Schedules a delayed removal of a remote participant that disconnected for a
+    /// non client-initiated reason. If a removal is already pending for this
+    /// identity, the existing timer is kept.
+    func scheduleParticipantRemoval(identity: Participant.Identity) {
+        _pendingParticipantRemovals.mutate { pending in
+            guard pending[identity] == nil else { return }
+            log("delaying removal of remote participant \(identity) by \(Room.participantRemovalGraceNanoseconds / 1_000_000_000)s (waiting for possible reconnect)")
+            let task = Task<Void, Never> { [weak self] in
+                do {
+                    try await Task.sleep(nanoseconds: Room.participantRemovalGraceNanoseconds)
+                } catch {
+                    // cancelled because the participant reconnected (or room cleaned up)
+                    return
+                }
+                guard let self, !Task.isCancelled else { return }
+                self._pendingParticipantRemovals.mutate { $0[identity] = nil }
+                self.log("remote participant \(identity) did not reconnect within grace period, removing")
+                do {
+                    try await self._onParticipantDidDisconnect(identity: identity)
+                } catch {
+                    self.log("Failed to remove participant \(identity) after grace period, error: \(error)", .error)
+                }
+            }
+            pending[identity] = task
+        }
+    }
+
+    /// Cancels a pending delayed removal for the given participant identity, if any.
+    func cancelPendingParticipantRemoval(identity: Participant.Identity) {
+        let task = _pendingParticipantRemovals.mutate { $0.removeValue(forKey: identity) }
+        if let task {
+            log("remote participant \(identity) reconnected within grace period, cancelling delayed removal")
+            task.cancel()
+        }
+    }
+
+    /// Cancels all pending delayed participant removals (e.g. on disconnect/reconnect).
+    func cancelAllPendingParticipantRemovals() {
+        let tasks = _pendingParticipantRemovals.mutate { pending -> [Task<Void, Never>] in
+            let values = Array(pending.values)
+            pending.removeAll()
+            return values
+        }
+        if !tasks.isEmpty {
+            log("cancelling \(tasks.count) pending participant removal(s)")
+            for task in tasks { task.cancel() }
+        }
     }
 }
 

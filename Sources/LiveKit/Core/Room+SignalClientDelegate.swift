@@ -371,7 +371,13 @@ extension Room: SignalClientDelegate {
     }
 
     func signalClient(_: SignalClient, didUpdateParticipants participants: [Livekit_ParticipantInfo]) async {
+        // Participants that left on purpose (client initiated) -> remove immediately.
         var disconnectedParticipantIdentities = [Participant.Identity]()
+        // Participants that dropped for another reason (e.g. network) -> delay removal
+        // so the local user doesn't see them leave while they may be reconnecting.
+        var delayedRemovalIdentities = [Participant.Identity]()
+        // Participants that are (still) present -> cancel any pending delayed removal.
+        var reconnectedIdentities = [Participant.Identity]()
         var newParticipants = [RemoteParticipant]()
 
         _state.mutate {
@@ -384,9 +390,16 @@ extension Room: SignalClientDelegate {
                 }
 
                 if info.state == .disconnected {
-                    // when it's disconnected, send updates
-                    disconnectedParticipantIdentities.append(infoIdentity)
+                    log("remote participant \(infoIdentity) disconnected, reason: \(info.disconnectReason)")
+                    if info.disconnectReason == .clientInitiated {
+                        // the participant left on purpose, remove it immediately
+                        disconnectedParticipantIdentities.append(infoIdentity)
+                    } else {
+                        // possibly reconnecting, keep it locally for a grace period
+                        delayedRemovalIdentities.append(infoIdentity)
+                    }
                 } else {
+                    reconnectedIdentities.append(infoIdentity)
                     let isNewParticipant = $0.remoteParticipants[infoIdentity] == nil
                     let participant = $0.updateRemoteParticipant(info: info, room: self, ignoreUpdate: true)
 
@@ -397,6 +410,12 @@ extension Room: SignalClientDelegate {
                     }
                 }
             }
+        }
+
+        // An active update means the participant is present (possibly reconnected),
+        // so cancel any pending delayed removal to avoid a spurious disconnect.
+        for identity in reconnectedIdentities {
+            cancelPendingParticipantRemoval(identity: identity)
         }
 
         await withTaskGroup(of: Void.self) { group in
@@ -411,6 +430,11 @@ extension Room: SignalClientDelegate {
             }
 
             await group.waitForAll()
+        }
+
+        // Schedule delayed removals for non client-initiated disconnects.
+        for identity in delayedRemovalIdentities {
+            scheduleParticipantRemoval(identity: identity)
         }
 
         if case .connected = _state.connectionState {
