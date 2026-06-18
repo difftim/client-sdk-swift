@@ -118,6 +118,16 @@ extension Room: SignalClientDelegate {
             if canReconnect {
                 // Force .full for next reconnect
                 _state.mutate { $0.nextReconnectMode = .full }
+            } else if reason == .stateMismatch {
+                // A DISCONNECT leave carrying STATE_MISMATCH means the resume session the
+                // server tracked is stale (common under weak networks where rapid reconnects
+                // supersede the old session). This is recoverable by rejoining, so force a
+                // full reconnect instead of tearing down the call. Aborting at the signal
+                // level (rather than a room-level cleanUp) lets a running reconnect cycle
+                // retry as .full, or triggers a fresh reconnect when otherwise connected.
+                log("recoverable disconnect reason: \(reason), forcing full reconnect instead of disconnect")
+                _state.mutate { $0.nextReconnectMode = .full }
+                await signalClient.cleanUp(withError: error)
             } else {
                 _state.mutate { $0.serverNotifyDisconnect = true }
                 await cleanUp(withError: error)
