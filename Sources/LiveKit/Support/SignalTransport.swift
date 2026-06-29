@@ -53,8 +53,21 @@ enum SignalTransportFactory: Loggable {
             log("fall back to WebSocket transport")
         }
 
-        log("use WebSocket transport")
         let webSocketURL = rewriteURLIfQuicFallbackNeeded(originalURL: url, options: options)
+
+        // WebSocket-over-proxy: when a signaling proxy is configured, tunnel the WebSocket
+        // through the self-hosted TLS-in-TLS relay (outer SPKI-pinned TLS to the proxy with
+        // a decoy SNI, inner TLS to the SFU). `URLSessionWebSocketTask` cannot dial through
+        // a custom socket, so this uses a dedicated NWConnection-based transport. This also
+        // covers the QUIC→WebSocket fallback path above.
+        if let proxy = options?.resolvedSignalingProxy {
+            log("use WebSocket transport through proxy \(proxy.host):\(proxy.port)")
+            return try await ProxiedWebSocketSignalTransport(
+                innerURL: webSocketURL, token: token, proxy: proxy, connectOptions: options, sendAfterOpen: sendAfterOpen
+            )
+        }
+
+        log("use WebSocket transport")
         return try await WebSocketSignalTransport(
             url: webSocketURL, token: token, connectOptions: options, sendAfterOpen: sendAfterOpen
         )

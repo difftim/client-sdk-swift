@@ -114,13 +114,19 @@ public final class ConnectOptions: NSObject, Sendable {
     /// QUIC-to-WebSocket fallback). For domain-based WebSocket URLs, this field is ignored.
     public let serverHost: String?
 
-    // MARK: - QUIC-over-proxy (MASQUE CONNECT-UDP)
+    // MARK: - Signaling proxy (QUIC MASQUE + WebSocket TLS-in-TLS)
 
-    /// Per-connection outbound proxy for the QUIC signaling transport (RFC 9298 CONNECT-UDP / MASQUE).
-    /// When set, the QUIC connection is tunnelled through the proxy. Only used when ``transportKind`` is `.quic`.
-    /// A raw proxy URL or the split host/port fields may be supplied.
+    /// Per-connection outbound proxy for the signaling transport. A single proxy config
+    /// covers both signaling transports:
+    /// - **QUIC** (``transportKind`` `.quic`): tunnelled via RFC 9298 CONNECT-UDP / MASQUE
+    ///   (requires an iOS `ttsignal` build with CONNECT-UDP support).
+    /// - **WebSocket** (default, and the QUIC→WebSocket fallback): tunnelled over a
+    ///   TLS-in-TLS connection to the proxy (outer SPKI-pinned TLS with the decoy
+    ///   ``quicProxySni``, inner TLS to the SFU verified via ``caCertPem``).
     ///
-    /// - Note: Requires an iOS `ttsignal` build with CONNECT-UDP support; ignored otherwise.
+    /// When any of these fields are set, signaling is routed through the proxy; the outer
+    /// hop is pinned via ``quicProxySpkiPin`` (or verified via ``quicProxyCaCertPem``).
+    /// A raw proxy URL or the split host/port fields may be supplied.
     public let quicProxyUrl: String?
     public let quicProxyHost: String?
     public let quicProxyPort: Int
