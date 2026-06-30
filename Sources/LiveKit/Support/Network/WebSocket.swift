@@ -24,12 +24,29 @@ actor WebSocket: Loggable, AsyncSequence {
     private let urlSession: URLSession
     private let task: URLSessionWebSocketTask
 
-    private static func makeSessionConfiguration() -> URLSessionConfiguration {
+    private static func makeSessionConfiguration(connectOptions: ConnectOptions?) -> URLSessionConfiguration {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 60
         config.timeoutIntervalForResource = 604_800
         config.shouldUseExtendedBackgroundIdleMode = true
         config.networkServiceType = .callSignaling
+
+        // WebSocket-over-proxy: route the signaling WebSocket through an HTTP CONNECT proxy
+        // (typically the app's loopback TLS-in-TLS tunnel, e.g. 127.0.0.1:<port>). URLSession
+        // performs the CONNECT to the proxy, then its own (caCertPem-pinned) TLS to the SFU over
+        // the tunnel — so the inner pinning is unchanged and the proxy stays transparent.
+        // Snapshotted here at socket construction; pass the current tunnel endpoint per connect.
+        if let proxyHost = connectOptions?.webSocketProxyHost?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !proxyHost.isEmpty,
+           let proxyPort = connectOptions?.webSocketProxyPort, proxyPort > 0
+        {
+            // kCFNetworkProxies* constants are macOS-only; these string keys work on iOS.
+            config.connectionProxyDictionary = [
+                "HTTPSEnable": 1,
+                "HTTPSProxy": proxyHost,
+                "HTTPSPort": proxyPort,
+            ]
+        }
         #if os(iOS) || os(visionOS)
         // MPTCP handover would help on Wi-Fi <-> cellular transitions, but the LiveKit
         // signaling server we deploy against does not currently support Multipath TCP,
@@ -60,7 +77,7 @@ actor WebSocket: Loggable, AsyncSequence {
 
         delegate = try Delegate(caCertPem: connectOptions?.caCertPem)
         delegate.setSendAfterOpen(sendAfterOpen)
-        urlSession = URLSession(configuration: Self.makeSessionConfiguration(),
+        urlSession = URLSession(configuration: Self.makeSessionConfiguration(connectOptions: connectOptions),
                                 delegate: delegate, delegateQueue: nil)
         task = urlSession.webSocketTask(with: request)
 

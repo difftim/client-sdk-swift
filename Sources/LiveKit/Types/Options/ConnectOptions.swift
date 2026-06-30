@@ -114,19 +114,14 @@ public final class ConnectOptions: NSObject, Sendable {
     /// QUIC-to-WebSocket fallback). For domain-based WebSocket URLs, this field is ignored.
     public let serverHost: String?
 
-    // MARK: - Signaling proxy (QUIC MASQUE + WebSocket TLS-in-TLS)
+    // MARK: - QUIC-over-proxy (MASQUE CONNECT-UDP)
 
-    /// Per-connection outbound proxy for the signaling transport. A single proxy config
-    /// covers both signaling transports:
-    /// - **QUIC** (``transportKind`` `.quic`): tunnelled via RFC 9298 CONNECT-UDP / MASQUE
-    ///   (requires an iOS `ttsignal` build with CONNECT-UDP support).
-    /// - **WebSocket** (default, and the QUIC→WebSocket fallback): tunnelled over a
-    ///   TLS-in-TLS connection to the proxy (outer SPKI-pinned TLS with the decoy
-    ///   ``quicProxySni``, inner TLS to the SFU verified via ``caCertPem``).
-    ///
-    /// When any of these fields are set, signaling is routed through the proxy; the outer
-    /// hop is pinned via ``quicProxySpkiPin`` (or verified via ``quicProxyCaCertPem``).
+    /// Per-connection outbound proxy for the QUIC signaling transport (RFC 9298 CONNECT-UDP / MASQUE).
+    /// When set, the QUIC connection is tunnelled through the proxy. Only used when ``transportKind`` is `.quic`.
     /// A raw proxy URL or the split host/port fields may be supplied.
+    ///
+    /// - Note: Requires an iOS `ttsignal` build with CONNECT-UDP support; ignored otherwise.
+    /// - Note: The WebSocket signaling path uses ``webSocketProxyHost`` / ``webSocketProxyPort`` instead.
     public let quicProxyUrl: String?
     public let quicProxyHost: String?
     public let quicProxyPort: Int
@@ -142,6 +137,28 @@ public final class ConnectOptions: NSObject, Sendable {
     /// TURN-TLS relay), instead of CA-chain verification. The inner connection (client↔SFU) is unaffected and
     /// keeps verifying via ``caCertPem``.
     public let quicProxySpkiPin: String?
+
+    // MARK: - WebSocket-over-proxy (HTTP CONNECT to a local tunnel)
+
+    /// HTTP CONNECT proxy host applied to the **WebSocket** signaling URLSession via
+    /// `URLSessionConfiguration.connectionProxyDictionary`. Typically the app's loopback
+    /// TLS-in-TLS tunnel (e.g. `127.0.0.1`); the tunnel performs the outer (camouflage/pinned)
+    /// TLS to the remote proxy, while URLSession performs the inner TLS to the SFU (still pinned
+    /// via ``caCertPem``) transparently — i.e. TLS-in-TLS without the SDK opening a custom socket.
+    ///
+    /// When set together with ``webSocketProxyPort`` (> 0), the WebSocket transport (direct and the
+    /// QUIC→WebSocket fallback) routes through this CONNECT proxy. The value is snapshotted when the
+    /// socket is built, so pass the current tunnel endpoint on each connect. Only affects WebSocket
+    /// signaling; QUIC uses the `quicProxy*` fields above.
+    ///
+    /// - Important: `URLSessionWebSocketTask` only honors `connectionProxyDictionary` on **iOS 17+**.
+    ///   On iOS 15/16 it is silently ignored and the WebSocket connects directly (verified empirically:
+    ///   iOS 26 tunnels, iOS 15.8 does not). To proxy signaling on older iOS, use QUIC (`quicProxy*`),
+    ///   which tunnels natively via ttsignal MASQUE and does not depend on URLSession.
+    public let webSocketProxyHost: String?
+
+    /// HTTP CONNECT proxy port for ``webSocketProxyHost``. `0` (default) disables WebSocket-over-proxy.
+    public let webSocketProxyPort: Int
 
     /// Custom verifier for the TURN-TLS (transport) certificate of an ICE relay server, enabling SPKI certificate
     /// pinning of the outer `turns:` TLS layer (e.g. a self-hosted, self-signed coturn used as a media relay/proxy).
@@ -182,6 +199,8 @@ public final class ConnectOptions: NSObject, Sendable {
         quicProxySni = nil
         quicProxyCaCertPem = nil
         quicProxySpkiPin = nil
+        webSocketProxyHost = nil
+        webSocketProxyPort = 0
         sslCertificateVerifier = nil
     }
 
@@ -210,6 +229,8 @@ public final class ConnectOptions: NSObject, Sendable {
                 quicProxySni: String? = nil,
                 quicProxyCaCertPem: String? = nil,
                 quicProxySpkiPin: String? = nil,
+                webSocketProxyHost: String? = nil,
+                webSocketProxyPort: Int = 0,
                 sslCertificateVerifier: (any SSLCertificateVerifier)? = nil)
     {
         self.autoSubscribe = autoSubscribe
@@ -237,6 +258,8 @@ public final class ConnectOptions: NSObject, Sendable {
         self.quicProxySni = quicProxySni
         self.quicProxyCaCertPem = quicProxyCaCertPem
         self.quicProxySpkiPin = quicProxySpkiPin
+        self.webSocketProxyHost = webSocketProxyHost
+        self.webSocketProxyPort = webSocketProxyPort
         self.sslCertificateVerifier = sslCertificateVerifier
     }
 
@@ -271,7 +294,9 @@ public final class ConnectOptions: NSObject, Sendable {
             quicProxyPort == other.quicProxyPort &&
             quicProxySni == other.quicProxySni &&
             quicProxyCaCertPem == other.quicProxyCaCertPem &&
-            quicProxySpkiPin == other.quicProxySpkiPin
+            quicProxySpkiPin == other.quicProxySpkiPin &&
+            webSocketProxyHost == other.webSocketProxyHost &&
+            webSocketProxyPort == other.webSocketProxyPort
     }
 
     override public var hash: Int {
@@ -301,6 +326,8 @@ public final class ConnectOptions: NSObject, Sendable {
         hasher.combine(quicProxySni)
         hasher.combine(quicProxyCaCertPem)
         hasher.combine(quicProxySpkiPin)
+        hasher.combine(webSocketProxyHost)
+        hasher.combine(webSocketProxyPort)
         return hasher.finalize()
     }
 }
