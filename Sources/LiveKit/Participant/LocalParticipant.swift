@@ -46,6 +46,14 @@ public class LocalParticipant: Participant, @unchecked Sendable {
 
     private let _prewarmedMicrophoneTrack = StateSync<LocalAudioTrack?>(nil)
 
+    private let _isRepublishingTracks = StateSync<Bool>(false)
+
+    /// `true` while ``republishAllTracks()`` is tearing down and re-publishing
+    /// local tracks after a full reconnect. Callers that also drive microphone
+    /// state (e.g. replaying a CallKit mute action) can consult this to avoid
+    /// racing the republish window and creating a duplicate publication.
+    public var isRepublishingTracks: Bool { _isRepublishingTracks.copy() }
+
     /// publish a new audio track to the Room
     @discardableResult
     public func publish(audioTrack: LocalAudioTrack, options: AudioPublishOptions? = nil) async throws -> LocalTrackPublication {
@@ -376,14 +384,27 @@ extension LocalParticipant {
     }
 
     func republishAllTracks() async throws {
-        let mediaTracks = _state.trackPublications.values.map { $0.track as? LocalTrack }.compactMap { $0 }
+        // Serialize with `set(source:)` / `publish(...)` via the shared publish
+        // runner. Otherwise a concurrent app-driven `set(source: .microphone,
+        // enabled: true)` (e.g. a CallKit mute replay during reconnect) can slip
+        // into the gap between `unpublishAll()` and re-`_publish(...)`, find no
+        // existing publication, and create a *second* microphone publication —
+        // leaking publications and firing a `didPublishTrack` per reconnect.
+        _ = try await _publishSerialRunner.run { () -> LocalTrackPublication? in
+            self._isRepublishingTracks.mutate { $0 = true }
+            defer { self._isRepublishingTracks.mutate { $0 = false } }
 
-        await unpublishAll()
+            let mediaTracks = self._state.trackPublications.values.map { $0.track as? LocalTrack }.compactMap { $0 }
 
-        for mediaTrack in mediaTracks {
-            // Don't re-publish muted tracks
-            if mediaTrack.isMuted, mediaTrack.source != .microphone { continue }
-            try await _publish(track: mediaTrack, options: mediaTrack.publishOptions, publishMuted: mediaTrack.isMuted)
+            await self.unpublishAll()
+
+            for mediaTrack in mediaTracks {
+                // Don't re-publish muted tracks (the microphone is always
+                // republished so its publication is restored even while muted).
+                if mediaTrack.isMuted, mediaTrack.source != .microphone { continue }
+                try await self._publish(track: mediaTrack, options: mediaTrack.publishOptions, publishMuted: mediaTrack.isMuted)
+            }
+            return nil
         }
     }
 }
