@@ -399,9 +399,8 @@ extension LocalParticipant {
             await self.unpublishAll()
 
             for mediaTrack in mediaTracks {
-                // Don't re-publish muted tracks (the microphone is always
-                // republished so its publication is restored even while muted).
-                if mediaTrack.isMuted, mediaTrack.source != .microphone { continue }
+                // Don't re-publish muted tracks
+                if mediaTrack.isMuted { continue }
                 try await self._publish(track: mediaTrack, options: mediaTrack.publishOptions, publishMuted: mediaTrack.isMuted)
             }
             return nil
