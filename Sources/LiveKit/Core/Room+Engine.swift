@@ -39,7 +39,7 @@ extension Room {
     }
 
     // Resets state of transports
-    func cleanUpRTC() async {
+    func cleanUpRTC(withError disconnectError: Error? = nil) async {
         // Release any in-flight waiters first so they don't race with the
         // teardown below (`Transport.close()` -> `removeTrack` -> webrtc
         // worker BlockingCall). Without this, callers blocked on the
@@ -48,34 +48,27 @@ extension Room {
         // which is the worker-thread `NULL+0x28` crash signature tracked in
         // Crashlytics issue `7d98c82c5fd6624ba2407487ca9dcf4e`.
         // See Docs/reconnect-metrics-storm-and-worker-crash-fix.md (Fix-9).
-        primaryTransportConnectedCompleter.reset()
-        publisherTransportConnectedCompleter.reset()
+        primaryTransportConnectedCompleter.reset(throwing: disconnectError)
+        publisherTransportConnectedCompleter.reset(throwing: disconnectError)
 
         // Close data channels (this also resets `openCompleter` internally).
-        publisherDataChannel.reset()
-        subscriberDataChannel.reset()
+        publisherDataChannel.reset(throwing: disconnectError)
+        subscriberDataChannel.reset(throwing: disconnectError)
 
-        let (subscriber, publisher) = _state.read { ($0.subscriber, $0.publisher) }
-
-        // Close transports. `Transport.close()` flips `_isClosing` first so
-        // any actor-isolated methods that were already suspended will bail
-        // out before issuing more BlockingCalls into webrtc.
-        await publisher?.close()
-        await subscriber?.close()
+        await _state.transport?.close()
 
         // Reset publish state
         _state.mutate {
-            $0.subscriber = nil
-            $0.publisher = nil
+            $0.transport = nil
             $0.hasPublished = false
         }
     }
 
-    func publisherShouldNegotiate() async throws {
+    func publisherShouldNegotiate(force: Bool = false) async throws {
         log()
 
         let publisher = try requirePublisher()
-        await publisher.negotiate()
+        try await publisher.negotiate(force: force)
         _state.mutate { $0.hasPublished = true }
     }
 
@@ -88,7 +81,10 @@ extension Room {
 
     func send(dataPacket packet: Livekit_DataPacket) async throws {
         func ensurePublisherConnected() async throws {
-            guard _state.isSubscriberPrimary else { return }
+            // Only needed when subscriber is primary in dual PC mode
+            guard case .subscriberPrimary = _state.transport else {
+                return
+            }
 
             let publisher = try requirePublisher()
 
@@ -97,14 +93,19 @@ extension Room {
                 try await publisherShouldNegotiate()
             }
 
-            try await publisherTransportConnectedCompleter.wait(timeout: _state.connectOptions.publisherTransportConnectTimeout)
-            try await publisherDataChannel.openCompleter.wait()
+            // Single combined gate: wait for both the publisher PC to be ICE-
+            // connected *and* the data channels to reach `.open` concurrently.
+            // Mirrors the prevailing pattern in client-sdk-js / -rust, where a
+            // single poll loop checks both conditions before any send proceeds.
+            async let transportReady: Void = publisherTransportConnectedCompleter.wait(timeout: _state.connectOptions.publisherTransportConnectTimeout)
+            async let dataChannelReady: Void = publisherDataChannel.openCompleter.wait()
+            _ = try await (transportReady, dataChannelReady)
         }
 
         try await ensurePublisherConnected()
 
         // At this point publisher should be .connected and dc should be .open
-        if await !(_state.publisher?.isConnected ?? false) {
+        if await !(_state.transport?.publisher.isConnected ?? false) {
             log("publisher is not .connected", .error)
         }
 
@@ -129,7 +130,7 @@ extension Room {
 
 extension Room {
     // swiftlint:disable:next function_body_length
-    func configureTransports(connectResponse: SignalClient.ConnectResponse) async throws {
+    func configureTransports(connectResponse: SignalClient.ConnectResponse, singlePeerConnection: Bool) async throws {
         func makeConfiguration() -> LKRTCConfiguration {
             let connectOptions = _state.connectOptions
 
@@ -161,26 +162,21 @@ extension Room {
         if case let .join(joinResponse) = connectResponse {
             log("Configuring transports with JOIN response...")
 
-            guard _state.subscriber == nil, _state.publisher == nil else {
+            guard _state.transport == nil else {
                 log("Transports are already configured")
                 return
             }
 
-            // protocol v3
-            let isSubscriberPrimary = joinResponse.subscriberPrimary
-            log("subscriberPrimary: \(isSubscriberPrimary), fastPublish: \(joinResponse.fastPublish)")
-
+            let isSinglePC = singlePeerConnection
+            let isSubscriberPrimary = isSinglePC ? false : joinResponse.subscriberPrimary
             let certificateVerifier = _state.connectOptions.sslCertificateVerifier
+            log("subscriberPrimary: \(isSubscriberPrimary), fastPublish: \(joinResponse.fastPublish), singlePeerConnection: \(isSinglePC)")
 
-            let subscriber = try Transport(config: rtcConfiguration,
-                                           target: .subscriber,
-                                           primary: isSubscriberPrimary,
-                                           delegate: self,
-                                           certificateVerifier: certificateVerifier)
-
+            // Publisher always created; is primary in single PC mode
             let publisher = try Transport(config: rtcConfiguration,
                                           target: .publisher,
-                                          primary: !isSubscriberPrimary,
+                                          primary: isSinglePC || !isSubscriberPrimary,
+                                          singlePCMode: isSinglePC,
                                           delegate: self,
                                           certificateVerifier: certificateVerifier)
 
@@ -188,6 +184,7 @@ extension Room {
                 guard let self else { return }
                 log("Publisher onOffer with offerId: \(offerId), sdp: \(offer.sdp)")
                 try await signalClient.send(offer: offer, offerId: offerId)
+                connectSpan?.record("offer_sent")
             }
 
             // data over pub channel for backwards compatibility
@@ -204,23 +201,27 @@ extension Room {
             log("dataChannel.\(String(describing: reliableDataChannel?.label)) : \(String(describing: reliableDataChannel?.channelId))")
             log("dataChannel.\(String(describing: lossyDataChannel?.label)) : \(String(describing: lossyDataChannel?.channelId))")
 
-            _state.mutate {
-                $0.subscriber = subscriber
-                $0.publisher = publisher
-                $0.isSubscriberPrimary = isSubscriberPrimary
+            let subscriber = isSinglePC ? nil : try Transport(config: rtcConfiguration,
+                                                              target: .subscriber,
+                                                              primary: isSubscriberPrimary,
+                                                              singlePCMode: false,
+                                                              delegate: self,
+                                                              certificateVerifier: certificateVerifier)
+
+            let transport: TransportMode = if let subscriber, isSubscriberPrimary {
+                .subscriberPrimary(publisher: publisher, subscriber: subscriber)
+            } else if let subscriber {
+                .publisherPrimary(publisher: publisher, subscriber: subscriber)
+            } else {
+                .publisherOnly(publisher: publisher)
             }
+            _state.mutate { $0.transport = transport }
 
             log("[Connect] Fast publish enabled: \(joinResponse.fastPublish ? "true" : "false")")
-            if !isSubscriberPrimary || joinResponse.fastPublish {
-                // lazy negotiation for protocol v3+
-                try await publisherShouldNegotiate()
-            }
 
         } else if case let .reconnect(reconnectResponse) = connectResponse {
             log("[Connect] Configuring transports with RECONNECT response...")
-            let (subscriber, publisher) = _state.read { ($0.subscriber, $0.publisher) }
-            try await subscriber?.set(configuration: rtcConfiguration)
-            try await publisher?.set(configuration: rtcConfiguration)
+            try await _state.transport?.set(configuration: rtcConfiguration)
             publisherDataChannel.retryReliable(lastSequence: reconnectResponse.lastMessageSeq)
         }
     }
@@ -267,29 +268,60 @@ public enum StartReconnectReason: Sendable {
 extension Room {
     // full connect sequence, doesn't update connection state
     func fullConnectSequence(_ url: URL, _ token: String) async throws {
-        let connectResponse = try await signalClient.connect(url,
+        var singlePC = _state.roomOptions.singlePeerConnection
+
+        let connectResponse: SignalClient.ConnectResponse
+        do {
+            connectResponse = try await signalClient.connect(url,
                                                              token,
                                                              connectOptions: _state.connectOptions,
                                                              reconnectMode: _state.isReconnectingWithMode,
-                                                             adaptiveStream: _state.roomOptions.adaptiveStream)
+                                                             adaptiveStream: _state.roomOptions.adaptiveStream,
+                                                             singlePeerConnection: singlePC,
+                                                             connectSpan: connectSpan)
+        } catch let error as LiveKitError where error.type == .serviceNotFound && singlePC {
+            log("v1 RTC path not supported, retrying with legacy path", .warning)
+            singlePC = false
+            connectResponse = try await signalClient.connect(url,
+                                                             token,
+                                                             connectOptions: _state.connectOptions,
+                                                             reconnectMode: _state.isReconnectingWithMode,
+                                                             adaptiveStream: _state.roomOptions.adaptiveStream,
+                                                             singlePeerConnection: false,
+                                                             connectSpan: connectSpan)
+        }
+
         // Check cancellation after WebSocket connected
         try Task.checkCancellation()
 
-        _state.mutate { $0.connectStopwatch.split(label: "signal") }
-        try await configureTransports(connectResponse: connectResponse)
+        connectSpan?.record("signal")
+        connectSpan?.record("join_recv")
+
+        try await configureTransports(connectResponse: connectResponse, singlePeerConnection: singlePC)
+        connectSpan?.record("pc_created")
         // Check cancellation after configuring transports
         try Task.checkCancellation()
 
         // Resume after configuring transports...
         await signalClient.resumeQueues()
+        try Task.checkCancellation()
+
+        // Eager publisher negotiation must run after `resumeQueues()` —
+        // offers are not queueable, so sending while suspended drops them.
+        if case let .join(joinResponse) = connectResponse {
+            let isSubscriberPrimary = singlePC ? false : joinResponse.subscriberPrimary
+            if singlePC || !isSubscriberPrimary || joinResponse.fastPublish {
+                try await publisherShouldNegotiate(force: true)
+            }
+        }
 
         log("[Connect] Waiting for subscriber to connect...")
         // Wait for transport...
         try await primaryTransportConnectedCompleter.wait(timeout: _state.connectOptions.primaryTransportConnectTimeout)
         try Task.checkCancellation()
 
-        _state.mutate { $0.connectStopwatch.split(label: "engine") }
-        log("\(_state.connectStopwatch)")
+        connectSpan?.record("engine")
+        connectSpan?.record("pc_connected")
     }
 
     // swiftlint:disable:next cyclomatic_complexity function_body_length
@@ -313,8 +345,8 @@ extension Room {
             throw LiveKitError(.invalidState)
         }
 
-        guard _state.subscriber != nil, _state.publisher != nil else {
-            log("[Connect] Publisher or subscriber is nil", .error)
+        guard _state.transport != nil else {
+            log("[Connect] Transport is nil", .error)
             throw LiveKitError(.invalidState)
         }
 
@@ -369,19 +401,22 @@ extension Room {
                 log("[reconnect][quic] transport restart failed, falling back to signal reconnect", .warning)
             }
 
+            let singlePC = await !signalClient.useV0SignalPath
             let connectResponse = try await signalClient.connect(url,
                                                                  token,
                                                                  connectOptions: _state.connectOptions,
                                                                  reconnectMode: _state.isReconnectingWithMode,
                                                                  participantSid: localParticipant.sid,
-                                                                 adaptiveStream: _state.roomOptions.adaptiveStream)
+                                                                 adaptiveStream: _state.roomOptions.adaptiveStream,
+                                                                 singlePeerConnection: singlePC)
             try Task.checkCancellation()
 
             // Update configuration
-            try await configureTransports(connectResponse: connectResponse)
+            try await configureTransports(connectResponse: connectResponse,
+                                          singlePeerConnection: singlePC)
             try Task.checkCancellation()
 
-            await _state.subscriber?.setIsRestartingIce()
+            await _state.transport?.setSubscriberRestartingIce()
             try Task.checkCancellation()
 
             // Resume after configuring transports...
@@ -401,7 +436,7 @@ extension Room {
             // send SyncState before offer
             try await sendSyncState()
 
-            if let publisher = _state.publisher, _state.hasPublished {
+            if let publisher = _state.transport?.publisher, _state.hasPublished {
                 // Only if published, wait for publisher to connect...
                 log("[Connect] Waiting for publisher to connect...")
                 try await publisher.createAndSendOffer(iceRestart: true)
@@ -569,13 +604,12 @@ extension Room {
 
 extension Room {
     func sendSyncState() async throws {
-        guard let subscriber = _state.subscriber else {
-            log("Subscriber is nil", .error)
+        guard let transport = _state.transport else {
+            log("Transport is nil", .error)
             return
         }
 
-        let previousAnswer = await subscriber.localDescription
-        let previousOffer = await subscriber.remoteDescription
+        let (previousAnswer, previousOffer) = await transport.syncStateDescriptions()
 
         // 1. autosubscribe on, so subscribed tracks = all tracks - unsub tracks,
         //    in this case, we send unsub tracks, so server add all tracks to this
@@ -613,7 +647,7 @@ extension Room {
 
 extension Room {
     func requirePublisher() throws -> Transport {
-        guard let publisher = _state.publisher else {
+        guard let publisher = _state.transport?.publisher else {
             log("Publisher is nil", .error)
             throw LiveKitError(.invalidState, message: "Publisher is nil")
         }

@@ -92,7 +92,8 @@ public struct PrintLogger: Logger {
         type: Any.Type,
         function: StaticString,
         line _: UInt,
-        metaData _: ScopedMetadataContainer
+        metaData _: ScopedMetadataContainer,
+        ptr _: String?,
     ) {
         guard level >= minLevel else { return }
         print("[\(colorCode(level))\(level)\(resetCode)] \(type).\(function) \(message())")
@@ -320,9 +321,7 @@ extension LogForwardLevel {
         case .warn: .default
         case .info: .info
         case .debug, .trace: .debug
-        #if swift(>=6.0)
         @unknown default: .debug
-        #endif
         }
     }
 }

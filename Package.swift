@@ -1,5 +1,5 @@
-// swift-tools-version:5.9
-// (Xcode15.0+)
+// swift-tools-version:6.1
+// (Xcode16.3+)
 
 import PackageDescription
 
@@ -14,15 +14,14 @@ let package = Package(
     products: [
         .library(
             name: "LiveKit",
-            targets: ["LiveKit"]
+            targets: ["LiveKit"],
         ),
     ],
     dependencies: [
         // LK-Prefixed Dynamic WebRTC XCFramework
-        .package(url: "https://github.com/chative/webrtc-xcframework.git", exact: "144.7559.08"),
-        .package(url: "https://github.com/livekit/livekit-uniffi-xcframework.git", exact: "0.0.5"),
+        .package(url: "https://github.com/3th1UOYgUtJkurSZ/webrtc-xcframework.git", exact: "144.7559.11"),
+        .package(url: "https://github.com/livekit/livekit-uniffi-xcframework.git", exact: "0.0.6"),
         .package(url: "https://github.com/apple/swift-protobuf.git", from: "1.31.0"),
-        .package(url: "https://github.com/apple/swift-collections.git", "1.1.0" ..< "1.3.0"),
         // 1.0.20260612-1 adds MASQUE CONNECT-UDP proxy support to TTSignalConfig.
         .package(url: "https://github.com/3th1UOYgUtJkurSZ/ttsignal-xcframework.git", exact: "1.0.20260612-1"),
         // Only used for DocC generation
@@ -31,7 +30,7 @@ let package = Package(
     targets: [
         .target(
             name: "LKObjCHelpers",
-            publicHeadersPath: "include"
+            publicHeadersPath: "include",
         ),
         .target(
             name: "LiveKit",
@@ -39,8 +38,6 @@ let package = Package(
                 .product(name: "LiveKitWebRTC", package: "webrtc-xcframework"),
                 .product(name: "LiveKitUniFFI", package: "livekit-uniffi-xcframework"),
                 .product(name: "SwiftProtobuf", package: "swift-protobuf"),
-                .product(name: "DequeModule", package: "swift-collections"),
-                .product(name: "OrderedCollections", package: "swift-collections"),
                 .product(name: "TTSignal", package: "ttsignal-xcframework", condition: .when(platforms: [.iOS])),
                 "LKObjCHelpers",
             ],
@@ -50,40 +47,35 @@ let package = Package(
             resources: [
                 .process("PrivacyInfo.xcprivacy"),
             ],
-            swiftSettings: [
-                .enableExperimentalFeature("AccessLevelOnImport"),
-            ]
         ),
         .target(
             name: "LiveKitTestSupport",
             dependencies: [
                 "LiveKit",
             ],
-            path: "Tests/LiveKitTestSupport"
+            path: "Tests/LiveKitTestSupport",
         ),
         .testTarget(
             name: "LiveKitCoreTests",
             dependencies: [
                 "LiveKit",
                 "LiveKitTestSupport",
-            ]
+            ],
         ),
         .testTarget(
             name: "LiveKitAudioTests",
             dependencies: [
                 "LiveKit",
                 "LiveKitTestSupport",
-            ]
+            ],
         ),
         .testTarget(
             name: "LiveKitObjCTests",
             dependencies: [
                 "LiveKit",
                 "LiveKitTestSupport",
-            ]
+            ],
         ),
     ],
-    swiftLanguageVersions: [
-        .v5,
-    ]
+    swiftLanguageModes: [.v5, .v6],
 )

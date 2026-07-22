@@ -19,37 +19,34 @@
 import AVFAudio
 import CoreMedia
 @testable import LiveKit
+import Testing
 #if canImport(LiveKitTestSupport)
 import LiveKitTestSupport
 #endif
 
-final class BroadcastAudioCodecTests: XCTestCase {
-    private var codec: BroadcastAudioCodec!
+@Suite(.tags(.broadcast))
+struct BroadcastAudioCodecTests {
+    private let codec = BroadcastAudioCodec()
 
-    override func setUpWithError() throws {
-        try super.setUpWithError()
-        codec = BroadcastAudioCodec()
+    @Test func encodeDecode() throws {
+        let testBuffer = try #require(createTestAudioBuffer())
+
+        let (metadata, audioData) = try codec.encode(testBuffer)
+        let decodedBuffer = try codec.decode(audioData, with: metadata)
+
+        #expect(decodedBuffer.frameLength == AVAudioFrameCount(testBuffer.numSamples))
+
+        let asbd = try #require(testBuffer.formatDescription?.audioStreamBasicDescription)
+        #expect(decodedBuffer.format.streamDescription.pointee == asbd)
     }
 
-    func testEncodeDecode() throws {
-        let testBuffer = try XCTUnwrap(createTestAudioBuffer())
-
-        let (metadata, audioData) = try XCTUnwrap(codec.encode(testBuffer))
-        let decodedBuffer = try XCTUnwrap(codec.decode(audioData, with: metadata))
-
-        XCTAssertEqual(decodedBuffer.frameLength, AVAudioFrameCount(testBuffer.numSamples))
-
-        let asbd = try XCTUnwrap(testBuffer.formatDescription?.audioStreamBasicDescription)
-        XCTAssertEqual(decodedBuffer.format.streamDescription.pointee, asbd)
-    }
-
-    func testDecodeEmpty() throws {
+    @Test func decodeEmpty() throws {
         let metadata = BroadcastAudioCodec.Metadata(
             sampleCount: 1,
-            description: AudioStreamBasicDescription()
+            description: AudioStreamBasicDescription(),
         )
-        XCTAssertThrowsError(try codec.decode(Data(), with: metadata)) { error in
-            XCTAssertEqual(error as? BroadcastAudioCodec.Error, .decodingFailed)
+        #expect(throws: BroadcastAudioCodec.Error.decodingFailed) {
+            try codec.decode(Data(), with: metadata)
         }
     }
 
@@ -71,7 +68,7 @@ final class BroadcastAudioCodecTests: XCTestCase {
             mBytesPerFrame: bytesPerFrame,
             mChannelsPerFrame: channels,
             mBitsPerChannel: bitsPerChannel,
-            mReserved: 0
+            mReserved: 0,
         )
 
         var formatDescription: CMAudioFormatDescription?
@@ -83,7 +80,7 @@ final class BroadcastAudioCodecTests: XCTestCase {
             magicCookieSize: 0,
             magicCookie: nil,
             extensions: nil,
-            formatDescriptionOut: &formatDescription
+            formatDescriptionOut: &formatDescription,
         ) == noErr,
             let audioFormatDesc = formatDescription else { return nil }
 
@@ -100,7 +97,7 @@ final class BroadcastAudioCodecTests: XCTestCase {
             offsetToData: 0,
             dataLength: totalDataSize,
             flags: 0,
-            blockBufferOut: &blockBuffer
+            blockBufferOut: &blockBuffer,
         ) == kCMBlockBufferNoErr,
             let cmBlockBuffer = blockBuffer
         else {
@@ -111,7 +108,7 @@ final class BroadcastAudioCodecTests: XCTestCase {
         var timingInfo = CMSampleTimingInfo(
             duration: CMTimeMake(value: 1, timescale: Int32(sampleRate)),
             presentationTimeStamp: .zero,
-            decodeTimeStamp: CMTime.invalid
+            decodeTimeStamp: CMTime.invalid,
         )
 
         var sampleBuffer: CMSampleBuffer?
@@ -127,7 +124,7 @@ final class BroadcastAudioCodecTests: XCTestCase {
             sampleTimingArray: &timingInfo,
             sampleSizeEntryCount: 0,
             sampleSizeArray: nil,
-            sampleBufferOut: &sampleBuffer
+            sampleBufferOut: &sampleBuffer,
         ) == noErr else { return nil }
 
         return sampleBuffer

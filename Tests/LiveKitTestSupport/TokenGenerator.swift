@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import Foundation
 @testable import LiveKit
 import LiveKitUniFFI
 
@@ -55,7 +56,7 @@ public class TokenGenerator {
             metadata: metadata,
             attributes: nil,
             sha256: nil,
-            roomConfiguration: roomConfiguration
+            roomConfiguration: roomConfiguration,
         )
 
         return try tokenGenerate(options: options, credentials: credentials)

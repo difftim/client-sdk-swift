@@ -45,12 +45,7 @@ extension ConnectionState: Identifiable {
 }
 
 extension ConnectionState {
-    var isDisconnectingOrDisconnected: Bool {
-        switch self {
-        case .disconnecting, .disconnected:
-            true
-        default:
-            false
-        }
+    var isTearingDown: Bool {
+        self == .disconnecting || self == .disconnected
     }
 }

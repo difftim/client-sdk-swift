@@ -14,19 +14,22 @@
  * limitations under the License.
  */
 
+import Foundation
 @testable import LiveKit
+import Testing
 #if canImport(LiveKitTestSupport)
 import LiveKitTestSupport
 #endif
 
-class PublishDataTests: LKTestCase {
+@Suite(.serialized, .tags(.e2e))
+struct PublishDataTests {
     // Test with canSubscribe: true
-    func testPublishDataReceiverCanSubscribe() async throws {
+    @Test func publishDataReceiverCanSubscribe() async throws {
         try await _publishDataTest(receiverRoomOptions: RoomTestingOptions(canSubscribe: true))
     }
 
     // Test with canSubscribe: false
-    func testPublishDataReceiverCanNotSubscribe() async throws {
+    @Test func publishDataReceiverCanNotSubscribe() async throws {
         try await _publishDataTest(receiverRoomOptions: RoomTestingOptions(canSubscribe: false))
     }
 
@@ -35,7 +38,7 @@ class PublishDataTests: LKTestCase {
             let content: String
         }
 
-        try await withRooms([RoomTestingOptions(canPublishData: true), receiverRoomOptions]) { rooms in
+        try await TestEnvironment.withRooms([RoomTestingOptions(canPublishData: true), receiverRoomOptions]) { rooms in
             // Alias to Rooms
             let room1 = rooms[0]
             let room2 = rooms[1]
@@ -52,7 +55,7 @@ class PublishDataTests: LKTestCase {
             let room2Watcher: RoomWatcher<TestDataPayload> = room2.createWatcher()
 
             // Publish concurrently
-            try await withThrowingTaskGroup(of: Void.self) { group in
+            try await withThrowingTaskGroup { group in
                 for topic in topics {
                     group.addTask {
                         try await room1.localParticipant.publish(data: jsonData, options: DataPublishOptions(topic: topic))
@@ -63,7 +66,7 @@ class PublishDataTests: LKTestCase {
             }
 
             // Wait concurrently
-            let result = try await withThrowingTaskGroup(of: TestDataPayload.self, returning: [TestDataPayload].self) { group in
+            let result = try await withThrowingTaskGroup(returning: [TestDataPayload].self) { group in
                 for topic in topics {
                     group.addTask {
                         try await room2Watcher.didReceiveDataCompleters.completer(for: topic).wait()

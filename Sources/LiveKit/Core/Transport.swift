@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+// swiftlint:disable file_length
+
 import Foundation
 
 internal import LiveKitWebRTC
@@ -27,6 +29,7 @@ actor Transport: NSObject, Loggable {
 
     nonisolated let target: Livekit_SignalTarget
     nonisolated let isPrimary: Bool
+    nonisolated let singlePCMode: Bool
 
     var connectionState: LKRTCPeerConnectionState {
         _pc.connectionState
@@ -82,7 +85,12 @@ actor Transport: NSObject, Loggable {
         guard let self else { return }
 
         do {
-            try await _pc.add(iceCandidate.toRTCType())
+            let rtcCandidate = iceCandidate.toRTCType()
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                self._pc.add(rtcCandidate) { error in
+                    if let error { continuation.resume(throwing: error) } else { continuation.resume() }
+                }
+            }
         } catch {
             log("Failed to add(iceCandidate:) with error: \(error)", .error)
         }
@@ -91,6 +99,7 @@ actor Transport: NSObject, Loggable {
     init(config: LKRTCConfiguration,
          target: Livekit_SignalTarget,
          primary: Bool,
+         singlePCMode: Bool = false,
          delegate: TransportDelegate,
          certificateVerifier: (any SSLCertificateVerifier)? = nil) throws
     {
@@ -102,6 +111,7 @@ actor Transport: NSObject, Loggable {
 
         self.target = target
         isPrimary = primary
+        self.singlePCMode = singlePCMode
         _pc = pc
 
         super.init()
@@ -111,12 +121,19 @@ actor Transport: NSObject, Loggable {
         _delegate.add(delegate: delegate)
     }
 
-    func negotiate() async {
+    func negotiate(force: Bool = false) async throws {
         // close()-in-flight check: avoid scheduling a debounced offer that
         // would call _pc.* after teardown started.
         if _isClosing { return }
-        await _debounce.schedule {
-            try await self.createAndSendOffer()
+
+        if force {
+            // Cancel any pending debounced negotiation; this call supersedes it.
+            await _debounce.cancel()
+            try await createAndSendOffer()
+        } else {
+            await _debounce.schedule {
+                try await self.createAndSendOffer()
+            }
         }
     }
 
@@ -199,7 +216,13 @@ actor Transport: NSObject, Loggable {
         // Actually negotiate
         func _negotiateSequence() async throws {
             _latestOfferId += 1
-            let offer = try await createOffer(for: constraints)
+            var offer = try await createOffer(for: constraints)
+            if singlePCMode {
+                let mungedSDP = Self.mungeInactiveToRecvOnlyForMedia(offer.sdp)
+                if mungedSDP != offer.sdp {
+                    offer = RTC.createSessionDescription(type: offer.type, sdp: mungedSDP)
+                }
+            }
             try await set(localDescription: offer)
             try await _onOffer(offer, _latestOfferId)
         }
@@ -232,6 +255,41 @@ actor Transport: NSObject, Loggable {
         // the worker-thread teardown (ICE use-after-free, AVAudioEngine
         // deallocation assertion). Close() handles full cleanup on its own.
         _pc.close()
+    }
+}
+
+// MARK: - SDP Munging
+
+extension Transport {
+    /// Munge SDP to change `a=inactive` to `a=recvonly` for RTP media m-lines in single PC mode.
+    /// WebRTC can generate inactive direction even when transceivers were configured as recvonly.
+    /// Only rewrites RTP m-sections — non-RTP sections (e.g. data channel `m=application`) are preserved.
+    static func mungeInactiveToRecvOnlyForMedia(_ sdp: String) -> String {
+        let usesCRLF = sdp.contains("\r\n")
+        let eol = usesCRLF ? "\r\n" : "\n"
+        let lines = sdp.components(separatedBy: usesCRLF ? "\r\n" : "\n")
+
+        var out: [String] = []
+        out.reserveCapacity(lines.count)
+        var inRTPMediaSection = false
+
+        for line in lines {
+            let l = line.trimmingCharacters(in: .whitespaces)
+            if l.hasPrefix("m=") {
+                inRTPMediaSection = l.contains("RTP/")
+            }
+            if inRTPMediaSection, l == "a=inactive" {
+                out.append("a=recvonly")
+            } else {
+                out.append(line)
+            }
+        }
+
+        var result = out.joined(separator: eol)
+        if sdp.hasSuffix(eol), !result.hasSuffix(eol) {
+            result.append(eol)
+        }
+        return result
     }
 }
 
@@ -371,6 +429,17 @@ extension Transport {
     {
         try throwIfClosing()
         guard let transceiver = _pc.addTransceiver(with: track, init: transceiverInit) else {
+            throw LiveKitError(.webRTC, message: "Failed to add transceiver")
+        }
+
+        return transceiver
+    }
+
+    func addTransceiver(ofType mediaType: LKRTCRtpMediaType,
+                        transceiverInit: LKRTCRtpTransceiverInit) throws -> LKRTCRtpTransceiver
+    {
+        try throwIfClosing()
+        guard let transceiver = _pc.addTransceiver(of: mediaType, init: transceiverInit) else {
             throw LiveKitError(.webRTC, message: "Failed to add transceiver")
         }
 

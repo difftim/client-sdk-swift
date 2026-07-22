@@ -23,7 +23,6 @@ actor IncomingStreamManager: Loggable {
         let info: StreamInfo
         let openTime: TimeInterval
         let continuation: StreamReaderSource.Continuation
-        var task: AnyTaskCancellable?
         var readLength = 0
     }
 
@@ -91,6 +90,16 @@ actor IncomingStreamManager: Loggable {
         textStreamHandlers[topic] = onNewStream
     }
 
+    /// SDK-internal: register `onNewStream` for `topic` if no handler is registered yet,
+    /// otherwise no-op. Used by idempotent wiring paths (e.g. RPC v2 setup runs on every
+    /// connect) that don't want the duplicate-registration throw from the public API.
+    @discardableResult
+    func registerTextStreamHandlerIfNeeded(for topic: String, _ onNewStream: @escaping TextStreamHandler) -> Bool {
+        guard textStreamHandlers[topic] == nil else { return false }
+        textStreamHandlers[topic] = onNewStream
+        return true
+    }
+
     func unregisterByteStreamHandler(for topic: String) {
         byteStreamHandlers[topic] = nil
     }
@@ -133,16 +142,17 @@ actor IncomingStreamManager: Loggable {
             continuation = $0
         }
 
-        let descriptor = Descriptor(
+        openStreams[info.id] = Descriptor(
             info: info,
             openTime: Date.timeIntervalSinceReferenceDate,
             continuation: continuation,
-            task: Task {
-                try await handler(source, identity)
-            }.cancellable()
         )
 
-        openStreams[info.id] = descriptor
+        // Detached: handler lifetime is not tied to the descriptor — abnormal stream
+        // conditions are signalled through `source` throwing instead.
+        Task.detachedDiscarding {
+            try await handler(source, identity)
+        }
     }
 
     /// Close the stream with the given id.
@@ -157,7 +167,7 @@ actor IncomingStreamManager: Loggable {
         if descriptor.info.encryptionType != encryptionType {
             let error = StreamError.encryptionTypeMismatch(
                 expected: descriptor.info.encryptionType,
-                received: encryptionType
+                received: encryptionType,
             )
             descriptor.continuation.finish(throwing: error)
             return
@@ -184,7 +194,7 @@ actor IncomingStreamManager: Loggable {
         if descriptor.info.encryptionType != encryptionType {
             let error = StreamError.encryptionTypeMismatch(
                 expected: descriptor.info.encryptionType,
-                received: encryptionType
+                received: encryptionType,
             )
             descriptor.continuation.finish(throwing: error)
             return
@@ -260,7 +270,7 @@ extension ByteStreamInfo {
     convenience init(
         _ header: Livekit_DataStream.Header,
         _ byteHeader: Livekit_DataStream.ByteHeader,
-        _ encryptionType: EncryptionType
+        _ encryptionType: EncryptionType,
     ) {
         self.init(
             id: header.streamID,
@@ -271,7 +281,7 @@ extension ByteStreamInfo {
             encryptionType: encryptionType,
             // ---
             mimeType: header.mimeType,
-            name: byteHeader.name
+            name: byteHeader.name,
         )
     }
 }
@@ -280,7 +290,7 @@ extension TextStreamInfo {
     convenience init(
         _ header: Livekit_DataStream.Header,
         _ textHeader: Livekit_DataStream.TextHeader,
-        _ encryptionType: EncryptionType
+        _ encryptionType: EncryptionType,
     ) {
         self.init(
             id: header.streamID,
@@ -294,7 +304,7 @@ extension TextStreamInfo {
             version: Int(textHeader.version),
             replyToStreamID: !textHeader.replyToStreamID.isEmpty ? textHeader.replyToStreamID : nil,
             attachedStreamIDs: textHeader.attachedStreamIds,
-            generated: textHeader.generated
+            generated: textHeader.generated,
         )
     }
 }

@@ -33,12 +33,16 @@ extension Room: TransportDelegate {
     func transport(_ transport: Transport, didUpdateState pcState: LKRTCPeerConnectionState) {
         log("target: \(transport.target), connectionState: \(pcState.description)")
 
+        let pcError: LiveKitError? = _state.connectionState.isTearingDown ? nil : LiveKitError(
+            .network, message: "Transport \(transport.target) state changed to \(pcState.description)",
+        )
+
         // primary connected
         if transport.isPrimary {
             if pcState.isConnected {
                 primaryTransportConnectedCompleter.resume(returning: ())
             } else if pcState.isDisconnected {
-                primaryTransportConnectedCompleter.reset()
+                primaryTransportConnectedCompleter.reset(throwing: pcError)
             }
         }
 
@@ -47,7 +51,7 @@ extension Room: TransportDelegate {
             if pcState.isConnected {
                 publisherTransportConnectedCompleter.resume(returning: ())
             } else if pcState.isDisconnected {
-                publisherTransportConnectedCompleter.reset()
+                publisherTransportConnectedCompleter.reset(throwing: pcError)
             }
         }
 
@@ -84,47 +88,51 @@ extension Room: TransportDelegate {
 
         let currentTransportId = transport.id
 
-        if transport.target == .subscriber {
-            // execute block when connected
-            execute(when: { state, _ in
-                        state.connectionState == .connected
-                    },
-                    // always remove this block when disconnected
-                    removeWhen: { state, _ in
-                        if state.connectionState == .disconnected {
-                            return true
-                        } else if currentTransportId != state.subscriber?.id {
-                            self.log("removeWhen: oldId=\(currentTransportId), newId=\(String(describing: state.subscriber?.id))", .warning)
-                            return true
-                        } else {
-                            return false
-                        }
-                    }) { [weak self] in
-                guard let self else { return }
-                Task {
-                    await self.engine(self, didAddTrack: track, rtpReceiver: rtpReceiver, stream: streams.first!, subscriberId: currentTransportId)
-                }
+        guard currentTransportId == _state.transport?.subscriber.id else { return }
+
+        // execute block when connected
+        execute(when: { state, _ in
+                    state.connectionState == .connected
+                },
+                // always remove this block when disconnected
+                removeWhen: { state, _ in
+                    if state.connectionState == .disconnected {
+                        return true
+                    } else if currentTransportId != state.transport?.subscriber.id {
+                        self.log("Removing track callback from stale transport", .warning)
+                        return true
+                    } else {
+                        return false
+                    }
+                }) { [weak self] in
+            guard let self else { return }
+            Task {
+                await self.engine(self,
+                                  didAddTrack: track,
+                                  rtpReceiver: rtpReceiver,
+                                  stream: streams.first!,
+                                  subscriberId: currentTransportId)
             }
         }
     }
 
     func transport(_ transport: Transport, didRemoveTrack track: LKRTCMediaStreamTrack) {
-        if transport.target == .subscriber {
-            Task {
-                await engine(self, didRemoveTrack: track)
-            }
+        guard transport.target == _state.transport?.subscriber.target else { return }
+
+        Task {
+            await engine(self, didRemoveTrack: track)
         }
     }
 
     func transport(_ transport: Transport, didOpenDataChannel dataChannel: LKRTCDataChannel) {
         log("Server opened data channel \(dataChannel.label)(\(dataChannel.readyState))")
 
-        if _state.isSubscriberPrimary, transport.target == .subscriber {
-            switch dataChannel.label {
-            case LKRTCDataChannel.Labels.reliable: subscriberDataChannel.set(reliable: dataChannel)
-            case LKRTCDataChannel.Labels.lossy: subscriberDataChannel.set(lossy: dataChannel)
-            default: log("Unknown data channel label \(dataChannel.label)", .warning)
-            }
+        guard transport.target == _state.transport?.subscriber.target else { return }
+
+        switch dataChannel.label {
+        case LKRTCDataChannel.Labels.reliable: subscriberDataChannel.set(reliable: dataChannel)
+        case LKRTCDataChannel.Labels.lossy: subscriberDataChannel.set(lossy: dataChannel)
+        default: log("Unknown data channel label \(dataChannel.label)", .warning)
         }
     }
 

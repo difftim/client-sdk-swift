@@ -76,7 +76,7 @@ extension AudioPublishOptions {
         Set([
             !dtx ? .tfNoDtx : nil,
             preConnect ? .tfPreconnectBuffer : nil,
-        ].compactMap { $0 })
+        ].compactMap(\.self))
     }
 }
 
@@ -88,7 +88,7 @@ extension AudioPublishOptions {
             dtx: dtx,
             red: red,
             streamName: streamName,
-            preConnect: enabled
+            preConnect: enabled,
         )
     }
 }

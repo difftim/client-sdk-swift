@@ -14,21 +14,23 @@
  * limitations under the License.
  */
 
+import Foundation
 @testable import LiveKit
+import Testing
 #if canImport(LiveKitTestSupport)
 import LiveKitTestSupport
 #endif
 
-class ProtoConverterTests: LKTestCase {
-    func testParticipantPermissions() {
+struct ProtoConverterTests {
+    @Test func participantPermissions() {
         let errors = Comparator.compareStructures(
             proto: Livekit_ParticipantPermission(),
             sdk: ParticipantPermissions(),
             excludedFields: ["agent"], // deprecated
-            allowedTypeMismatches: ["canPublishSources"] // Array vs Set
+            allowedTypeMismatches: ["canPublishSources"], // Array vs Set
         )
 
-        XCTAssert(errors.isEmpty, errors.description)
+        #expect(errors.isEmpty, Comment(rawValue: errors.description))
     }
 }
 
@@ -115,7 +117,7 @@ enum Comparator {
         proto: some Any,
         sdk: some Any,
         excludedFields: Set<String> = [],
-        allowedTypeMismatches: Set<String> = []
+        allowedTypeMismatches: Set<String> = [],
     ) -> [ComparisonError] {
         let protoFields = extractFields(from: proto, excludedFields: excludedFields)
         let sdkFields = extractFields(from: sdk, excludedFields: excludedFields)
@@ -135,7 +137,7 @@ enum Comparator {
                 errors.append(.typeMismatch(
                     field: protoField.name,
                     proto: protoField.type,
-                    sdk: sdkField.type
+                    sdk: sdkField.type,
                 ))
             }
         }

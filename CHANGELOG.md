@@ -1,5 +1,100 @@
 # Changelog
 
+## [2.15.2] - 2026-07-17
+
+### Added
+
+- Add `LocalParticipant.publishDtmf(code:digit:)` for sending SIP DTMF tones
+- Add AudioProcessingOptions
+
+### Fixed
+
+- Ping/pong timeout was re-armed on every ping and never fired, leaving a lost signaling connection stuck at .connected
+- WebRTC crashes during track teardown
+- Report microphone permission and audio session errors with the correct error type
+
+## [2.15.1] - 2026-06-18
+
+### Fixed
+
+- Fixed Xcode 27 beta build errors
+- Fixed WebRTC use-after-free buffer crash
+- Wrap ObjC completion-handler async calls in explicit checked continuations (fixes mixed Swift 5/6 continuation-bridge EXC_BAD_ACCESS)
+
+## [2.15.0] - 2026-06-09
+
+### Added
+
+- Expose `keyDerivationAlgorithm` (PBKDF2/HKDF) and `discardFrameWhenCryptorNotReady` on `KeyProviderOptions` for parity with Android
+- RPC v2: transport payloads larger than 15 KB over data streams when both peers support it
+- Allow customizing `maxRoundTripLatency` on `LocalParticipant.performRpc` for high-latency networks
+
+### Changed
+
+- Bumped minimum Swift toolchain to 6.1 (Xcode 16.3+)
+
+### Fixed
+
+- `Room.sid()` no longer resolves with an empty SID
+- Reliable data-channel sequence stays monotonic under concurrent sends
+- Crashes during track teardown in WebRTC m144
+- Crash on PeerConnection teardown caused by DTLS-in-STUN piggyback field trial
+- Fix adaptive stream dimensions on high-density displays
+- Camera position lost after full reconnect
+- Advertise both ConstrainedHigh and ConstrainedBaseline H264 profiles instead of collapsing to ConstrainedBaseline L5.0
+- Reject oversized data messages before they break the publisher data channel
+- Clamp simulcast lower-layer maxFps to the top layer, and clamp maxBitrate for layers that don't scale resolution down, so the user-configured top layer is always the highest-quality tier
+
+## [2.14.1] - 2026-05-13
+
+### Fixed
+
+- Report transport-level disconnects as LiveKitError(.network) instead of LiveKitError(.cancelled) so consumers can distinguish network failures from user-initiated cancellation
+- Faster initial connect in single peer connection mode by skipping an unnecessary 20ms negotiate debounce
+- Fix RemoteAudioTrack volume range
+
+## [2.14.0] - 2026-04-29
+
+### Added
+
+- Configure end-to-end encryption directly through Session initialization
+
+### Changed
+
+- Drop Xcode 15 (Swift 5.x) support; minimum is now Xcode 16 / Swift 6.0
+- Skip AVAudioSession configuration in manual rendering mode
+
+### Fixed
+
+- Avoid Metal pipeline freeze on iPhone 11 family by defaulting to sample buffer renderer
+
+## [2.13.0] - 2026-04-09
+
+### Added
+
+- Single peer connection mode via `RoomOptions.singlePeerConnection`. Requires LiveKit Cloud or LiveKit OSS >= 1.9.2.
+- Missing data stream and RPC ObjC exposure with ObjC tests
+- SoundPlayer API for prepared audio clips with local playback and best-effort remote playback
+- Add isFinal property to ReceivedMessage for transcription segment finalization
+
+### Changed
+
+- Changed minimal supported visionOS version to 26 due to WebRTC dependencies
+- Update WebRTC to m144
+- Remove swift-collections dependency by replacing with minimal internal implementations
+
+### Fixed
+
+- Local video track freezing during landscape rotation or losing aspect ratio
+- Use software rendering in BroadcastImageCodec to avoid GPU crash when app is backgrounded during PiP
+- Correct sample-buffer rendering for cropped and scaled screen-share frames
+- WebSocket failing to connect in some concurrent scenarios
+- Stop audio publishing when audio session activation fails by propagating configuration errors to the audio engine
+- Set maximumFramesToRender on mixer audio nodes to prevent kAudioUnitErr_TooManyFramesToProcess (-10874) when iOS negotiates larger IO buffer sizes
+- Crash during PeerConnection teardown caused by stats timer race
+- Screen share via broadcast extension showing 3fps on receiver due to hardcoded simulcast layer FPS
+- WebSocket errors killing new connections
+
 ## [2.12.1] - 2026-02-17
 
 ### Fixed

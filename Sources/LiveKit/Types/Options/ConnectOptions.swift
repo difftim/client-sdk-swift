@@ -172,6 +172,11 @@ public final class ConnectOptions: NSObject, Sendable {
     /// hardens the TURN transport-camouflage TLS.
     @nonobjc
     public let sslCertificateVerifier: (any SSLCertificateVerifier)?
+    /// Client-to-client protocol version advertised to other participants.
+    ///
+    /// Defaults to ``ClientProtocol/v1``, which enables RPC v2 (data-stream-based payloads
+    /// with no 15 KB size limit). Generally, it's not recommended to change this.
+    public let clientProtocol: ClientProtocol
 
     override public init() {
         autoSubscribe = true
@@ -202,6 +207,7 @@ public final class ConnectOptions: NSObject, Sendable {
         webSocketProxyHost = nil
         webSocketProxyPort = 0
         sslCertificateVerifier = nil
+        clientProtocol = .v1
     }
 
     public init(autoSubscribe: Bool = true,
@@ -231,7 +237,8 @@ public final class ConnectOptions: NSObject, Sendable {
                 quicProxySpkiPin: String? = nil,
                 webSocketProxyHost: String? = nil,
                 webSocketProxyPort: Int = 0,
-                sslCertificateVerifier: (any SSLCertificateVerifier)? = nil)
+                sslCertificateVerifier: (any SSLCertificateVerifier)? = nil,
+                clientProtocol: ClientProtocol = .v1)
     {
         self.autoSubscribe = autoSubscribe
         self.reconnectAttempts = reconnectAttempts
@@ -261,6 +268,7 @@ public final class ConnectOptions: NSObject, Sendable {
         self.webSocketProxyHost = webSocketProxyHost
         self.webSocketProxyPort = webSocketProxyPort
         self.sslCertificateVerifier = sslCertificateVerifier
+        self.clientProtocol = clientProtocol
     }
 
     // MARK: - Equal
@@ -296,7 +304,8 @@ public final class ConnectOptions: NSObject, Sendable {
             quicProxyCaCertPem == other.quicProxyCaCertPem &&
             quicProxySpkiPin == other.quicProxySpkiPin &&
             webSocketProxyHost == other.webSocketProxyHost &&
-            webSocketProxyPort == other.webSocketProxyPort
+            webSocketProxyPort == other.webSocketProxyPort &&
+            clientProtocol == other.clientProtocol
     }
 
     override public var hash: Int {

@@ -107,7 +107,8 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
 
     public var disconnectError: LiveKitError? { _state.disconnectError }
 
-    public var connectStopwatch: Stopwatch { _state.connectStopwatch }
+    /// Timing data for the most recent connection attempt.
+    public var connectSpan: Span? { _state.connectSpan }
 
     // MARK: - Internal
 
@@ -119,6 +120,16 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
     }
 
     public internal(set) var ttCallResp: Livekit_TTCallResponse?
+    /// Enables or disables end-to-end encryption on this Room.
+    ///
+    /// Requires the Room to have been constructed with ``EncryptionOptions``
+    /// (via ``RoomOptions/encryptionOptions``) and to be connected.
+    /// Otherwise this is a no-op.
+    ///
+    /// - Parameter enabled: Whether to enable encryption.
+    public func setE2EEEnabled(_ enabled: Bool) {
+        e2eeManager?.enableE2EE(enabled: enabled)
+    }
 
     public lazy var localParticipant: LocalParticipant = .init(room: self)
 
@@ -154,7 +165,8 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
 
     // MARK: - RPC
 
-    let rpcState = RpcStateManager()
+    let rpcClient = RpcClientManager()
+    let rpcServer = RpcServerManager()
 
     // MARK: - State
 
@@ -199,12 +211,12 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
         // "unknown / allow", `false` as offline.
         var hasConnectivity: Bool?
         var disconnectError: LiveKitError?
-        var connectStopwatch = Stopwatch(label: "connect")
         var hasPublished: Bool = false
 
-        var publisher: Transport?
-        var subscriber: Transport?
-        var isSubscriberPrimary: Bool = false
+        var transport: TransportMode?
+
+        // Timing
+        var connectSpan: Span?
 
         var serverNotifyDisconnect: Bool = false
 
@@ -331,8 +343,10 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
                 roomOptions: RoomOptions? = nil)
     {
         // Ensure manager shared objects are instantiated
+        #if !LK_BENCHMARK
         DeviceManager.prepare()
         AudioManager.prepare()
+        #endif
 
         _state = StateSync(State(connectOptions: connectOptions ?? ConnectOptions(),
                                  roomOptions: roomOptions ?? RoomOptions()))
@@ -472,6 +486,10 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
 
         try Task.checkCancellation()
 
+        // Wire RPC internals before any engine activity so incoming v2 streams aren't
+        // dropped in the gap between init and connect. Idempotent across reconnects.
+        await setupRpc()
+
         // enable E2EE
         if let e2eeOptions = state.roomOptions.e2eeOptions {
             e2eeManager = E2EEManager(e2eeOptions: e2eeOptions)
@@ -480,16 +498,17 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
             e2eeManager = E2EEManager(options: encryptionOptions)
             e2eeManager!.setup(room: self)
 
-            subscriberDataChannel.e2eeManager = e2eeManager
-            publisherDataChannel.e2eeManager = e2eeManager
+            subscriberDataChannel.set(e2eeManager: e2eeManager)
+            publisherDataChannel.set(e2eeManager: e2eeManager)
         } else {
             e2eeManager = nil
 
-            subscriberDataChannel.e2eeManager = nil
-            publisherDataChannel.e2eeManager = nil
+            subscriberDataChannel.set(e2eeManager: nil)
+            publisherDataChannel.set(e2eeManager: nil)
         }
 
         _state.mutate {
+            $0.connectSpan = sharedTracing.beginSpan("connect")
             $0.providedUrl = providedUrl
             $0.token = token
             $0.connectionState = .connecting
@@ -553,6 +572,8 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
             // Final check if cancelled, don't fire connected events
             try Task.checkCancellation()
 
+            connectSpan?.record("room_connected")
+
             _state.mutate {
                 $0.connectedUrl = finalUrl
 
@@ -563,6 +584,9 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
 
                 $0.connectionState = .connected
             }
+
+            connectSpan?.end()
+
             // Publish mic if mic task was created
             if let createMicrophoneTrackTask, !createMicrophoneTrackTask.isCancelled {
                 let track = try await createMicrophoneTrackTask.value
@@ -586,7 +610,6 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
 
     public func disconnect() async {
         let disconnectId = UUID().uuidString
-        var sw = Stopwatch(label: "disconnect")
         log("[disconnect]\(disconnectId): in", .info)
         await signalClient.resetQuicHealthForNewSession()
         enum DisconnectIntent {
@@ -624,6 +647,8 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
             break
         }
 
+        let sw = sharedTracing.beginSpan("disconnect")
+
         _disconnectCompleter.reset()
 
         defer {
@@ -637,18 +662,19 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
         } catch {
             log("[disconnect]\(disconnectId): Failed to send leave with error: \(error)")
         }
-        sw.split(label: "sendLeave")
+        sw.record("sendLeave")
 
         cancelReconnect()
 
         // must clean local info — single cleanUp call site for client-initiated disconnect
         await cleanUp(stopTrackCaptureImmediately: true)
-        sw.split(label: "cleanUp")
+        sw.record("cleanUp")
 
         cancelReconnect()
-        sw.split(label: "done")
+        sw.record("done")
 
-        log("[disconnect]\(disconnectId): out \(sw.msDescription)", .info)
+        log("[disconnect]\(disconnectId): out \(Int(sw.total() * 1000))ms", .info)
+        sw.end()
     }
 
     private func cancelReconnect() {
@@ -708,10 +734,16 @@ extension Room {
     {
         log("withError: \(String(describing: disconnectError)), isFullReconnect: \(isFullReconnect), preserveRemoteParticipants: \(preserveRemoteParticipants), stopTrackCaptureImmediately: \(stopTrackCaptureImmediately)")
 
+        // Reap all in-flight RPCs with `recipientDisconnected` (1503). Runs before the
+        // participant-state wipe so callers don't hang on the response timeout during
+        // disconnect / full reconnect.
+        await rpcClient.handleAllPendingDisconnected()
+
         // Reset completers
-        _sidCompleter.reset()
-        primaryTransportConnectedCompleter.reset()
-        publisherTransportConnectedCompleter.reset()
+        _sidCompleter.reset(throwing: disconnectError)
+        primaryTransportConnectedCompleter.reset(throwing: disconnectError)
+        publisherTransportConnectedCompleter.reset(throwing: disconnectError)
+        await activeParticipantCompleters.reset(throwing: disconnectError)
 
         await signalClient.cleanUp(withError: disconnectError)
 
@@ -742,7 +774,7 @@ extension Room {
         log("[cleanup] cleanUpParticipants end")
 
         log("[cleanup] cleanUpRTC begin")
-        await cleanUpRTC()
+        await cleanUpRTC(withError: disconnectError)
         log("[cleanup] cleanUpRTC end")
 
         // Reset state
@@ -769,7 +801,7 @@ extension Room {
                 // remoteParticipants: removePar ? [:] : $0.remoteParticipants,
                 connectionState: .disconnected,
                 reconnectTask: $0.reconnectTask,
-                disconnectError: LiveKitError.from(error: disconnectError)
+                disconnectError: LiveKitError.from(error: disconnectError),
             )
         }
     }
@@ -779,6 +811,17 @@ extension Room {
             for (_, publication) in participant._state.trackPublications {
                 publication.track?.cancelStatisticsTimer()
             }
+        }
+    }
+
+    private func setupRpc() async {
+        await rpcClient.attach(to: self)
+        await rpcServer.attach(to: self)
+        await incomingStreamManager.registerTextStreamHandlerIfNeeded(for: RpcStreamTopic.request) { [weak rpcServer] reader, identity in
+            await rpcServer?.handleIncomingRequestStream(reader: reader, callerIdentity: identity)
+        }
+        await incomingStreamManager.registerTextStreamHandlerIfNeeded(for: RpcStreamTopic.response) { [weak rpcClient] reader, identity in
+            await rpcClient?.handleIncomingResponseStream(reader: reader, senderIdentity: identity)
         }
     }
 }
@@ -806,7 +849,7 @@ extension Room {
         }
 
         // Clean up Participants concurrently
-        await withTaskGroup(of: Void.self) { group in
+        await withTaskGroup { group in
             for participant in allParticipants {
                 group.addTask {
                     await participant.cleanUp(notify: _notify)
@@ -826,6 +869,10 @@ extension Room {
     func _onParticipantDidDisconnect(identity: Participant.Identity) async throws {
         // Any pending delayed removal for this identity is now moot.
         cancelPendingParticipantRemoval(identity: identity)
+        // Reap any in-flight RPCs targeting this participant before tearing them down,
+        // so the caller sees `recipientDisconnected` (1503) immediately instead of
+        // hanging until the user-supplied `responseTimeout`.
+        await rpcClient.handleParticipantDisconnected(identity)
 
         guard let participant = _state.mutate({ $0.remoteParticipants.removeValue(forKey: identity) }) else {
             throw LiveKitError(.invalidState, message: "Participant not found for \(identity)")

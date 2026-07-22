@@ -68,7 +68,7 @@ public struct RoomConfiguration: Encodable, Sendable, Equatable {
         minPlayoutDelay: UInt32? = nil,
         maxPlayoutDelay: UInt32? = nil,
         syncStreams: Bool? = nil,
-        agents: [RoomAgentDispatch]? = nil
+        agents: [RoomAgentDispatch]? = nil,
     ) {
         self.name = name
         self.emptyTimeout = emptyTimeout
@@ -89,16 +89,22 @@ public struct RoomAgentDispatch: Encodable, Sendable, Equatable {
     /// Metadata for the agent
     public let metadata: String?
 
+    /// Optional deployment to target. Leave empty to target the production deployment.
+    public let deployment: String?
+
     enum CodingKeys: String, CodingKey {
         case agentName = "agent_name"
         case metadata
+        case deployment
     }
 
     public init(
         agentName: String? = nil,
-        metadata: String? = nil
+        metadata: String? = nil,
+        deployment: String? = nil,
     ) {
         self.agentName = agentName
         self.metadata = metadata
+        self.deployment = deployment
     }
 }

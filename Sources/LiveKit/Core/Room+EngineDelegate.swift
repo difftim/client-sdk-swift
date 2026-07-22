@@ -181,7 +181,7 @@ extension Room {
 
         let (participant, currentSubscriberId): (RemoteParticipant?, String) = _state.read { state in
             let participant = state.remoteParticipants.values.first { $0.sid == parseResult.participantSid }
-            let currentSubscriberId = state.subscriber?.id ?? ""
+            let currentSubscriberId = state.transport?.subscriber.id ?? ""
 
             return (participant, currentSubscriberId)
         }
@@ -287,14 +287,17 @@ extension Room {
         default: (nil, nil)
         }
 
-        localParticipant.handleIncomingRpcResponse(requestId: response.requestID,
+        Task.discarding { [rpcClient] in
+            await rpcClient.handleIncomingResponse(requestId: response.requestID,
                                                    payload: payload,
                                                    error: error)
+        }
     }
 
     func room(didReceiveRpcAck ack: Livekit_RpcAck) {
-        let requestId = ack.requestID
-        localParticipant.handleIncomingRpcAck(requestId: requestId)
+        Task.discarding { [rpcClient] in
+            await rpcClient.handleIncomingAck(requestId: ack.requestID)
+        }
     }
 
     func room(didReceiveRpcRequest request: Livekit_RpcRequest, from participantIdentity: String) {
@@ -305,13 +308,13 @@ extension Room {
         let responseTimeout = TimeInterval(UInt64(request.responseTimeoutMs) / UInt64(msecPerSec))
         let version = Int(request.version)
 
-        Task {
-            await localParticipant.handleIncomingRpcRequest(callerIdentity: callerIdentity,
-                                                            requestId: requestId,
-                                                            method: method,
-                                                            payload: payload,
-                                                            responseTimeout: responseTimeout,
-                                                            version: version)
+        Task.discarding { [rpcServer] in
+            await rpcServer.handleIncomingRequest(callerIdentity: callerIdentity,
+                                                  requestId: requestId,
+                                                  method: method,
+                                                  payload: payload,
+                                                  responseTimeout: responseTimeout,
+                                                  version: version)
         }
     }
 }

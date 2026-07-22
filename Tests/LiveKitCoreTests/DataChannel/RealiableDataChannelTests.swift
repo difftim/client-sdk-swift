@@ -14,66 +14,184 @@
  * limitations under the License.
  */
 
+import Foundation
 @testable import LiveKit
+import Testing
 #if canImport(LiveKitTestSupport)
 import LiveKitTestSupport
 #endif
 
-class RealiableDataChannelTests: LKTestCase, @unchecked Sendable {
-    var receivedExpectation: XCTestExpectation!
-    var receivedData: Data!
+@Suite(.serialized, .tags(.dataChannel, .e2e)) final class RealiableDataChannelTests: @unchecked Sendable {
+    enum ReconnectMode: CustomStringConvertible {
+        case none, sender, receiver, both, simultaneous, bothLate
 
-    override func setUp() {
-        super.setUp()
-        receivedData = Data()
-    }
-
-    func testReliableRetry() async throws {
-        let iterations = 128
-        receivedExpectation = expectation(description: "Data received")
-        receivedExpectation.expectedFulfillmentCount = iterations
-
-        let testString = "abcdefghijklmnopqrstuvwxyz🔥"
-        let testData = String(repeating: testString, count: 1024).data(using: .utf8)!
-
-        try await withRooms([
-            RoomTestingOptions(canPublishData: true),
-            RoomTestingOptions(delegate: self, canSubscribe: true),
-        ]) { rooms in
-            let sending = rooms[0]
-            let receiving = rooms[1]
-            let remoteIdentity = try XCTUnwrap(sending.remoteParticipants.keys.first)
-
-            Task {
-                try await Task.sleep(nanoseconds: 200_000_000) // 200 ms
-                try await sending.startReconnect(reason: .debug)
-            }
-            Task {
-                try await Task.sleep(nanoseconds: 400_000_000) // 400 ms
-                try await receiving.startReconnect(reason: .debug)
-            }
-
-            for _ in 0 ..< iterations {
-                let userPacket = Livekit_UserPacket.with {
-                    $0.payload = testData
-                    $0.destinationIdentities = [remoteIdentity.stringValue]
-                }
-
-                try await sending.send(userPacket: userPacket, kind: .reliable)
-                try await Task.sleep(nanoseconds: 50_000_000) // 50 ms
+        var description: String {
+            switch self {
+            case .none: "no reconnect"
+            case .sender: "sender reconnect"
+            case .receiver: "receiver reconnect"
+            case .both: "dual reconnect"
+            case .simultaneous: "simultaneous reconnect"
+            case .bothLate: "dual reconnect (late)"
             }
         }
 
-        await fulfillment(of: [receivedExpectation], timeout: 10)
+        /// When (if at all) the sender room should call `startReconnect`.
+        /// `nil` means no sender reconnect for this mode.
+        var senderReconnectDelay: TimeInterval? {
+            switch self {
+            case .none, .receiver: nil
+            case .sender, .both: 0.2
+            case .simultaneous: 0.3
+            // Mid-burst: 2s is ~40 sends in, so the retry buffer has a
+            // non-trivial replay set vs. early reconnects that only
+            // have to replay 4–8 entries.
+            case .bothLate: 2.0
+            }
+        }
 
-        let receivedString = try XCTUnwrap(String(data: receivedData, encoding: .utf8))
-        XCTAssertEqual(receivedString.count, testString.count * 1024 * iterations, "Corrupted or duplicated data")
+        var receiverReconnectDelay: TimeInterval? {
+            switch self {
+            case .none, .sender: nil
+            case .receiver, .both: 0.4
+            case .simultaneous: 0.3
+            case .bothLate: 3.0
+            }
+        }
+    }
+
+    private let _receivedIndices = StateSync<[UInt32]>([])
+    var onDataReceived: (() -> Void)?
+
+    @Test(arguments: [ReconnectMode.none, .sender, .receiver, .both, .simultaneous, .bothLate])
+    func reliableDelivery(mode: ReconnectMode) async throws {
+        let iterations = 128
+        let sendInterval: TimeInterval = 0.05
+        // 15s tolerates the .bothLate case, where the receiver reconnect
+        // doesn't kick in until 3s and replay then has to drain.
+        let receiveDeadline: TimeInterval = 15
+
+        let bodyString = "abcdefghijklmnopqrstuvwxyz🔥"
+        let bodyData = try #require(String(repeating: bodyString, count: 1024).data(using: .utf8))
+
+        try await confirmation("Data received", expectedCount: iterations) { confirm in
+            self._receivedIndices.mutate { $0 = [] }
+            self.onDataReceived = { confirm() }
+
+            try await TestEnvironment.withRooms([
+                RoomTestingOptions(canPublishData: true),
+                RoomTestingOptions(delegate: self, canSubscribe: true),
+            ]) { rooms in
+                let sending = rooms[0]
+                let receiving = rooms[1]
+                let remoteIdentity = try #require(sending.remoteParticipants.keys.first)
+
+                var reconnectTasks: [AnyTaskCancellable] = []
+                if let delay = mode.senderReconnectDelay {
+                    reconnectTasks.append(Task {
+                        try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                        try await sending.startReconnect(reason: .debug)
+                    }.cancellable())
+                }
+                if let delay = mode.receiverReconnectDelay {
+                    reconnectTasks.append(Task {
+                        try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                        try await receiving.startReconnect(reason: .debug)
+                    }.cancellable())
+                }
+                defer { reconnectTasks.forEach { $0.cancel() } }
+
+                for i in 0 ..< iterations {
+                    // 4-byte LE sequence prefix lets the receiver assert
+                    // exact ordering — a size-only check would pass even
+                    // if packets arrived reordered or with dupes.
+                    var seq = UInt32(i)
+                    let packetData = Data(bytes: &seq, count: 4) + bodyData
+                    let userPacket = Livekit_UserPacket.with {
+                        $0.payload = packetData
+                        $0.destinationIdentities = [remoteIdentity.stringValue]
+                    }
+
+                    try await sending.send(userPacket: userPacket, kind: .reliable)
+                    try await Task.sleep(nanoseconds: UInt64(sendInterval * 1_000_000_000))
+                }
+            }
+
+            // `withRooms` tears the rooms down once its body returns, but
+            // the last few deliveries may still be in flight. Poll until
+            // all confirms have fired (or the deadline expires) so we
+            // don't end the confirmation body prematurely.
+            let deadline = Date().addingTimeInterval(receiveDeadline)
+            while Date() < deadline, self._receivedIndices.copy().count < iterations {
+                try? await Task.sleep(nanoseconds: 100_000_000)
+            }
+        }
+
+        let received = _receivedIndices.copy()
+        #expect(received == Array(0 ..< UInt32(iterations)),
+                "Reliable delivery should be exact and in send order, with no dupes or drops")
+    }
+
+    @Test
+    func concurrentReliableSendsDeliverExactlyOnce() async throws {
+        let iterations = 256
+        let receiveDeadline: TimeInterval = 15
+        let bodyData = Data(repeating: 0xAB, count: 64)
+
+        try await confirmation("Data received", expectedCount: iterations) { confirm in
+            _receivedIndices.mutate { $0 = [] }
+            onDataReceived = { confirm() }
+
+            try await TestEnvironment.withRooms([
+                RoomTestingOptions(canPublishData: true),
+                RoomTestingOptions(delegate: self, canSubscribe: true),
+            ]) { rooms in
+                let sending = rooms[0]
+                let remoteIdentity = try #require(sending.remoteParticipants.keys.first)
+
+                // Fire every send into the task group at once. Without the
+                // event-loop-side sequence assignment, the AsyncStream yields
+                // would land in a different order than `withSequence` picked
+                // numbers, the SFU would drop the laggards, and the receiver
+                // would surface gaps in `_receivedIndices`.
+                try await withThrowingTaskGroup { group in
+                    for i in 0 ..< iterations {
+                        group.addTask {
+                            var seq = UInt32(i)
+                            let packetData = Data(bytes: &seq, count: 4) + bodyData
+                            let userPacket = Livekit_UserPacket.with {
+                                $0.payload = packetData
+                                $0.destinationIdentities = [remoteIdentity.stringValue]
+                            }
+                            try await sending.send(userPacket: userPacket, kind: .reliable)
+                        }
+                    }
+                    try await group.waitForAll()
+                }
+
+                // Wait for the receiver inside `withRooms` so the data channel
+                // stays open until every packet has been delivered. Polling
+                // outside `withRooms` would race the room teardown, and
+                // any still-in-flight packets would be lost when the
+                // underlying SCTP connection closes.
+                let deadline = Date().addingTimeInterval(receiveDeadline)
+                while Date() < deadline, self._receivedIndices.copy().count < iterations {
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+            }
+        }
+
+        let received = _receivedIndices.copy()
+        #expect(received.sorted() == Array(0 ..< UInt32(iterations)),
+                "Reliable delivery must cover every sequence exactly once, with no drops or dupes")
     }
 }
 
 extension RealiableDataChannelTests: RoomDelegate {
     func room(_: Room, participant _: RemoteParticipant?, didReceiveData data: Data, forTopic _: String, encryptionType _: EncryptionType) {
-        receivedData.append(data)
-        receivedExpectation.fulfill()
+        guard data.count >= 4 else { return }
+        let seq = data.prefix(4).withUnsafeBytes { $0.load(as: UInt32.self) }
+        _receivedIndices.mutate { $0.append(seq) }
+        onDataReceived?()
     }
 }

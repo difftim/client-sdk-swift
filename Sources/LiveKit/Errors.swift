@@ -32,6 +32,9 @@ public enum LiveKitErrorType: Int, Sendable {
     case network // Network issue
     case validation // Validation issue
     case reconnectFailure // Network issue
+    // HTTP 404 from validation endpoint; distinct from .validation so the
+    // v1 → v0 RTC path fallback can fire without masking token/permission errors.
+    case serviceNotFound
 
     // Server
     case duplicateIdentity = 500
@@ -55,6 +58,7 @@ public enum LiveKitErrorType: Int, Sendable {
     // Audio
     case audioEngine = 801
     case audioSession = 802
+    case soundPlayer = 803
 
     case codecNotSupported = 901
 
@@ -93,6 +97,8 @@ extension LiveKitErrorType: CustomStringConvertible {
             "Validation error"
         case .reconnectFailure:
             "Reconnect failure"
+        case .serviceNotFound:
+            "Service not found"
         case .duplicateIdentity:
             "Duplicate Participant identity"
         case .serverShutdown:
@@ -119,6 +125,8 @@ extension LiveKitErrorType: CustomStringConvertible {
             "Audio Engine Error"
         case .audioSession:
             "Audio Session Error"
+        case .soundPlayer:
+            "Sound Player Error"
         case .codecNotSupported:
             "Codec not supported"
         case .encryptionFailed:
@@ -147,7 +155,7 @@ public class LiveKitError: NSError, @unchecked Sendable, Loggable {
     public var underlyingError: Error? { internalError }
 
     override public var underlyingErrors: [Error] {
-        [internalError].compactMap { $0 }
+        [internalError].compactMap(\.self)
     }
 
     public init(_ type: LiveKitErrorType,

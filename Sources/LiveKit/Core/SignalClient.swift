@@ -54,6 +54,7 @@ actor SignalClient: Loggable {
     var isQuicMarkedUnhealthy: Bool { quicMarkedUnhealthy }
 
     var lastConnectionError: LiveKitError?
+    var useV0SignalPath: Bool { _state.useV0SignalPath }
 
     // MARK: - Private
 
@@ -98,6 +99,9 @@ actor SignalClient: Loggable {
         var messageLoopTask: AnyTaskCancellable?
         var lastJoinResponse: Livekit_JoinResponse?
         var rtt: Int64 = 0
+        // Tracks whether the v0 signal path (/rtc) is in use, set during connect.
+        // Reused by reconnect to avoid re-attempting the unsupported v1 path.
+        var useV0SignalPath: Bool = false
     }
 
     let _state = StateSync(State())
@@ -121,7 +125,9 @@ actor SignalClient: Loggable {
                  connectOptions: ConnectOptions? = nil,
                  reconnectMode: ReconnectMode? = nil,
                  participantSid: Participant.Sid? = nil,
-                 adaptiveStream: Bool) async throws -> ConnectResponse
+                 adaptiveStream: Bool,
+                 singlePeerConnection: Bool,
+                 connectSpan: Span? = nil) async throws -> ConnectResponse
     {
         await cleanUp()
 
@@ -129,12 +135,22 @@ actor SignalClient: Loggable {
             log("[Connect] mode: \(String(describing: reconnectMode))")
         }
 
-        let url = try Utils.buildUrl(url,
-                                     token,
-                                     connectOptions: connectOptions,
-                                     reconnectMode: reconnectMode,
-                                     participantSid: participantSid,
-                                     adaptiveStream: adaptiveStream)
+        let url: URL = if singlePeerConnection {
+            try Utils.buildJoinRequestUrl(url,
+                                          connectOptions: connectOptions,
+                                          reconnectMode: reconnectMode,
+                                          participantSid: participantSid,
+                                          adaptiveStream: adaptiveStream)
+        } else {
+            try Utils.buildUrl(url,
+                               token,
+                               connectOptions: connectOptions,
+                               reconnectMode: reconnectMode,
+                               participantSid: participantSid,
+                               adaptiveStream: adaptiveStream)
+        }
+
+        _state.mutate { $0.useV0SignalPath = !singlePeerConnection }
 
         let isReconnect = reconnectMode != nil
 
@@ -162,6 +178,7 @@ actor SignalClient: Loggable {
                                                                     token: token,
                                                                     options: connectOptions,
                                                                     sendAfterOpen: sendAfterOpen)
+            connectSpan?.record("transport_open")
             markQuicUnhealthyIfFallback(requestedKind: requestedKind, actualKind: transport.transportKind)
 
             let messageLoopTask = transport.subscribe(self) { observer, message in
@@ -210,18 +227,15 @@ actor SignalClient: Loggable {
 
             await cleanUp(withError: connectionError)
 
-            // Attempt to validate with server
-            let validateUrl = try Utils.buildUrl(url,
-                                                 token,
-                                                 connectOptions: connectOptions,
-                                                 participantSid: participantSid,
-                                                 adaptiveStream: adaptiveStream,
-                                                 validate: true)
+            // Attempt to validate with server, deriving validate URL from the actual WS URL
+            let validateUrl = try Utils.toValidateUrl(url)
             log("Validating with url: \(validateUrl)...")
             do {
                 try await HTTP.requestValidation(from: validateUrl, token: token)
                 // Re-throw original error since validation passed
                 throw LiveKitError(.network, internalError: connectionError)
+            } catch let error as LiveKitError where error.type == .serviceNotFound {
+                throw error
             } catch let validationError as LiveKitError where validationError.type == .validation {
                 // Re-throw validation error
                 throw validationError
@@ -271,9 +285,9 @@ actor SignalClient: Loggable {
             $0.lastJoinResponse = nil
         }
 
-        _connectResponseCompleter.reset()
+        _connectResponseCompleter.reset(throwing: disconnectError)
 
-        await _addTrackCompleters.reset()
+        await _addTrackCompleters.reset(throwing: disconnectError)
         await _requestQueue.clear()
         await _responseQueue.clear()
 
@@ -452,6 +466,9 @@ private extension SignalClient {
 
         case let .trackSubscribed(trackSubscribed):
             _delegate.notifyDetached { await $0.signalClient(self, didSubscribeTrack: Track.Sid(from: trackSubscribed.trackSid)) }
+
+        case let .mediaSectionsRequirement(requirement):
+            _delegate.notifyDetached { await $0.signalClient(self, didReceiveMediaSectionsRequirement: requirement) }
 
         default:
             log("Unhandled signal message: \(message)", .warning)
@@ -753,7 +770,8 @@ private extension SignalClient {
             await cleanUp(withError: LiveKitError(.serverPingTimedOut))
         }
 
-        _pingTimeoutTimer.restart()
+        // Arm without resetting a running countdown, else every ping pushes the deadline out and it never fires.
+        _pingTimeoutTimer.startIfStopped()
     }
 
     func _onReceivedPong(_: Int64) async {

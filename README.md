@@ -43,7 +43,7 @@ Add the dependency and also to your target
 let package = Package(
   ...
   dependencies: [
-    .package(name: "LiveKit", url: "https://github.com/difftim/client-sdk-swift.git", .upToNextMajor("2.12.1")),
+    .package(name: "LiveKit", url: "https://github.com/difftim/client-sdk-swift.git", .upToNextMajor("2.15.2")),
   ],
   targets: [
     .target(
@@ -54,11 +54,19 @@ let package = Package(
 }
 ```
 
-### XCode
+### Xcode
 
 Go to Project Settings -> Swift Packages.
 
 Add a new package and enter: `https://github.com/difftim/client-sdk-swift`
+
+### Pre-built XCFramework
+
+A pre-built binary distribution is available for faster integration and CI builds. Add the XCFramework package instead:
+
+`https://github.com/livekit/client-sdk-swift-xcframework`
+
+This package bundles `LiveKit.xcframework` (dynamic framework) along with its dependencies (`LiveKitWebRTC`, `RustLiveKitUniFFI`). It contains the same code as the source package above, just pre-compiled.
 
 ### CocoaPods
 
@@ -163,7 +171,7 @@ Make sure any access to your app's UI elements are from the main thread, for exa
 
 ### Swift 6
 
-LiveKit is currently compiled using Swift 6.0 with full support for strict concurrency. Apps compiled in Swift 6 language mode will not need to use `@preconcurrency` or `@unchecked Sendable` to access LiveKit classes.
+LiveKit is currently compiled using Swift 6.1 with full support for strict concurrency. Apps compiled in Swift 6 language mode will not need to use `@preconcurrency` or `@unchecked Sendable` to access LiveKit classes.
 
 ### Memory management
 

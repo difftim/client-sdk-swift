@@ -133,7 +133,7 @@ public class CameraCapturer: VideoCapturer, @unchecked Sendable {
         log("set(cameraPosition:) \(position)")
         let newOptions = options.copyWith(
             device: .value(nil),
-            position: .value(position)
+            position: .value(position),
         )
         return try await set(options: newOptions)
     }
@@ -285,7 +285,11 @@ public class CameraCapturer: VideoCapturer, @unchecked Sendable {
 
         log("starting camera capturer device: \(device), format: \(selectedFormat), fps: \(selectedFps)(\(fpsRange))", .info)
 
-        try await capturer.startCapture(with: device, format: selectedFormat.format, fps: selectedFps)
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            capturer.startCapture(with: device, format: selectedFormat.format, fps: selectedFps) { error in
+                if let error { continuation.resume(throwing: error) } else { continuation.resume() }
+            }
+        }
 
         // Update internal vars
         _cameraCapturerState.mutate {
@@ -305,7 +309,11 @@ public class CameraCapturer: VideoCapturer, @unchecked Sendable {
         // Already stopped
         guard didStop else { return false }
 
-        await capturer.stopCapture()
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            capturer.stopCapture {
+                continuation.resume()
+            }
+        }
 
         // Update internal vars
         set(dimensions: nil)
@@ -374,13 +382,6 @@ extension AVCaptureDevice.Position: Swift.CustomStringConvertible {
     }
 }
 
-extension Comparable {
-    // clamp a value within the range
-    func clamped(to limits: ClosedRange<Self>) -> Self {
-        min(max(self, limits.lowerBound), limits.upperBound)
-    }
-}
-
 extension AVFrameRateRange {
     // convert to a ClosedRange
     func toRange() -> ClosedRange<Int> {
@@ -410,7 +411,7 @@ extension AVCaptureDevice.Format {
 extension LKRTCVideoFrame {
     func cropAndScaleFromCenter(
         targetWidth: Int32,
-        targetHeight: Int32
+        targetHeight: Int32,
     ) -> LKRTCVideoFrame? {
         // Ensure target dimensions don't exceed source dimensions
         let scaleWidth: Int32
@@ -458,7 +459,7 @@ extension LKRTCVideoFrame {
             cropWidth: cropWidth,
             cropHeight: cropHeight,
             scaleWidth: scaleWidth,
-            scaleHeight: scaleHeight
+            scaleHeight: scaleHeight,
         ) else { return nil }
 
         return LKRTCVideoFrame(buffer: newBuffer, rotation: rotation, timeStampNs: timeStampNs)

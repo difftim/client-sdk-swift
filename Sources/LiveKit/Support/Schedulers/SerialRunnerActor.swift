@@ -20,7 +20,7 @@ actor SerialRunnerActor<Value: Sendable> {
     private var previous: (id: UInt64, task: Task<Value, Error>)?
     private var nextId: UInt64 = 0
 
-    func run(block: @Sendable @escaping () async throws -> Value) async throws -> Value {
+    func run(block: sending @escaping () async throws -> Value) async throws -> Value {
         let prevTask = previous?.task
 
         nextId &+= 1

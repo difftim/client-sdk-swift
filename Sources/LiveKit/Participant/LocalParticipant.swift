@@ -162,7 +162,7 @@ public class LocalParticipant: Participant, @unchecked Sendable {
             return await _notifyDidUnpublish()
         }
 
-        if let publisher = room._state.publisher, let sender = track._state.rtpSender {
+        if let publisher = room._state.transport?.publisher, let sender = track._state.rtpSender {
             // Remove all simulcast senders...
             let simulcastSenders = track._state.read { Array($0.rtpSenderForCodec.values) }
             for simulcastSender in simulcastSenders {
@@ -206,6 +206,34 @@ public class LocalParticipant: Participant, @unchecked Sendable {
         }
 
         try await room.send(userPacket: userPacket, kind: options.reliable ? .reliable : .lossy)
+    }
+
+    /// Publish a SIP DTMF message to the room.
+    ///
+    /// Use this when a connected LiveKit SIP call needs keypad input, such as
+    /// selecting an IVR menu option or dialing an extension.
+    ///
+    /// ```swift
+    /// try await room.localParticipant.publishDtmf(code: 1, digit: "1")
+    /// try await room.localParticipant.publishDtmf(code: 10, digit: "*")
+    /// try await room.localParticipant.publishDtmf(code: 11, digit: "#")
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - code: Numeric DTMF code. SIP calls commonly use `10` for `*` and `11` for `#`.
+    ///   - digit: Human-readable DTMF digit, such as `"1"`, `"*"`, or `"#"`.
+    public func publishDtmf(code: UInt32, digit: String) async throws {
+        let room = try requireRoom()
+
+        let packet = Livekit_DataPacket.with {
+            $0.kind = .reliable
+            $0.sipDtmf = Livekit_SipDTMF.with {
+                $0.code = code
+                $0.digit = digit
+            }
+        }
+
+        try await room.send(dataPacket: packet)
     }
 
     /**

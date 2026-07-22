@@ -70,6 +70,13 @@ public class RemoteTrackPublication: TrackPublication, @unchecked Sendable {
 
         _state.mutate { $0.isSubscribePreferred = newValue }
 
+        if !newValue {
+            // Proactively clear the track. In single PC mode the transceiver is
+            // reused (direction changes) rather than removed, so the WebRTC
+            // didRemove(rtpReceiver:) callback may never fire.
+            await set(track: nil)
+        }
+
         try await room.signalClient.sendUpdateSubscription(participantSid: participantSid,
                                                            trackSid: sid,
                                                            isSubscribed: newValue)
@@ -352,7 +359,7 @@ extension RemoteTrackPublication {
 
         let newSettings = _state.trackSettings.copyWith(
             isEnabled: .value(isEnabled),
-            dimensions: .value(dimensions)
+            dimensions: .value(dimensions),
         )
 
         guard _state.trackSettings != newSettings else {

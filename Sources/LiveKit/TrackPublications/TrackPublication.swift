@@ -97,7 +97,7 @@ public class TrackPublication: NSObject, @unchecked Sendable, ObservableObject, 
             isMetadataMuted: info.muted,
             encryptionType: info.encryption.toLKType(),
             latestInfo: info,
-            audioTrackFeatures: Set(info.audioFeatures)
+            audioTrackFeatures: Set(info.audioFeatures),
         ))
 
         self.participant = participant
@@ -201,7 +201,7 @@ extension TrackPublication: TrackDelegateInternal {
     public func track(_: Track, didUpdateIsMuted isMuted: Bool, shouldSendSignal: Bool) {
         log("isMuted: \(isMuted) shouldSendSignal: \(shouldSendSignal)")
 
-        Task.detached {
+        Task.detachedDiscarding {
             let participant = try await self.requireParticipant()
             let room = try participant.requireRoom()
 

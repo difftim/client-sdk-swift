@@ -96,7 +96,12 @@ class Utils: Loggable {
         }
         return identifier
         #elseif os(macOS)
-        let service = IOServiceGetMatchingService(kIOMasterPortDefault,
+        let mainPort: mach_port_t = if #available(macOS 12.0, *) {
+            kIOMainPortDefault
+        } else {
+            0 // kIOMainPortDefault (macOS 12+) is a synonym for the NULL default port
+        }
+        let service = IOServiceGetMatchingService(mainPort,
                                                   IOServiceMatching("IOPlatformExpertDevice"))
         defer { IOObjectRelease(service) }
 
@@ -136,8 +141,6 @@ class Utils: Loggable {
         reconnectMode: ReconnectMode? = nil,
         participantSid: Participant.Sid? = nil,
         adaptiveStream: Bool,
-        validate: Bool = false,
-        forceSecure: Bool = false
     ) throws -> URL {
         // use default options if nil
         let connectOptions = connectOptions ?? ConnectOptions()
@@ -148,9 +151,7 @@ class Utils: Loggable {
             throw LiveKitError(.failedToParseUrl)
         }
 
-        let useSecure = url.isSecure || forceSecure
-        let httpScheme = useSecure ? "https" : "http"
-        let wsScheme = useSecure ? "wss" : "ws"
+        let wsScheme = url.isSecure ? "wss" : "ws"
 
         var pathSegments = url.pathComponents
         // strip empty & slashes
@@ -166,18 +167,15 @@ class Utils: Loggable {
         }
         // add the correct segment
         pathSegments.append("rtc")
-        // add validate after rtc if validate mode
-        if validate {
-            pathSegments.append("validate")
-        }
 
-        builder.scheme = validate ? httpScheme : wsScheme
+        builder.scheme = wsScheme
         builder.path = "/" + pathSegments.joined(separator: "/")
 
         var queryItems = [
             URLQueryItem(name: "protocol", value: connectOptions.protocolVersion.description),
             URLQueryItem(name: "sdk", value: "swift"),
             URLQueryItem(name: "version", value: LiveKitSDK.version),
+            URLQueryItem(name: "client_protocol", value: String(connectOptions.clientProtocol.rawValue)),
             // Additional client info
             URLQueryItem(name: "os", value: String(describing: os())),
             URLQueryItem(name: "os_version", value: osVersionString()),
@@ -215,51 +213,102 @@ class Utils: Loggable {
         return result
     }
 
-    static func computeVideoEncodings(
-        dimensions: Dimensions,
-        publishOptions: VideoPublishOptions?,
-        isScreenShare: Bool = false,
-        overrideVideoCodec: VideoCodec? = nil
-    ) -> [LKRTCRtpEncodingParameters] {
-        let publishOptions = publishOptions ?? VideoPublishOptions()
-        let preferredEncoding: VideoEncoding? = isScreenShare ? publishOptions.screenShareEncoding : publishOptions.encoding
-        let encoding = preferredEncoding ?? dimensions.computeSuggestedPreset(in: dimensions.computeSuggestedPresets(isScreenShare: isScreenShare))
+    static func buildJoinRequestUrl(
+        _ url: URL,
+        connectOptions: ConnectOptions? = nil,
+        reconnectMode: ReconnectMode? = nil,
+        participantSid: Participant.Sid? = nil,
+        adaptiveStream: Bool,
+    ) throws -> URL {
+        let connectOptions = connectOptions ?? ConnectOptions()
 
-        let videoCodec = overrideVideoCodec ?? publishOptions.preferredCodec
-
-        if let videoCodec, videoCodec.isSVC {
-            // SVC mode — screen share always uses L1T3 (single spatial layer required)
-            let mode: ScalabilityMode = isScreenShare ? .L1T3 : publishOptions.scalabilityMode
-            log("Using SVC mode, scalabilityMode: \(mode)")
-            return [RTC.createRtpEncodingParameters(encoding: encoding, scalabilityMode: mode)]
-        } else if !publishOptions.simulcast {
-            // Not-simulcast mode
-            log("Simulcast not enabled")
-            return [RTC.createRtpEncodingParameters(encoding: encoding)]
+        guard var builder = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            throw LiveKitError(.failedToParseUrl)
         }
 
-        // Continue to simulcast encoding computation...
+        let wsScheme = url.isSecure ? "wss" : "ws"
 
-        let baseParameters = VideoParameters(dimensions: dimensions,
-                                             encoding: encoding)
+        var pathSegments = url.pathComponents
+        pathSegments.removeAll(where: { $0.isEmpty || $0 == "/" })
+        if !url.hasDirectoryPath, let last = pathSegments.last,
+           ["rtc", "validate"].contains(last)
+        {
+            pathSegments.removeLast()
+        }
+        pathSegments.append("rtc")
+        pathSegments.append("v1")
 
-        // get suggested presets for the dimensions
-        let preferredPresets = (isScreenShare ? publishOptions.screenShareSimulcastLayers : publishOptions.simulcastLayers)
-        let presets = (!preferredPresets.isEmpty ? preferredPresets : baseParameters.defaultSimulcastLayers(isScreenShare: isScreenShare)).sorted { $0 < $1 }
+        builder.scheme = wsScheme
+        builder.path = "/" + pathSegments.joined(separator: "/")
 
-        log("Using presets: \(presets), count: \(presets.count) isScreenShare: \(isScreenShare)")
+        let encoded = try buildWrappedJoinRequest(connectOptions: connectOptions,
+                                                  reconnectMode: reconnectMode,
+                                                  participantSid: participantSid,
+                                                  adaptiveStream: adaptiveStream)
 
-        let lowPreset = presets[0]
-        let midPreset = presets[safe: 1]
+        builder.queryItems = [URLQueryItem(name: "join_request", value: encoded)]
 
-        var resultPresets = [baseParameters]
-        if dimensions.max >= 960, let midPreset {
-            resultPresets = [lowPreset, midPreset, baseParameters]
-        } else if dimensions.max >= 480 {
-            resultPresets = [lowPreset, baseParameters]
+        guard let result = builder.url else {
+            throw LiveKitError(.failedToParseUrl)
         }
 
-        return dimensions.encodings(from: resultPresets)
+        return result
+    }
+
+    /// Converts a WebSocket URL to its HTTP validation counterpart.
+    /// - `wss://host/rtc?...` → `https://host/rtc/validate?...`
+    /// - `wss://host/rtc/v1?...` → `https://host/rtc/v1/validate?...`
+    static func toValidateUrl(_ wsUrl: URL) throws -> URL {
+        guard var components = URLComponents(url: wsUrl, resolvingAgainstBaseURL: false) else {
+            throw LiveKitError(.failedToParseUrl)
+        }
+        components.scheme = components.scheme == "wss" ? "https" : "http"
+        components.path = components.path.hasSuffix("/")
+            ? components.path + "validate"
+            : components.path + "/validate"
+        guard let result = components.url else {
+            throw LiveKitError(.failedToParseUrl)
+        }
+        return result
+    }
+
+    private static func buildWrappedJoinRequest(
+        connectOptions: ConnectOptions,
+        reconnectMode: ReconnectMode?,
+        participantSid: Participant.Sid?,
+        adaptiveStream: Bool,
+    ) throws -> String {
+        var joinRequest = Livekit_JoinRequest()
+        joinRequest.clientInfo = Livekit_ClientInfo.with {
+            $0.sdk = .swift
+            $0.version = LiveKitSDK.version
+            $0.protocol = Int32(connectOptions.protocolVersion.rawValue)
+            $0.clientProtocol = Int32(connectOptions.clientProtocol.rawValue)
+            $0.os = String(describing: os())
+            $0.osVersion = osVersionString()
+            if let model = modelIdentifier() { $0.deviceModel = model }
+            if let network = networkTypeString() { $0.network = network }
+        }
+        joinRequest.connectionSettings = Livekit_ConnectionSettings.with {
+            $0.autoSubscribe = connectOptions.autoSubscribe
+            $0.adaptiveStream = adaptiveStream
+        }
+
+        if reconnectMode == .quick {
+            joinRequest.reconnect = true
+            joinRequest.reconnectReason = .rrSignalDisconnected
+            if let sid = participantSid {
+                joinRequest.participantSid = sid.stringValue
+            }
+        }
+
+        let joinRequestData = try joinRequest.serializedData()
+        let wrappedData = try Livekit_WrappedJoinRequest.with {
+            $0.compression = .none
+            $0.joinRequest = joinRequestData
+        }.serializedData()
+
+        return wrappedData.base64EncodedString()
     }
 }
 

@@ -17,6 +17,8 @@
 @preconcurrency import AVFAudio
 
 final class AudioConverter: Sendable {
+    static let defaultOutputBufferCapacity: AVAudioFrameCount = 1024 * 10
+
     let inputFormat: AVAudioFormat
     let outputFormat: AVAudioFormat
 
@@ -28,10 +30,10 @@ final class AudioConverter: Sendable {
         let inputSampleRate = inputFormat.sampleRate
         let outputSampleRate = outputFormat.sampleRate
         // Compute the output frame capacity based on sample rate ratio
-        return AVAudioFrameCount(Double(inputFrameCount) * (outputSampleRate / inputSampleRate))
+        return AVAudioFrameCount(ceil(Double(inputFrameCount) * (outputSampleRate / inputSampleRate)))
     }
 
-    init?(from inputFormat: AVAudioFormat, to outputFormat: AVAudioFormat, outputBufferCapacity: AVAudioFrameCount = 9600) {
+    init?(from inputFormat: AVAudioFormat, to outputFormat: AVAudioFormat, outputBufferCapacity: AVAudioFrameCount = AudioConverter.defaultOutputBufferCapacity) {
         guard let converter = AVAudioConverter(from: inputFormat, to: outputFormat),
               let buffer = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: outputBufferCapacity)
         else {
@@ -46,12 +48,8 @@ final class AudioConverter: Sendable {
 
     func convert(from inputBuffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer {
         var error: NSError?
-        #if swift(>=6.0)
         // Won't be accessed concurrently, marking as nonisolated(unsafe) to avoid Atomics.
         nonisolated(unsafe) var bufferFilled = false
-        #else
-        var bufferFilled = false
-        #endif
 
         converter.convert(to: outputBuffer, error: &error) { _, outStatus in
             if bufferFilled {

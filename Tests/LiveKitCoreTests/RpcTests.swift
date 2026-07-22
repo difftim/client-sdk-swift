@@ -14,198 +14,214 @@
  * limitations under the License.
  */
 
+import Foundation
 @testable import LiveKit
+import Testing
 #if canImport(LiveKitTestSupport)
 import LiveKitTestSupport
 #endif
 
-class RpcTests: LKTestCase {
-    // Test performing RPC calls and verifying outgoing packets
-    func testPerformRpc() async throws {
-        try await withRooms([RoomTestingOptions()]) { rooms in
-            let room = rooms[0]
-
-            let expectRequest = self.expectation(description: "Should send RPC request packet")
-
-            let mockDataChannel = MockDataChannelPair { packet in
-                guard case let .rpcRequest(request) = packet.value else {
-                    print("Not an RPC request packet")
-                    return
-                }
-
-                guard request.method == "test-method", request.payload == "test-payload", request.responseTimeoutMs == 8000 else {
-                    return
-                }
-
-                // Trigger fake response packets
-                Task {
-                    try await Task.sleep(nanoseconds: 100_000_000)
-
-                    room.localParticipant.handleIncomingRpcAck(requestId: request.id)
-
-                    try await Task.sleep(nanoseconds: 100_000_000)
-
-                    room.localParticipant.handleIncomingRpcResponse(
-                        requestId: request.id,
-                        payload: "response-payload",
-                        error: nil
-                    )
-                }
-                expectRequest.fulfill()
-            }
-
-            room.publisherDataChannel = mockDataChannel
-
-            let response = try await room.localParticipant.performRpc(
-                destinationIdentity: Participant.Identity(from: "test-destination"),
-                method: "test-method",
-                payload: "test-payload"
-            )
-
-            XCTAssertEqual(response, "response-payload")
-            await self.fulfillment(of: [expectRequest], timeout: 5.0)
+@Suite(.serialized, .tags(.e2e, .rpc))
+struct RpcTests {
+    /// Spin up a paired responder + caller for an e2e RPC test, exposing the
+    /// responder's identity (the most common pre-RPC dependency). Defaults
+    /// give both rooms `canPublishData: true` and the SDK-default
+    /// `ClientProtocol`; callers override for v0-fallback scenarios.
+    private func withRpcPair(
+        responder responderOptions: RoomTestingOptions = .init(canPublishData: true),
+        caller callerOptions: RoomTestingOptions = .init(canPublishData: true),
+        _ block: @escaping (
+            _ responder: Room,
+            _ caller: Room,
+            _ responderIdentity: Participant.Identity
+        ) async throws -> Void,
+    ) async throws {
+        try await TestEnvironment.withRooms([responderOptions, callerOptions]) { rooms in
+            let responder = rooms[0]
+            let caller = rooms[1]
+            let responderIdentity = try #require(responder.localParticipant.identity)
+            try await block(responder, caller, responderIdentity)
         }
     }
 
-    // Test registering and handling incoming RPC requests
-    func testHandleIncomingRpcRequest() async throws {
-        try await withRooms([RoomTestingOptions()]) { rooms in
-            let room = rooms[0]
+    /// v2 caller happy path (short payload). Both peers advertise the current
+    /// `ClientProtocol`, so the request/response flow uses v2 data streams end-to-end.
+    @Test(.spec("https://github.com/livekit/client-sdk-js/blob/92c72f06/RPC_SPEC.md?plain=1#L204"))
+    func v2CallerHappyPathShort() async throws {
+        try await withRpcPair { responder, caller, responderIdentity in
+            try await responder.registerRpcMethod("v2-method") { _ in "v2-response" }
 
-            let expectResponse = self.expectation(description: "Should send RPC response packet")
+            let response = try await caller.localParticipant.performRpc(
+                destinationIdentity: responderIdentity,
+                method: "v2-method",
+                payload: "small payload",
+            )
+            #expect(response == "v2-response")
+            #expect(await caller.rpcClient.pendingCount == 0)
+        }
+    }
 
-            let mockDataChannel = MockDataChannelPair { packet in
-                guard case let .rpcResponse(response) = packet.value else {
-                    return
+    /// v2 caller happy path with a payload above the v1 15 KB cap. Success through real
+    /// WebRTC proves the v2 data-stream path was used — v1 packets would have been
+    /// rejected with `REQUEST_PAYLOAD_TOO_LARGE`.
+    @Test(.spec("https://github.com/livekit/client-sdk-js/blob/92c72f06/RPC_SPEC.md?plain=1#L213"))
+    func v2CallerHappyPathLargePayload() async throws {
+        try await withRpcPair { responder, caller, responderIdentity in
+            let largePayload = String(repeating: "x", count: 20000)
+            try await responder.registerRpcMethod("echo") { data in data.payload }
+
+            let response = try await caller.localParticipant.performRpc(
+                destinationIdentity: responderIdentity,
+                method: "echo",
+                payload: largePayload,
+            )
+            #expect(response == largePayload)
+            #expect(await caller.rpcClient.pendingCount == 0)
+        }
+    }
+
+    /// v2 handler happy path. The handler observes the real caller identity and payload
+    /// from a connected peer, returns a value, and the caller receives it.
+    @Test(.spec("https://github.com/livekit/client-sdk-js/blob/92c72f06/RPC_SPEC.md?plain=1#L222"))
+    func v2HandlerHappyPath() async throws {
+        try await withRpcPair { responder, caller, responderIdentity in
+            let callerIdentity = try #require(caller.localParticipant.identity)
+
+            try await confirmation("handler invoked with the caller's identity and payload") { handlerInvoked in
+                try await responder.registerRpcMethod("greet") { data in
+                    #expect(data.callerIdentity == callerIdentity)
+                    #expect(data.payload == "Hi!")
+                    handlerInvoked()
+                    return "Hello, \(data.callerIdentity)!"
                 }
 
-                guard case let .payload(payload) = response.value else {
-                    return
-                }
-
-                guard response.requestID == "test-request-1",
-                      payload == "Hello, test-caller!"
-                else {
-                    return
-                }
-
-                expectResponse.fulfill()
+                let response = try await caller.localParticipant.performRpc(
+                    destinationIdentity: responderIdentity,
+                    method: "greet",
+                    payload: "Hi!",
+                )
+                #expect(response == "Hello, \(callerIdentity)!")
             }
+        }
+    }
 
-            room.publisherDataChannel = mockDataChannel
+    /// Regression test: a v2 handler returning a payload larger than the v1 packet cap
+    /// (15 KB) must still succeed — the 15 KB cap is a v1 wire-format constraint, not a
+    /// handler-side limit. End-to-end success through real WebRTC proves the response
+    /// went over a v2 data stream rather than being silently mapped to
+    /// `responsePayloadTooLarge`.
+    @Test func v2HandlerCanReturnLargeResponse() async throws {
+        try await withRpcPair { responder, caller, responderIdentity in
+            let largePayload = String(repeating: "y", count: 20000)
+            try await responder.registerRpcMethod("echo") { _ in largePayload }
 
-            try await room.registerRpcMethod("greet") { data in
-                "Hello, \(data.callerIdentity)!"
+            let response = try await caller.localParticipant.performRpc(
+                destinationIdentity: responderIdentity,
+                method: "echo",
+                payload: "go",
+            )
+            #expect(response == largePayload)
+            #expect(await caller.rpcClient.pendingCount == 0)
+        }
+    }
+
+    /// v2 caller receives a typed error from a v2 handler that throws `RpcError`.
+    @Test(.spec("https://github.com/livekit/client-sdk-js/blob/92c72f06/RPC_SPEC.md?plain=1#L252"))
+    func v2CallerErrorResponse() async throws {
+        try await withRpcPair { responder, caller, responderIdentity in
+            try await responder.registerRpcMethod("fails") { _ in
+                throw RpcError(code: 101, message: "Test error message", data: "")
             }
-
-            let isRegistered = await room.isRpcMethodRegistered("greet")
-            XCTAssertTrue(isRegistered)
 
             do {
-                try await room.registerRpcMethod("greet") { _ in "" }
-                XCTFail("Duplicate RPC method registration should fail.")
-            } catch {
-                XCTAssertNotNil(error as? LiveKitError)
+                _ = try await caller.localParticipant.performRpc(
+                    destinationIdentity: responderIdentity,
+                    method: "fails",
+                    payload: "x",
+                )
+                Issue.record("Expected error not thrown")
+            } catch let error as RpcError {
+                #expect(error.code == 101)
+                #expect(error.message == "Test error message")
             }
-
-            await room.localParticipant.handleIncomingRpcRequest(
-                callerIdentity: Participant.Identity(from: "test-caller"),
-                requestId: "test-request-1",
-                method: "greet",
-                payload: "Hi there!",
-                responseTimeout: 8,
-                version: 1
-            )
-
-            await self.fulfillment(of: [expectResponse], timeout: 5.0)
+            #expect(await caller.rpcClient.pendingCount == 0)
         }
     }
 
-    // Test error handling for RPC calls
-    func testRpcErrorHandling() async throws {
-        try await withRooms([RoomTestingOptions()]) { rooms in
-            let room = rooms[0]
+    /// v2 caller, v1 responder: the responder advertises `clientProtocol = .v0`, which the
+    /// caller reads from `Livekit_ParticipantInfo` and uses to select the v1 packet path.
+    /// If fallback didn't trigger, the caller would publish a v2 stream on `lk.rpc_request`,
+    /// the v0 responder wouldn't subscribe to that topic, and the call would time out — so
+    /// response arrival is the proof.
+    @Test(.spec("https://github.com/livekit/client-sdk-js/blob/92c72f06/RPC_SPEC.md?plain=1#L265"))
+    func v2CallerV1FallbackUsesPacket() async throws {
+        try await withRpcPair(responder: .init(clientProtocol: .v0, canPublishData: true)) { responder, caller, responderIdentity in
+            try await responder.registerRpcMethod("method") { _ in "v1-response" }
 
-            let expectError = self.expectation(description: "Should send error response packet")
-
-            let mockDataChannel = MockDataChannelPair { packet in
-                guard case let .rpcResponse(response) = packet.value,
-                      case let .error(error) = response.value
-                else {
-                    return
-                }
-
-                guard error.code == 2000,
-                      error.message == "Custom error",
-                      error.data == "Additional data"
-                else {
-                    return
-                }
-
-                expectError.fulfill()
-            }
-
-            room.publisherDataChannel = mockDataChannel
-
-            try await room.registerRpcMethod("failingMethod") { _ in
-                throw RpcError(code: 2000, message: "Custom error", data: "Additional data")
-            }
-
-            await room.localParticipant.handleIncomingRpcRequest(
-                callerIdentity: Participant.Identity(from: "test-caller"),
-                requestId: "test-request-1",
-                method: "failingMethod",
-                payload: "test",
-                responseTimeout: 8,
-                version: 1
+            let response = try await caller.localParticipant.performRpc(
+                destinationIdentity: responderIdentity,
+                method: "method",
+                payload: "x",
             )
-
-            await self.fulfillment(of: [expectError], timeout: 5.0)
+            #expect(response == "v1-response")
+            #expect(await caller.rpcClient.pendingCount == 0)
         }
     }
 
-    // Test unregistering RPC methods
-    func testUnregisterRpcMethod() async throws {
-        try await withRooms([RoomTestingOptions()]) { rooms in
-            let room = rooms[0]
+    /// After a caller disconnects and reconnects, v2 RPC must still route correctly.
+    /// Exercises `setupRpc` idempotency: the second `connect()` re-runs `setupRpc`, and
+    /// `IncomingStreamManager.registerTextStreamHandlerIfNeeded` no-ops when the v2 RPC
+    /// stream handlers are still registered, so routing stays intact across reconnects.
+    /// The responder is kept connected throughout so its `rpcServer.handlers` remain
+    /// intact too.
+    @Test func v2RpcWorksAfterReconnect() async throws {
+        try await withRpcPair { responder, caller, responderIdentity in
+            try await responder.registerRpcMethod("ping") { _ in "pong" }
 
-            let expectUnsupportedMethod = self.expectation(description: "Should send unsupported method error packet")
-
-            let mockDataChannel = MockDataChannelPair { packet in
-                guard case let .rpcResponse(response) = packet.value,
-                      case let .error(error) = response.value
-                else {
-                    return
-                }
-
-                guard error.code == RpcError.BuiltInError.unsupportedMethod.code else {
-                    return
-                }
-
-                expectUnsupportedMethod.fulfill()
-            }
-
-            room.publisherDataChannel = mockDataChannel
-
-            try await room.registerRpcMethod("test") { _ in
-                "test response"
-            }
-
-            await room.unregisterRpcMethod("test")
-
-            let isRegistered = await room.isRpcMethodRegistered("test")
-            XCTAssertFalse(isRegistered)
-
-            await room.localParticipant.handleIncomingRpcRequest(
-                callerIdentity: Participant.Identity(from: "test-caller"),
-                requestId: "test-request-1",
-                method: "test",
-                payload: "test",
-                responseTimeout: 10,
-                version: 1
+            let first = try await caller.localParticipant.performRpc(
+                destinationIdentity: responderIdentity,
+                method: "ping",
+                payload: "",
             )
+            #expect(first == "pong")
 
-            await self.fulfillment(of: [expectUnsupportedMethod], timeout: 5.0)
+            // Save credentials before disconnect (cleanUp clears them on the non-reconnect path).
+            let url = try #require(caller.url)
+            let token = try #require(caller.token)
+            await caller.disconnect()
+            try await caller.connect(url: url, token: token)
+
+            // `Room.cleanUp` resets `activeParticipantCompleters`, so after
+            // `caller.connect()` the completer for `responderIdentity` is fresh
+            // and resolves on the next `.active` transition.
+            try await caller.activeParticipantCompleters
+                .completer(for: responderIdentity.stringValue)
+                .wait(timeout: 10)
+
+            let second = try await caller.localParticipant.performRpc(
+                destinationIdentity: responderIdentity,
+                method: "ping",
+                payload: "",
+            )
+            #expect(second == "pong")
+            #expect(await caller.rpcClient.pendingCount == 0)
+        }
+    }
+
+    /// v2 caller falling back to the v1 path rejects payloads >15 KB before publishing.
+    @Test(.spec("https://github.com/livekit/client-sdk-js/blob/92c72f06/RPC_SPEC.md?plain=1#L283"))
+    func v2CallerV1FallbackRejectsLargePayload() async throws {
+        try await withRpcPair(responder: .init(clientProtocol: .v0, canPublishData: true)) { _, caller, responderIdentity in
+            let largePayload = String(repeating: "x", count: 20000)
+
+            await #expect(throws: RpcError.self) {
+                _ = try await caller.localParticipant.performRpc(
+                    destinationIdentity: responderIdentity,
+                    method: "method",
+                    payload: largePayload,
+                )
+            }
+            #expect(await caller.rpcClient.pendingCount == 0)
         }
     }
 }

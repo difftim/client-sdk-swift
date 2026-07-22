@@ -193,7 +193,7 @@ extension Room: SignalClientDelegate {
             if ttCallRespTmp?.hasBody == true,
                let body = ttCallRespTmp?.body,
                let encryptor = _state.roomOptions.e2eeOptions?.ttEncryptor,
-               !_state.connectionState.isDisconnectingOrDisconnected
+               !_state.connectionState.isTearingDown
             {
                 if let mk = encryptor.decryptCallKey(eKey: body.publicKey, eMKey: body.emk) {
                     log("[startcall] Decrypted call key successfully, setting shared key.")
@@ -243,9 +243,9 @@ extension Room: SignalClientDelegate {
                 }
             }
 
-            if !_state.connectionState.isDisconnectingOrDisconnected {
+            if !_state.connectionState.isTearingDown {
                 delegates.notify {
-                    if !self._state.connectionState.isDisconnectingOrDisconnected {
+                    if !self._state.connectionState.isTearingDown {
                         $0.roomDidSignalConnect?(self)
                     } else {
                         self.log("ignore roomDidSignalConnect callback, connectionState: \(self._state.connectionState)")
@@ -475,20 +475,28 @@ extension Room: SignalClientDelegate {
     }
 
     func signalClient(_: SignalClient, didReceiveIceCandidate iceCandidate: IceCandidate, target: Livekit_SignalTarget) async {
-        guard let transport = target == .subscriber ? _state.subscriber : _state.publisher else {
+        guard let mode = _state.transport else {
             log("Failed to add ice candidate, transport is nil for target: \(target)", .error)
             return
         }
 
         do {
-            try await transport.add(iceCandidate: iceCandidate)
+            try await mode.transport(for: target).add(iceCandidate: iceCandidate)
         } catch {
-            log("Failed to add ice candidate for transport: \(transport), error: \(error)", .error)
+            log("Failed to add ice candidate for target: \(target), error: \(error)", .error)
         }
     }
 
     func signalClient(_: SignalClient, didReceiveAnswer answer: LKRTCSessionDescription, offerId: UInt32) async {
         log("Received answer for offerId: \(offerId)")
+
+        // Clamp to the SDK default — libwebrtc advertises larger (~256 KiB)
+        // than LiveKit/pion can deliver end-to-end (~64 KiB), so we trust
+        // the answer no more than our compiled-in ceiling.
+        let parsed = parseSDPMaxMessageSize(answer.sdp) ?? DataChannelPair.defaultMaxMessageSize
+        let maxMessageSize = min(parsed, DataChannelPair.defaultMaxMessageSize)
+        publisherDataChannel.set(maxMessageSize: maxMessageSize)
+        log("Negotiated data channel max-message-size: \(maxMessageSize) bytes", .debug)
 
         do {
             let publisher = try requirePublisher()
@@ -499,18 +507,19 @@ extension Room: SignalClientDelegate {
     }
 
     func signalClient(_ signalClient: SignalClient, didReceiveOffer offer: LKRTCSessionDescription, offerId: UInt32) async {
-        log("Received offer with offerId: \(offerId), creating & sending answer...")
-
-        guard let subscriber = _state.subscriber else {
-            log("Failed to send answer, subscriber is nil", .error)
+        guard let subscriber = _state.transport?.dedicatedSubscriber else {
+            log("Received offer but not in dual PC mode, ignoring")
             return
         }
+
+        log("Received offer with offerId: \(offerId), creating & sending answer...")
 
         do {
             try await subscriber.set(remoteDescription: offer)
             let answer = try await subscriber.createAnswer()
             try await subscriber.set(localDescription: answer)
             try await signalClient.send(answer: answer, offerId: offerId)
+            connectSpan?.record("answer_sent")
         } catch {
             log("Failed to send answer for offerId: \(offerId), error: \(error)", .error)
         }
@@ -536,6 +545,25 @@ extension Room: SignalClientDelegate {
         // Notify LocalParticipant.
         localParticipant.delegates.notify {
             $0.participant?(self.localParticipant, remoteDidSubscribeTrack: track)
+        }
+    }
+
+    func signalClient(_: SignalClient, didReceiveMediaSectionsRequirement requirement: Livekit_MediaSectionsRequirement) async {
+        guard case let .publisherOnly(publisher) = _state.transport else { return }
+
+        let transceiverInit = LKRTCRtpTransceiverInit()
+        transceiverInit.direction = .recvOnly
+
+        do {
+            for _ in 0 ..< requirement.numAudios {
+                _ = try await publisher.addTransceiver(ofType: .audio, transceiverInit: transceiverInit)
+            }
+            for _ in 0 ..< requirement.numVideos {
+                _ = try await publisher.addTransceiver(ofType: .video, transceiverInit: transceiverInit)
+            }
+            try await publisherShouldNegotiate()
+        } catch {
+            log("Failed to add transceivers for media sections requirement: \(error)", .error)
         }
     }
 }
