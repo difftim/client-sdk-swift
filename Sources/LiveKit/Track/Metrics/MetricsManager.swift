@@ -99,8 +99,7 @@ actor MetricsManager {
         do {
             try await room.send(dataPacket: dataPacket)
             trackProperties[sid]?.lastSentHash = hash
-        } catch {
-        }
+        } catch {}
     }
 }
 
@@ -118,13 +117,13 @@ extension Livekit_MetricsBatch {
             outboundRtpStreams: statistics.outboundRtpStream,
             strings: &strings,
             identity: identity,
-            sid: trackSid?.stringValue
+            sid: trackSid?.stringValue,
         )
         addSubscriberStreamRttMetrics(
             from: statistics.remoteOutboundRtpStream,
             inboundRtpStreams: statistics.inboundRtpStream,
             strings: &strings,
-            identity: identity
+            identity: identity,
         )
         addConnectionRttMetrics(from: statistics.iceCandidatePair, strings: &strings, identity: identity, isPublisher: isPublisher)
         if !isPublisher {
@@ -230,7 +229,7 @@ extension Livekit_MetricsBatch {
         outboundRtpStreams: [OutboundRtpStreamStatistics],
         strings: inout OrderedSet<String>,
         identity: Participant.Identity?,
-        sid: String?
+        sid: String?,
     ) {
         for stat in statistics {
             let outbound = outboundRtpStreams.first { $0.id == stat.localId }
@@ -242,7 +241,7 @@ extension Livekit_MetricsBatch {
         from statistics: [RemoteOutboundRtpStreamStatistics],
         inboundRtpStreams: [InboundRtpStreamStatistics],
         strings: inout OrderedSet<String>,
-        identity: Participant.Identity?
+        identity: Participant.Identity?,
     ) {
         for stat in statistics {
             let inbound = inboundRtpStreams.first { $0.id == stat.localId }
@@ -328,7 +327,6 @@ extension Livekit_MetricsBatch {
         let index = set.append(string).index
         return UInt32(index + offset)
     }
-
 }
 
 private extension Numeric {

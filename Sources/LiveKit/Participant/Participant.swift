@@ -224,7 +224,7 @@ public class Participant: NSObject, @unchecked Sendable, ObservableObject, Logga
         _state.mutate {
             $0 = State(
                 sid: $0.sid,
-                identity: $0.identity
+                identity: $0.identity,
             )
         }
     }

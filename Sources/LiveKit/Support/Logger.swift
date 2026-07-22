@@ -34,7 +34,7 @@ public protocol Logger: Sendable {
         function: StaticString,
         line: UInt,
         metaData: ScopedMetadataContainer,
-        ptr: String?
+        ptr: String?,
     )
 }
 
@@ -49,7 +49,7 @@ public extension Logger {
         function: StaticString = #function,
         line: UInt = #line,
         metaData: ScopedMetadataContainer = ScopedMetadataContainer(),
-        ptr: String? = nil
+        ptr: String? = nil,
     ) {
         let ptr = ptr ?? String(describing: Unmanaged.passUnretained(self as AnyObject).toOpaque())
         log(message(), level, source: source(), file: file, type: type, function: function, line: line, metaData: metaData, ptr: ptr)
@@ -69,7 +69,7 @@ public struct DisabledLogger: Logger {
         function _: StaticString,
         line _: UInt,
         metaData _: ScopedMetadataContainer,
-        ptr _: String?
+        ptr _: String?,
     ) {}
 }
 
@@ -155,7 +155,7 @@ open class OSLogger: Logger, @unchecked Sendable {
         function: StaticString,
         line _: UInt,
         metaData: ScopedMetadataContainer,
-        ptr: String? = nil
+        ptr: String? = nil,
     ) {
         guard level >= minLevel else { return }
 

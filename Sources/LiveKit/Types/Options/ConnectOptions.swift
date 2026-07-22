@@ -272,6 +272,7 @@ public final class ConnectOptions: NSObject, Sendable {
     }
 
     // MARK: - Equal
+
     // Note: `sslCertificateVerifier` is intentionally excluded from `isEqual`/`hash`
     // (it is a non-Hashable closure-like verifier; identity is not meaningful for
     // option equality/caching).

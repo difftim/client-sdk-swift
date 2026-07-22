@@ -125,7 +125,7 @@ extension Room {
         token: String,
         // When this failover runs as part of a full reconnect, preserve the remote roster + cryptors
         // between region attempts so the UI can hold the last frame. Initial connect passes false.
-        preserveRemoteParticipants: Bool = false
+        preserveRemoteParticipants: Bool = false,
     ) async throws -> URL {
         var nextUrl = initialUrl
         var nextRegion = initialRegion

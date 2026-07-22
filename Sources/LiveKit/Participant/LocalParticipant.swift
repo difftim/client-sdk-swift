@@ -92,7 +92,7 @@ public class LocalParticipant: Participant, @unchecked Sendable {
         let room = try requireRoom()
         let track = LocalAudioTrack.createTrack(
             options: captureOptions ?? room._state.roomOptions.defaultAudioCaptureOptions,
-            reportStatistics: room._state.roomOptions.reportRemoteTrackStatistics
+            reportStatistics: room._state.roomOptions.reportRemoteTrackStatistics,
         )
 
         do {
@@ -422,7 +422,7 @@ extension LocalParticipant {
             self._isRepublishingTracks.mutate { $0 = true }
             defer { self._isRepublishingTracks.mutate { $0 = false } }
 
-            let mediaTracks = self._state.trackPublications.values.map { $0.track as? LocalTrack }.compactMap { $0 }
+            let mediaTracks = self._state.trackPublications.values.map { $0.track as? LocalTrack }.compactMap(\.self)
 
             await self.unpublishAll()
 

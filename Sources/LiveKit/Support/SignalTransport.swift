@@ -46,7 +46,7 @@ enum SignalTransportFactory: Loggable {
         if kind == .quic {
             log("use QUIC transport")
             if let transport = try await QUICSignalTransport.maybeCreate(
-                url: url, token: token, connectOptions: options, sendAfterOpen: sendAfterOpen
+                url: url, token: token, connectOptions: options, sendAfterOpen: sendAfterOpen,
             ) {
                 return transport
             }
@@ -60,7 +60,7 @@ enum SignalTransportFactory: Loggable {
         log("use WebSocket transport")
         let webSocketURL = rewriteURLIfQuicFallbackNeeded(originalURL: url, options: options)
         return try await WebSocketSignalTransport(
-            url: webSocketURL, token: token, connectOptions: options, sendAfterOpen: sendAfterOpen
+            url: webSocketURL, token: token, connectOptions: options, sendAfterOpen: sendAfterOpen,
         )
     }
 

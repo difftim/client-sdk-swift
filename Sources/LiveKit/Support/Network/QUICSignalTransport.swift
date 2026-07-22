@@ -75,7 +75,7 @@ actor QUICSignalTransport: SignalTransport {
                         let code = connection.connect(url: httpsURLString, propsJson: propsJson, timeoutMs: timeoutMs)
                         if code != 0 {
                             bridge.failConnectContinuation(
-                                LiveKitError(.network, message: "ttsignal connect returned \(code)")
+                                LiveKitError(.network, message: "ttsignal connect returned \(code)"),
                             )
                         }
                     }

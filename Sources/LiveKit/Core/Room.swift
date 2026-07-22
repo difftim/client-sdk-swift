@@ -794,7 +794,7 @@ extension Room {
                 isReconnectingWithMode: $0.isReconnectingWithMode,
                 connectionState: $0.connectionState,
                 reconnectTask: $0.reconnectTask,
-                disconnectError: LiveKitError.from(error: disconnectError)
+                disconnectError: LiveKitError.from(error: disconnectError),
             ) : State(
                 connectOptions: $0.connectOptions,
                 roomOptions: $0.roomOptions,
@@ -896,12 +896,12 @@ extension Room {
                     return
                 }
                 guard let self, !Task.isCancelled else { return }
-                self._pendingParticipantRemovals.mutate { $0[identity] = nil }
-                self.log("remote participant \(identity) did not reconnect within grace period, removing")
+                _pendingParticipantRemovals.mutate { $0[identity] = nil }
+                log("remote participant \(identity) did not reconnect within grace period, removing")
                 do {
-                    try await self._onParticipantDidDisconnect(identity: identity)
+                    try await _onParticipantDidDisconnect(identity: identity)
                 } catch {
-                    self.log("Failed to remove participant \(identity) after grace period, error: \(error)", .error)
+                    log("Failed to remove participant \(identity) after grace period, error: \(error)", .error)
                 }
             }
             pending[identity] = task
@@ -926,7 +926,9 @@ extension Room {
         }
         if !tasks.isEmpty {
             log("cancelling \(tasks.count) pending participant removal(s)")
-            for task in tasks { task.cancel() }
+            for task in tasks {
+                task.cancel()
+            }
         }
     }
 }
@@ -1046,7 +1048,7 @@ extension Room {
             guard await signalClient.connectionState != .disconnected else { return }
 
             if _state.connectOptions.transportKind == .quic,
-               !(await signalClient.isQuicMarkedUnhealthy),
+               await !(signalClient.isQuicMarkedUnhealthy),
                await signalClient.canRestartTransport()
             {
                 log("[reconnect][net] connectivity lost with QUIC signal, deferring reconnect without closing signal transport")
@@ -1151,7 +1153,7 @@ extension Room {
                     : (pendingMode ?? nextReconnectMode)
                 state.pendingReconnectOnConnectivity = State.PendingReconnect(
                     reason: reason,
-                    nextReconnectMode: mergedMode
+                    nextReconnectMode: mergedMode,
                 )
                 // Externalize as `.reconnecting` on ANY deferred entry —
                 // regardless of whether the merged intent is `.full` or

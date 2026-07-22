@@ -298,7 +298,7 @@ actor SignalClient: Loggable {
     }
 
     func selectedTransportKind(requestedKind: TransportKind, reconnectMode _: ReconnectMode?) -> TransportKind {
-        return quicMarkedUnhealthy ? .websocket : requestedKind
+        quicMarkedUnhealthy ? .websocket : requestedKind
     }
 
     func resetQuicHealthForNewSession() {
