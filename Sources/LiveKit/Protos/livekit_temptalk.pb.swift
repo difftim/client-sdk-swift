@@ -344,6 +344,8 @@ public nonisolated struct Livekit_TTStartCall: Sendable {
 
   public var cipherMessages: [Livekit_TTCipherMessages] = []
 
+  public var clientCallID: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -896,7 +898,7 @@ nonisolated extension Livekit_TTNotification.TTArgs: SwiftProtobuf.Message, Swif
 
 nonisolated extension Livekit_TTStartCall: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TTStartCall"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}type\0\u{1}version\0\u{1}roomId\0\u{1}conversationId\0\u{1}publicKey\0\u{1}encInfos\0\u{1}encMeta\0\u{1}timestamp\0\u{1}notification\0\u{1}cipherMessages\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}type\0\u{1}version\0\u{1}roomId\0\u{1}conversationId\0\u{1}publicKey\0\u{1}encInfos\0\u{1}encMeta\0\u{1}timestamp\0\u{1}notification\0\u{1}cipherMessages\0\u{1}clientCallId\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -914,6 +916,7 @@ nonisolated extension Livekit_TTStartCall: SwiftProtobuf.Message, SwiftProtobuf.
       case 8: try { try decoder.decodeSingularInt64Field(value: &self.timestamp) }()
       case 9: try { try decoder.decodeSingularMessageField(value: &self._notification) }()
       case 10: try { try decoder.decodeRepeatedMessageField(value: &self.cipherMessages) }()
+      case 11: try { try decoder.decodeSingularStringField(value: &self.clientCallID) }()
       default: break
       }
     }
@@ -954,6 +957,9 @@ nonisolated extension Livekit_TTStartCall: SwiftProtobuf.Message, SwiftProtobuf.
     if !self.cipherMessages.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.cipherMessages, fieldNumber: 10)
     }
+    if !self.clientCallID.isEmpty {
+      try visitor.visitSingularStringField(value: self.clientCallID, fieldNumber: 11)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -968,6 +974,7 @@ nonisolated extension Livekit_TTStartCall: SwiftProtobuf.Message, SwiftProtobuf.
     if lhs.timestamp != rhs.timestamp {return false}
     if lhs._notification != rhs._notification {return false}
     if lhs.cipherMessages != rhs.cipherMessages {return false}
+    if lhs.clientCallID != rhs.clientCallID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
