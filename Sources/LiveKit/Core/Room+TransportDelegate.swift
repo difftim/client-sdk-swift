@@ -53,6 +53,7 @@ extension Room: TransportDelegate {
             } else if pcState.isDisconnected {
                 publisherTransportConnectedCompleter.reset(throwing: pcError)
             }
+            recomputeMediaSendConnectionState(publisherPCState: pcState)
         }
 
         // Allow `.reconnecting` too: when we previously deferred a reconnect

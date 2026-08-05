@@ -163,6 +163,18 @@ extension ConnectionState: CustomStringConvertible {
     }
 }
 
+extension MediaSendConnectionState: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .idle: ".idle"
+        case .connecting: ".connecting"
+        case .connected: ".connected"
+        case .recovering: ".recovering"
+        case .failed: ".failed"
+        }
+    }
+}
+
 extension ReconnectMode: CustomStringConvertible {
     public var description: String {
         switch self {

@@ -89,8 +89,8 @@ import LiveKitTestSupport
             // Verify cleanup actually ran (not skipped due to cancellation)
             #expect(room.connectionState == .disconnected)
 
-            let socketAfterCleanUp = await room.signalClient._state.socket
-            #expect(socketAfterCleanUp == nil)
+            let transportAfterCleanUp = await room.signalClient._state.transport
+            #expect(transportAfterCleanUp == nil)
 
             let signalConnectionState = await room.signalClient.connectionState
             #expect(signalConnectionState == .disconnected)
@@ -138,7 +138,7 @@ import LiveKitTestSupport
 
 private struct WeakRoomRefs: @unchecked Sendable {
     weak var signalClient: SignalClient?
-    weak var socket: WebSocket?
+    weak var signalTransport: AnyObject?
     weak var publisher: Transport?
     weak var subscriber: Transport?
     weak var publisherDataChannel: DataChannelPair?
@@ -161,7 +161,7 @@ private struct WeakRoomRefs: @unchecked Sendable {
 
     mutating func capture(from room: Room) async {
         signalClient = room.signalClient
-        socket = await room.signalClient._state.socket
+        signalTransport = await room.signalClient._state.transport as AnyObject?
 
         if let transport = room._state.transport {
             publisher = transport.publisher
@@ -193,7 +193,7 @@ private struct WeakRoomRefs: @unchecked Sendable {
 
     func expectAllNil() {
         #expect(signalClient == nil, "Leaked object: SignalClient")
-        #expect(socket == nil, "Leaked object: WebSocket")
+        #expect(signalTransport == nil, "Leaked object: SignalTransport")
         #expect(publisher == nil, "Leaked object: Publisher Transport")
         #expect(subscriber == nil, "Leaked object: Subscriber Transport")
         #expect(publisherDataChannel == nil, "Leaked object: Publisher DataChannel")

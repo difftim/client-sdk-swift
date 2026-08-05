@@ -21,6 +21,24 @@ internal import LiveKitWebRTC
 extension Room {
     // swiftlint:disable:next cyclomatic_complexity function_body_length
     func engine(_: Room, didMutateState state: Room.State, oldState: Room.State) {
+        if state.mediaSendConnectionState != oldState.mediaSendConnectionState {
+            delegates.notify(label: { "room.didUpdate mediaSendConnectionState: \(state.mediaSendConnectionState) oldValue: \(oldState.mediaSendConnectionState)" }) {
+                $0.room?(self, didUpdateMediaSendConnectionState: state.mediaSendConnectionState, from: oldState.mediaSendConnectionState)
+            }
+        }
+
+        // Recompute uplink health when room connectivity / publish demand changes.
+        // Must be deferred: `didMutateState` runs inside `StateSync.mutate`'s lock.
+        if state.connectionState != oldState.connectionState
+            || state.isReconnectingWithMode != oldState.isReconnectingWithMode
+            || state.hasPublished != oldState.hasPublished
+            || state.transport?.isSubscriberPrimary != oldState.transport?.isSubscriberPrimary
+        {
+            Task { [weak self] in
+                self?.recomputeMediaSendConnectionState()
+            }
+        }
+
         if state.connectionState != oldState.connectionState {
             // connectionState did update
 

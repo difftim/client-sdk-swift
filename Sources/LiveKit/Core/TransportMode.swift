@@ -50,6 +50,11 @@ extension TransportMode {
         }
     }
 
+    /// Whether room connection is driven by the subscriber PeerConnection.
+    var isSubscriberPrimary: Bool {
+        if case .subscriberPrimary = self { true } else { false }
+    }
+
     /// All distinct transports (one in single PC, two in dual PC).
     var allTransports: [Transport] {
         switch self {

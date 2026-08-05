@@ -129,8 +129,8 @@ struct WebSocketTests {
         try await room.connect(url: url, token: finalToken)
         #expect(room.connectionState == .connected)
 
-        let socket = await room.signalClient._state.socket
-        #expect(socket != nil)
+        let transport = await room.signalClient._state.transport
+        #expect(transport != nil)
 
         await room.disconnect()
         #expect(room.connectionState == .disconnected)

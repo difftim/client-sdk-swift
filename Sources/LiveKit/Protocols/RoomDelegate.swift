@@ -41,6 +41,13 @@ public protocol RoomDelegate: AnyObject, Sendable {
     @objc optional
     func room(_ room: Room, didUpdateConnectionState connectionState: ConnectionState, from oldConnectionState: ConnectionState)
 
+    /// ``Room/mediaSendConnectionState`` has updated.
+    ///
+    /// Useful when the room is already ``ConnectionState/connected`` but local
+    /// audio/video uplink is still negotiating, recovering, or failed.
+    @objc optional
+    func room(_ room: Room, didUpdateMediaSendConnectionState mediaSendConnectionState: MediaSendConnectionState, from oldMediaSendConnectionState: MediaSendConnectionState)
+
     @objc optional
     func roomDidSignalConnect(_ room: Room)
 

@@ -90,6 +90,15 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
     /// Current ``ConnectionState`` of the ``Room``.
     public var connectionState: ConnectionState { _state.connectionState }
 
+    /// Health of the local media send (uplink) path.
+    ///
+    /// When the server uses subscriber-primary, ``connectionState`` can be
+    /// ``ConnectionState/connected`` while the publisher transport is still
+    /// negotiating or failed. Apps should warn when the room is connected and
+    /// this value is neither ``MediaSendConnectionState/idle`` nor
+    /// ``MediaSendConnectionState/connected``.
+    public var mediaSendConnectionState: MediaSendConnectionState { _state.mediaSendConnectionState }
+
     /// True only when the ``Room`` is in a steady, fully-connected state.
     ///
     /// Returns `false` during quick or full reconnect, even if
@@ -212,6 +221,9 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
         var hasConnectivity: Bool?
         var disconnectError: LiveKitError?
         var hasPublished: Bool = false
+        /// Latest publisher PeerConnection state raw value (`LKRTCPeerConnectionState`).
+        var publisherTransportPCStateRaw: Int?
+        var mediaSendConnectionState: MediaSendConnectionState = .idle
 
         var transport: TransportMode?
 
