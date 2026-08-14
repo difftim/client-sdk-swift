@@ -27,16 +27,20 @@ extension Room {
             }
         }
 
-        // Recompute uplink health when room connectivity / publish demand changes.
-        // Must be deferred: `didMutateState` runs inside `StateSync.mutate`'s lock.
+        // Capture each uplink input transition while ordered by `StateSync`, then
+        // process it on the room's serial queue after the lock is released.
         if state.connectionState != oldState.connectionState
             || state.isReconnectingWithMode != oldState.isReconnectingWithMode
+            || state.isReconnectStartPending != oldState.isReconnectStartPending
+            || state.pendingReconnectOnConnectivity != oldState.pendingReconnectOnConnectivity
+            || state.hasConnectivity != oldState.hasConnectivity
             || state.hasPublished != oldState.hasPublished
+            || state.publisherTransportPCStateRaw != oldState.publisherTransportPCStateRaw
+            || state.mediaSendConnectionGeneration != oldState.mediaSendConnectionGeneration
+            || state.hasPublisherEverConnected != oldState.hasPublisherEverConnected
             || state.transport?.isSubscriberPrimary != oldState.transport?.isSubscriberPrimary
         {
-            Task { [weak self] in
-                self?.recomputeMediaSendConnectionState()
-            }
+            enqueueMediaSendConnectionStateTransition(state: state)
         }
 
         if state.connectionState != oldState.connectionState {

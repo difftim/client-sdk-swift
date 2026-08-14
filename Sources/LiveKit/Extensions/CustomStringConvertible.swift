@@ -171,6 +171,7 @@ extension MediaSendConnectionState: CustomStringConvertible {
         case .connected: ".connected"
         case .recovering: ".recovering"
         case .failed: ".failed"
+        case .roomRecovering: ".roomRecovering"
         }
     }
 }

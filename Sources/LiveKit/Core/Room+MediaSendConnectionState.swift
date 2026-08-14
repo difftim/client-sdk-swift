@@ -19,24 +19,67 @@ import Foundation
 internal import LiveKitWebRTC
 
 extension Room {
-    func recomputeMediaSendConnectionState(publisherPCState: LKRTCPeerConnectionState? = nil) {
+    private struct MediaSendConnectionSnapshot {
+        let connectionState: ConnectionState
+        let isSubscriberPrimary: Bool
+        let hasPublished: Bool
+        let hasConnectivity: Bool?
+        let hasPendingReconnect: Bool
+        let isReconnectStartPending: Bool
+        let isReconnectingWithMode: Bool
+        let generation: UInt64
+        let hasPublisherEverConnected: Bool
+        let publisherPCStateRaw: Int?
+
+        init(state: State) {
+            connectionState = state.connectionState
+            isSubscriberPrimary = state.transport?.isSubscriberPrimary ?? false
+            hasPublished = state.hasPublished
+            hasConnectivity = state.hasConnectivity
+            hasPendingReconnect = state.pendingReconnectOnConnectivity != nil
+            isReconnectStartPending = state.isReconnectStartPending
+            isReconnectingWithMode = state.isReconnectingWithMode != nil
+            generation = state.mediaSendConnectionGeneration
+            hasPublisherEverConnected = state.hasPublisherEverConnected
+            publisherPCStateRaw = state.publisherTransportPCStateRaw
+        }
+    }
+
+    func enqueueMediaSendConnectionStateTransition(state: State) {
+        let snapshot = MediaSendConnectionSnapshot(state: state)
+        _blockProcessQueue.async { [weak self] in
+            self?.processMediaSendConnectionStateTransition(snapshot)
+        }
+    }
+
+    private func processMediaSendConnectionStateTransition(_ snapshot: MediaSendConnectionSnapshot) {
         _ = _state.mutate { state -> MediaSendConnectionState in
-            if let publisherPCState {
-                state.publisherTransportPCStateRaw = publisherPCState.rawValue
+            guard snapshot.generation == state.mediaSendConnectionGeneration else {
+                return state.mediaSendConnectionState
             }
 
-            let pcState = publisherPCState ?? state.publisherTransportPCStateRaw.flatMap {
+            let pcState = snapshot.publisherPCStateRaw.flatMap {
                 LKRTCPeerConnectionState(rawValue: $0)
             }
 
-            let isSubscriberPrimary: Bool = state.transport?.isSubscriberPrimary ?? false
+            state.isWholeConnectionRecovering = Self.computeWholeConnectionRecovering(
+                wasRecovering: state.isWholeConnectionRecovering,
+                connectionState: snapshot.connectionState,
+                hasConnectivity: snapshot.hasConnectivity,
+                hasPendingReconnect: snapshot.hasPendingReconnect,
+                isReconnectStartPending: snapshot.isReconnectStartPending,
+                isReconnectingWithMode: snapshot.isReconnectingWithMode,
+                hasPublished: snapshot.hasPublished,
+                isPublisherPCConnected: pcState == .connected,
+            )
 
             let computed = Self.computeMediaSendConnectionState(
-                connectionState: state.connectionState,
-                isSubscriberPrimary: isSubscriberPrimary,
-                hasPublished: state.hasPublished,
-                isReconnectingWithMode: state.isReconnectingWithMode,
-                publisherPCState: pcState
+                connectionState: snapshot.connectionState,
+                isSubscriberPrimary: snapshot.isSubscriberPrimary,
+                hasPublished: snapshot.hasPublished,
+                isWholeConnectionRecovering: state.isWholeConnectionRecovering,
+                hasPublisherEverConnected: snapshot.hasPublisherEverConnected,
+                publisherPCState: pcState,
             )
 
             guard state.mediaSendConnectionState != computed else {
@@ -52,8 +95,9 @@ extension Room {
         connectionState: ConnectionState,
         isSubscriberPrimary: Bool,
         hasPublished: Bool,
-        isReconnectingWithMode: ReconnectMode?,
-        publisherPCState: LKRTCPeerConnectionState?
+        isWholeConnectionRecovering: Bool,
+        hasPublisherEverConnected: Bool,
+        publisherPCState: LKRTCPeerConnectionState?,
     ) -> MediaSendConnectionState {
         switch connectionState {
         case .disconnected, .disconnecting:
@@ -62,12 +106,14 @@ extension Room {
             break
         }
 
+        if isWholeConnectionRecovering {
+            return .roomRecovering
+        }
+
         if !isSubscriberPrimary {
             switch connectionState {
-            case .connected where isReconnectingWithMode == nil:
-                return .connected
             case .connected:
-                return .recovering
+                return .connected
             case .connecting, .reconnecting:
                 return hasPublished ? .connecting : .idle
             default:
@@ -84,10 +130,6 @@ extension Room {
 
         guard hasPublished else { return .idle }
 
-        if isReconnectingWithMode != nil || connectionState == .reconnecting {
-            return .recovering
-        }
-
         guard let publisherPCState else {
             return .connecting
         }
@@ -100,10 +142,38 @@ extension Room {
         case .failed, .closed:
             return .failed
         case .disconnected:
-            return .recovering
+            return hasPublisherEverConnected ? .recovering : .connecting
         @unknown default:
             return .connecting
         }
+    }
+
+    static func computeWholeConnectionRecovering(
+        wasRecovering: Bool,
+        connectionState: ConnectionState,
+        hasConnectivity: Bool?,
+        hasPendingReconnect: Bool,
+        isReconnectStartPending: Bool,
+        isReconnectingWithMode: Bool,
+        hasPublished: Bool,
+        isPublisherPCConnected: Bool,
+    ) -> Bool {
+        let hasRecoverySignal = hasConnectivity == false
+            || hasPendingReconnect
+            || isReconnectStartPending
+            || isReconnectingWithMode
+            || connectionState == .reconnecting
+
+        if hasRecoverySignal {
+            return true
+        }
+
+        guard wasRecovering else { return false }
+
+        let isStable = connectionState == .connected
+            && hasConnectivity != false
+            && (!hasPublished || isPublisherPCConnected)
+        return !isStable
     }
 
     /// Test helper that avoids importing LiveKitWebRTC from test targets.
@@ -111,15 +181,17 @@ extension Room {
         connectionState: ConnectionState,
         isSubscriberPrimary: Bool,
         hasPublished: Bool,
-        isReconnectingWithMode: ReconnectMode?,
-        publisherPCStateRaw: Int?
+        isWholeConnectionRecovering: Bool,
+        hasPublisherEverConnected: Bool,
+        publisherPCStateRaw: Int?,
     ) -> MediaSendConnectionState {
         computeMediaSendConnectionState(
             connectionState: connectionState,
             isSubscriberPrimary: isSubscriberPrimary,
             hasPublished: hasPublished,
-            isReconnectingWithMode: isReconnectingWithMode,
-            publisherPCState: publisherPCStateRaw.flatMap { LKRTCPeerConnectionState(rawValue: $0) }
+            isWholeConnectionRecovering: isWholeConnectionRecovering,
+            hasPublisherEverConnected: hasPublisherEverConnected,
+            publisherPCState: publisherPCStateRaw.flatMap { LKRTCPeerConnectionState(rawValue: $0) },
         )
     }
 }

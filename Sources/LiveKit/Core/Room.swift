@@ -94,9 +94,11 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
     ///
     /// When the server uses subscriber-primary, ``connectionState`` can be
     /// ``ConnectionState/connected`` while the publisher transport is still
-    /// negotiating or failed. Apps should warn when the room is connected and
-    /// this value is neither ``MediaSendConnectionState/idle`` nor
-    /// ``MediaSendConnectionState/connected``.
+    /// negotiating or failed. Normal ``MediaSendConnectionState/connecting``
+    /// negotiation does not require a warning; use
+    /// ``MediaSendConnectionState/isRoomRecovering`` and
+    /// ``MediaSendConnectionState/isMediaSendAbnormal`` to identify recovery
+    /// or failure states.
     public var mediaSendConnectionState: MediaSendConnectionState { _state.mediaSendConnectionState }
 
     /// True only when the ``Room`` is in a steady, fully-connected state.
@@ -223,6 +225,12 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
         var hasPublished: Bool = false
         /// Latest publisher PeerConnection state raw value (`LKRTCPeerConnectionState`).
         var publisherTransportPCStateRaw: Int?
+        /// Invalidates queued media-send snapshots across complete cleanup boundaries.
+        var mediaSendConnectionGeneration: UInt64 = 0
+        /// Sticky for the current room session, including quick and full reconnects.
+        var hasPublisherEverConnected: Bool = false
+        /// Serialized latch for recovery affecting the room's whole connection.
+        var isWholeConnectionRecovering: Bool = false
         var mediaSendConnectionState: MediaSendConnectionState = .idle
 
         var transport: TransportMode?
@@ -791,6 +799,10 @@ extension Room {
 
         // Reset state
         _state.mutate {
+            let mediaSendConnectionGeneration = isFullReconnect
+                ? $0.mediaSendConnectionGeneration
+                : $0.mediaSendConnectionGeneration &+ 1
+
             // if isFullReconnect, keep connection related states
             $0 = isFullReconnect ? State(
                 connectOptions: $0.connectOptions,
@@ -807,6 +819,10 @@ extension Room {
                 connectionState: $0.connectionState,
                 reconnectTask: $0.reconnectTask,
                 disconnectError: LiveKitError.from(error: disconnectError),
+                mediaSendConnectionGeneration: mediaSendConnectionGeneration,
+                hasPublisherEverConnected: $0.hasPublisherEverConnected,
+                isWholeConnectionRecovering: $0.isWholeConnectionRecovering,
+                mediaSendConnectionState: $0.mediaSendConnectionState,
             ) : State(
                 connectOptions: $0.connectOptions,
                 roomOptions: $0.roomOptions,
@@ -814,6 +830,7 @@ extension Room {
                 connectionState: .disconnected,
                 reconnectTask: $0.reconnectTask,
                 disconnectError: LiveKitError.from(error: disconnectError),
+                mediaSendConnectionGeneration: mediaSendConnectionGeneration,
             )
         }
     }

@@ -62,7 +62,6 @@ extension Room {
             $0.transport = nil
             $0.hasPublished = false
             $0.publisherTransportPCStateRaw = nil
-            $0.mediaSendConnectionState = .idle
         }
     }
 

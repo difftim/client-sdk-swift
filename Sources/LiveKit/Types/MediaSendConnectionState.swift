@@ -27,8 +27,7 @@ import Foundation
 /// ```swift
 /// func room(_ room: Room, didUpdateMediaSendConnectionState state: MediaSendConnectionState, from _: MediaSendConnectionState) {
 ///     let shouldWarn = room.connectionState == .connected
-///         && state != .idle
-///         && state != .connected
+///         && (state.isRoomRecovering || state.isMediaSendAbnormal)
 ///     // show "Media send issue" when shouldWarn
 /// }
 /// ```
@@ -48,6 +47,9 @@ public enum MediaSendConnectionState: Int, Sendable {
 
     /// The publisher transport failed and local media cannot be sent.
     case failed
+
+    /// The room's whole connection is recovering, including the local media send path.
+    case roomRecovering
 }
 
 extension MediaSendConnectionState: Identifiable {
@@ -56,9 +58,11 @@ extension MediaSendConnectionState: Identifiable {
     }
 }
 
-extension MediaSendConnectionState {
-    /// `true` when the uplink is degraded while the room may still receive remote media.
-    public var isAbnormal: Bool {
+public extension MediaSendConnectionState {
+    /// `true` when the publisher transport is recovering or failed.
+    ///
+    /// This remains publisher-only and does not include normal negotiation or whole-room recovery.
+    var isAbnormal: Bool {
         switch self {
         case .recovering, .failed:
             true
@@ -67,10 +71,20 @@ extension MediaSendConnectionState {
         }
     }
 
+    /// `true` while the room's whole connection is recovering.
+    var isRoomRecovering: Bool {
+        self == .roomRecovering
+    }
+
+    /// `true` when only the local media send path is recovering or failed.
+    var isMediaSendAbnormal: Bool {
+        isAbnormal
+    }
+
     /// `true` when the uplink is not yet ready or is unhealthy.
-    public var isDegraded: Bool {
+    var isDegraded: Bool {
         switch self {
-        case .connecting, .recovering, .failed:
+        case .connecting, .roomRecovering, .recovering, .failed:
             true
         default:
             false

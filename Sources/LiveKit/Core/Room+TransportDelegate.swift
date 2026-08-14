@@ -30,6 +30,13 @@ extension LKRTCPeerConnectionState {
 }
 
 extension Room: TransportDelegate {
+    static func isCurrentPublisherTransport(
+        callbackTransportID: String,
+        currentPublisherTransportID: String?,
+    ) -> Bool {
+        callbackTransportID == currentPublisherTransportID
+    }
+
     func transport(_ transport: Transport, didUpdateState pcState: LKRTCPeerConnectionState) {
         log("target: \(transport.target), connectionState: \(pcState.description)")
 
@@ -53,7 +60,19 @@ extension Room: TransportDelegate {
             } else if pcState.isDisconnected {
                 publisherTransportConnectedCompleter.reset(throwing: pcError)
             }
-            recomputeMediaSendConnectionState(publisherPCState: pcState)
+            _state.mutate {
+                guard Self.isCurrentPublisherTransport(
+                    callbackTransportID: transport.id,
+                    currentPublisherTransportID: $0.transport?.publisher.id,
+                ) else {
+                    return
+                }
+
+                $0.publisherTransportPCStateRaw = pcState.rawValue
+                if pcState == .connected {
+                    $0.hasPublisherEverConnected = true
+                }
+            }
         }
 
         // Allow `.reconnecting` too: when we previously deferred a reconnect
