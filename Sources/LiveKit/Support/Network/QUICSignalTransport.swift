@@ -14,6 +14,17 @@
  * limitations under the License.
  */
 
+private let defaultQuicConnectTimeoutMs = 7000
+private let minQuicConnectTimeoutMs = 1000
+private let maxQuicConnectTimeoutMs = 15000
+
+func normalizeQuicConnectTimeoutMs(_ value: Int) -> Int {
+    guard minQuicConnectTimeoutMs ... maxQuicConnectTimeoutMs ~= value else {
+        return defaultQuicConnectTimeoutMs
+    }
+    return value
+}
+
 #if os(iOS)
 import Foundation
 import Network
@@ -58,12 +69,19 @@ actor QUICSignalTransport: SignalTransport {
         }
         bridge.setConnection(connection)
 
+        let configuredTimeoutMs = connectOptions?.quicConnectTimeoutMs ?? defaultQuicConnectTimeoutMs
+        let effectiveTimeoutMs = normalizeQuicConnectTimeoutMs(configuredTimeoutMs)
+        if effectiveTimeoutMs != configuredTimeoutMs {
+            Self.log(
+                "Invalid quicConnectTimeoutMs \(configuredTimeoutMs); using \(effectiveTimeoutMs)ms",
+                .warning,
+            )
+        }
+
         let propsJson = Self.buildPropsJson(token: token, connectOptions: connectOptions)
         let httpsURLString = Self.httpsURLString(from: url)
 
-        let configuredTimeout = connectOptions?.socketConnectTimeoutInterval ?? .defaultQUICSocketConnect
-        let quicTimeoutSec = Swift.min(configuredTimeout, .defaultQUICSocketConnect)
-        let timeoutMs = Int32(quicTimeoutSec * 1000)
+        let timeoutMs = Int32(effectiveTimeoutMs)
         let connectStartedAt = Date()
 
         do {
@@ -81,9 +99,9 @@ actor QUICSignalTransport: SignalTransport {
                     }
                 }
                 group.addTask {
-                    try await Task.sleep(nanoseconds: UInt64(quicTimeoutSec * 1_000_000_000))
-                    Self.log("QUIC connect timed out after \(quicTimeoutSec)s, will fall back", .warning)
-                    throw LiveKitError(.timedOut, message: "QUIC connect timed out after \(quicTimeoutSec)s")
+                    try await Task.sleep(nanoseconds: UInt64(effectiveTimeoutMs) * 1_000_000)
+                    Self.log("QUIC connect timed out after \(effectiveTimeoutMs)ms, will fall back", .warning)
+                    throw LiveKitError(.timedOut, message: "QUIC connect timed out after \(effectiveTimeoutMs)ms")
                 }
                 do {
                     try await group.next()
