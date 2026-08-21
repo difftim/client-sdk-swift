@@ -248,7 +248,16 @@ public class Participant: NSObject, @unchecked Sendable, ObservableObject, Logga
         }
 
         _state.mutate {
-            $0.sid = Sid(from: info.sid)
+            let newSid = Sid(from: info.sid)
+            // Connection quality is measured per session, so a new sid means the previous
+            // reading no longer describes the current connection. It has to be dropped here
+            // because the server only sends quality for participants we hold a track
+            // subscription to: a peer that reconnects without publishing would otherwise
+            // keep its stale pre-reconnect quality forever.
+            if $0.sid != newSid {
+                $0.connectionQuality = .unknown
+            }
+            $0.sid = newSid
             $0.identity = Identity(from: info.identity)
             $0.name = info.name
             $0.metadata = info.metadata
