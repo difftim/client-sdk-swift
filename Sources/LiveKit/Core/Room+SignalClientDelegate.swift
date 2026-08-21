@@ -318,15 +318,31 @@ extension Room: SignalClientDelegate {
     }
 
     func signalClient(_: SignalClient, didUpdateConnectionQuality connectionQuality: [Livekit_ConnectionQualityInfo]) async {
-        for entry in connectionQuality {
-            let participantSid = Participant.Sid(from: entry.participantSid)
-            if participantSid == localParticipant.sid {
-                // update for LocalParticipant
-                localParticipant._state.mutate { $0.connectionQuality = entry.quality.toLKType() }
-            } else if let participant = _state.read({ $0.remoteParticipant(forSid: participantSid) }) {
-                // udpate for RemoteParticipant
-                participant._state.mutate { $0.connectionQuality = entry.quality.toLKType() }
+        // Resolve everything up front so the log lands before the delegate notifications
+        // that the mutations below trigger.
+        let updates: [(participant: Participant?, sid: Participant.Sid, quality: ConnectionQuality)] = connectionQuality.map { entry in
+            let sid = Participant.Sid(from: entry.participantSid)
+            let participant: Participant? = if sid == localParticipant.sid {
+                localParticipant
+            } else {
+                _state.read { $0.remoteParticipant(forSid: sid) }
             }
+            return (participant, sid, entry.quality.toLKType())
+        }
+
+        // Logs what the server reported, including values that didn't change: `Participant`
+        // only notifies delegates on an actual change, so this is the only place that shows
+        // the server still reporting — or having gone quiet for someone.
+        if !updates.isEmpty {
+            log(updates.map { update in
+                let name = update.participant?.identity?.stringValue ?? update.sid.stringValue
+                let isLocal = update.participant === localParticipant
+                return "\(name)\(isLocal ? "(local)" : "")=\(update.quality)"
+            }.joined(separator: " "))
+        }
+
+        for update in updates {
+            update.participant?._state.mutate { $0.connectionQuality = update.quality }
         }
     }
 
