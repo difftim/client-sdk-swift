@@ -772,8 +772,6 @@ extension Room {
             await localParticipant.stopAllTrackCapture()
         }
 
-        // Clean up sender-related resources (incl. encryption state) before tearing down RTC.
-        // During reconnect local capture may still produce frames; tearing down RTC/cryptors first can cause callbacks to touch released objects and crash.
         // Cancel all track stats timers before closing transports to prevent
         // stats collection from accessing destroyed WebRTC channels.
         cancelTimers()
@@ -789,13 +787,27 @@ extension Room {
             log("[cleanup] e2eeManager.cleanUp end")
         }
 
-        log("[cleanup] cleanUpParticipants begin")
-        await cleanUpParticipants(isFullReconnect: isFullReconnect, preserveRemoteParticipants: preserveRemoteParticipants)
-        log("[cleanup] cleanUpParticipants end")
+        if stopTrackCaptureImmediately {
+            // Client-initiated disconnect has already stopped capture. Close RTC first so local
+            // participant cleanup skips removeTrack / renegotiation on a connection being torn down.
+            // Keep the legacy participant-first order for reconnect and failure cleanup, where
+            // capture may still be producing frames.
+            log("[cleanup] cleanUpRTC begin")
+            await cleanUpRTC(withError: disconnectError)
+            log("[cleanup] cleanUpRTC end")
 
-        log("[cleanup] cleanUpRTC begin")
-        await cleanUpRTC(withError: disconnectError)
-        log("[cleanup] cleanUpRTC end")
+            log("[cleanup] cleanUpParticipants begin")
+            await cleanUpParticipants(isFullReconnect: isFullReconnect, preserveRemoteParticipants: preserveRemoteParticipants)
+            log("[cleanup] cleanUpParticipants end")
+        } else {
+            log("[cleanup] cleanUpParticipants begin")
+            await cleanUpParticipants(isFullReconnect: isFullReconnect, preserveRemoteParticipants: preserveRemoteParticipants)
+            log("[cleanup] cleanUpParticipants end")
+
+            log("[cleanup] cleanUpRTC begin")
+            await cleanUpRTC(withError: disconnectError)
+            log("[cleanup] cleanUpRTC end")
+        }
 
         // Reset state
         _state.mutate {
