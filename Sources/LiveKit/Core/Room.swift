@@ -706,6 +706,22 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
 
 // MARK: - Internal
 
+enum RoomCleanupOrderingPolicy {
+    enum Ordering: Equatable {
+        case rtcFirst
+        case participantFirst
+    }
+
+    static func ordering(
+        stopTrackCaptureImmediately: Bool,
+        hasBroadcastScreenPublication: Bool,
+    ) -> Ordering {
+        stopTrackCaptureImmediately && !hasBroadcastScreenPublication
+            ? .rtcFirst
+            : .participantFirst
+    }
+}
+
 extension Room {
     // Resets state of Room.
     //
@@ -752,6 +768,7 @@ extension Room {
                           preserveRemoteParticipants: Bool = false,
                           stopTrackCaptureImmediately: Bool = false) async
     {
+        let cleanupOrdering = cleanupOrdering(stopTrackCaptureImmediately: stopTrackCaptureImmediately)
         log("withError: \(String(describing: disconnectError)), isFullReconnect: \(isFullReconnect), preserveRemoteParticipants: \(preserveRemoteParticipants), stopTrackCaptureImmediately: \(stopTrackCaptureImmediately)")
 
         // Reap all in-flight RPCs with `recipientDisconnected` (1503). Runs before the
@@ -787,11 +804,11 @@ extension Room {
             log("[cleanup] e2eeManager.cleanUp end")
         }
 
-        if stopTrackCaptureImmediately {
+        if cleanupOrdering == .rtcFirst {
             // Client-initiated disconnect has already stopped capture. Close RTC first so local
             // participant cleanup skips removeTrack / renegotiation on a connection being torn down.
-            // Keep the legacy participant-first order for reconnect and failure cleanup, where
-            // capture may still be producing frames.
+            // Broadcast capture keeps the legacy participant-first order because stopping it can
+            // synchronously trigger auto-unpublish through LocalTrackPublication.
             log("[cleanup] cleanUpRTC begin")
             await cleanUpRTC(withError: disconnectError)
             log("[cleanup] cleanUpRTC end")
@@ -844,6 +861,32 @@ extension Room {
                 disconnectError: LiveKitError.from(error: disconnectError),
                 mediaSendConnectionGeneration: mediaSendConnectionGeneration,
             )
+        }
+    }
+
+    private func cleanupOrdering(
+        stopTrackCaptureImmediately: Bool
+    ) -> RoomCleanupOrderingPolicy.Ordering {
+        RoomCleanupOrderingPolicy.ordering(
+            stopTrackCaptureImmediately: stopTrackCaptureImmediately,
+            hasBroadcastScreenPublication: hasPublishedBroadcastScreenTrack()
+        )
+    }
+
+    private func hasPublishedBroadcastScreenTrack() -> Bool {
+        localParticipant._state.trackPublications.values.contains { publication in
+            guard let localVideoTrack = publication.track as? LocalVideoTrack else { return false }
+
+            #if os(iOS)
+            return localVideoTrack.capturer is BroadcastScreenCapturer
+            #elseif os(macOS)
+            if #available(macOS 12.3, *) {
+                return localVideoTrack.capturer is MacOSScreenCapturer
+            }
+            return false
+            #else
+            return false
+            #endif
         }
     }
 
