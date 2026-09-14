@@ -40,10 +40,17 @@ class AudioDeviceModuleDelegateAdapter: NSObject, LKRTCAudioDeviceModuleDelegate
         return entryPoint?.engineDidCreate(engine) ?? 0
     }
 
+    // Keep both selectors while the fork transitions from M144.11 to newer builds.
+    @objc
     func audioDeviceModule(_: LKRTCAudioDeviceModule, willEnableEngine engine: AVAudioEngine, isPlayoutEnabled: Bool, isRecordingEnabled: Bool) -> Int {
         guard let audioManager else { return 0 }
         let entryPoint = audioManager.buildEngineObserverChain()
         return entryPoint?.engineWillEnable(engine, isPlayoutEnabled: isPlayoutEnabled, isRecordingEnabled: isRecordingEnabled) ?? 0
+    }
+
+    @objc
+    func audioDeviceModule(_ audioDeviceModule: LKRTCAudioDeviceModule, willEnableEngine engine: AVAudioEngine, isPlayoutEnabled: Bool, isRecordingEnabled: Bool, isVoiceProcessingEnabled _: Bool) -> Int {
+        self.audioDeviceModule(audioDeviceModule, willEnableEngine: engine, isPlayoutEnabled: isPlayoutEnabled, isRecordingEnabled: isRecordingEnabled)
     }
 
     func audioDeviceModule(_: LKRTCAudioDeviceModule, willStartEngine engine: AVAudioEngine, isPlayoutEnabled: Bool, isRecordingEnabled: Bool) -> Int {
