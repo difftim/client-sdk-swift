@@ -101,6 +101,13 @@ public final class ConnectOptions: NSObject, Sendable {
     /// Only used when ``transportKind`` is `.quic`.
     public let quicConnectTimeoutMs: Int
 
+    /// Forces QUIC signaling to bind to a physical interface instead of using
+    /// the operating system's default route.
+    ///
+    /// This is ignored by WebSocket signaling. When no physical interface is
+    /// available, QUIC fails and the SDK falls back to WebSocket.
+    public let forcePhysical: Bool
+
     /// Root CA certificate(s) in PEM format for TLS verification when the server chain is signed by a non-public CA.
     ///
     /// When `nil` or empty:
@@ -203,6 +210,7 @@ public final class ConnectOptions: NSObject, Sendable {
         quicDeviceType = 0
         quicCidTag = ""
         quicConnectTimeoutMs = 7000
+        forcePhysical = false
         caCertPem = nil
         serverHost = nil
         quicProxyUrl = nil
@@ -235,6 +243,7 @@ public final class ConnectOptions: NSObject, Sendable {
                 quicDeviceType: Int = 0,
                 quicCidTag: String = "",
                 quicConnectTimeoutMs: Int = 7000,
+                forcePhysical: Bool = false,
                 caCertPem: String? = nil,
                 serverHost: String? = nil,
                 quicProxyUrl: String? = nil,
@@ -266,6 +275,7 @@ public final class ConnectOptions: NSObject, Sendable {
         self.quicDeviceType = quicDeviceType
         self.quicCidTag = quicCidTag
         self.quicConnectTimeoutMs = quicConnectTimeoutMs
+        self.forcePhysical = forcePhysical
         self.caCertPem = caCertPem
         self.serverHost = serverHost
         self.quicProxyUrl = quicProxyUrl
@@ -306,6 +316,7 @@ public final class ConnectOptions: NSObject, Sendable {
             quicDeviceType == other.quicDeviceType &&
             quicCidTag == other.quicCidTag &&
             quicConnectTimeoutMs == other.quicConnectTimeoutMs &&
+            forcePhysical == other.forcePhysical &&
             caCertPem == other.caCertPem &&
             serverHost == other.serverHost &&
             quicProxyUrl == other.quicProxyUrl &&
@@ -339,6 +350,7 @@ public final class ConnectOptions: NSObject, Sendable {
         hasher.combine(quicDeviceType)
         hasher.combine(quicCidTag)
         hasher.combine(quicConnectTimeoutMs)
+        hasher.combine(forcePhysical)
         hasher.combine(caCertPem)
         hasher.combine(serverHost)
         hasher.combine(quicProxyUrl)

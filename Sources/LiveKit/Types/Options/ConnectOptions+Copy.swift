@@ -23,7 +23,8 @@ public extension ConnectOptions {
                   reconnectMaxDelay: ValueOrAbsent<TimeInterval> = .absent,
                   protocolVersion: ValueOrAbsent<ProtocolVersion> = .absent,
                   clientProtocol: ValueOrAbsent<ClientProtocol> = .absent,
-                  quicConnectTimeoutMs: ValueOrAbsent<Int> = .absent) -> ConnectOptions
+                  quicConnectTimeoutMs: ValueOrAbsent<Int> = .absent,
+                  forcePhysical: ValueOrAbsent<Bool> = .absent) -> ConnectOptions
     {
         ConnectOptions(autoSubscribe: autoSubscribe.value(ifAbsent: self.autoSubscribe),
                        reconnectAttempts: reconnectAttempts.value(ifAbsent: self.reconnectAttempts),
@@ -31,6 +32,7 @@ public extension ConnectOptions {
                        reconnectMaxDelay: reconnectMaxDelay.value(ifAbsent: self.reconnectMaxDelay),
                        protocolVersion: protocolVersion.value(ifAbsent: self.protocolVersion),
                        quicConnectTimeoutMs: quicConnectTimeoutMs.value(ifAbsent: self.quicConnectTimeoutMs),
+                       forcePhysical: forcePhysical.value(ifAbsent: self.forcePhysical),
                        clientProtocol: clientProtocol.value(ifAbsent: self.clientProtocol))
     }
 }

@@ -51,4 +51,16 @@ struct ConnectOptionsTests {
 
         #expect(options.copyWith(quicConnectTimeoutMs: .value(5000)).quicConnectTimeoutMs == 5000)
     }
+
+    @Test func forcePhysicalParticipatesInEqualityHashingAndCopying() {
+        let direct = ConnectOptions(forcePhysical: true)
+        let same = ConnectOptions(forcePhysical: true)
+        let systemRouted = ConnectOptions(forcePhysical: false)
+
+        #expect(direct == same)
+        #expect(direct.hash == same.hash)
+        #expect(direct != systemRouted)
+        #expect(direct.copyWith().forcePhysical)
+        #expect(!direct.copyWith(forcePhysical: .value(false)).forcePhysical)
+    }
 }

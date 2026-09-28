@@ -22,8 +22,8 @@ let package = Package(
         .package(url: "https://github.com/3th1UOYgUtJkurSZ/webrtc-xcframework.git", exact: "144.7559.15"),
         .package(url: "https://github.com/livekit/livekit-uniffi-xcframework.git", exact: "0.0.6"),
         .package(url: "https://github.com/apple/swift-protobuf.git", from: "1.31.0"),
-        // 1.0.20260612-1 adds MASQUE CONNECT-UDP proxy support to TTSignalConfig.
-        .package(url: "https://github.com/3th1UOYgUtJkurSZ/ttsignal-xcframework.git", exact: "1.0.20260612-1"),
+        // 1.0.20260928 adds per-connection force-physical QUIC routing.
+        .package(url: "https://github.com/3th1UOYgUtJkurSZ/ttsignal-xcframework.git", exact: "1.0.20260928"),
         // Only used for DocC generation
         .package(url: "https://github.com/apple/swift-docc-plugin.git", from: "1.3.0"),
     ],

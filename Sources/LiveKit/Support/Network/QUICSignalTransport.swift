@@ -181,6 +181,9 @@ actor QUICSignalTransport: SignalTransport {
         cfg.serverHost = Self.serverHost(url: url, connectOptions: connectOptions)
         cfg.caCertPem = connectOptions?.caCertPem ?? ""
         cfg.disableAutoRestart = true
+        if connectOptions?.forcePhysical == true {
+            cfg.vpnPolicy = .forcePhysical
+        }
 
         // QUIC-over-proxy (MASQUE CONNECT-UDP): tunnel the QUIC signaling through a
         // per-connection proxy. The outer hop is SPKI-pinned via quicProxySpkiPin
