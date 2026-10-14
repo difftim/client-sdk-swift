@@ -656,3 +656,20 @@ extension Room {
         return publisher
     }
 }
+
+// MARK: - Initial connect errors
+
+extension Room {
+    static func mediaUnreachableError(from error: Error, transport: String, elapsed: TimeInterval) -> Error {
+        if error is CancellationError {
+            return error
+        }
+        if let lkError = error as? LiveKitError, lkError.type == .cancelled {
+            return error
+        }
+        let elapsedMs = Int((elapsed * 1000).rounded())
+        return LiveKitError(.mediaUnreachable,
+                            message: "\(transport) transport not connected after \(elapsedMs)ms",
+                            internalError: error)
+    }
+}

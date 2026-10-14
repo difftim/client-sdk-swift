@@ -478,6 +478,8 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
                         connectOptions: ConnectOptions? = nil,
                         roomOptions: RoomOptions? = nil) async throws
     {
+        await signalClient.resetQuicHealthForNewSession()
+
         guard let providedUrl = URL(string: urlString), providedUrl.isValidForConnect else {
             log("URL parse failed", .error)
             throw LiveKitError(.failedToParseUrl)

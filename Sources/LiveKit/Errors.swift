@@ -72,6 +72,7 @@ public enum LiveKitErrorType: Int, Sendable {
 
     // TT specific
     case startCall = 2001
+    case mediaUnreachable = 2002
 }
 
 extension LiveKitErrorType: CustomStringConvertible {
@@ -139,6 +140,8 @@ extension LiveKitErrorType: CustomStringConvertible {
             "Region manager error"
         case .startCall:
             "TT Start Call Error"
+        case .mediaUnreachable:
+            "TT Media Unreachable"
         default: "Unknown"
         }
     }
