@@ -273,7 +273,7 @@ actor QUICSignalTransport: SignalTransport {
 // MARK: - Bridge
 
 /// Bridges ttsignal callbacks into continuation-driven async messaging (thread-safe).
-private final class QuicSignalBridge: TTSignalHandler, Loggable, @unchecked Sendable {
+final class QuicSignalBridge: TTSignalHandler, Loggable, @unchecked Sendable {
     private let _state = StateSync(State())
     private let eventContinuation: AsyncStream<CallbackEvent>.Continuation
     private var eventLoopTask: AnyTaskCancellable?
@@ -317,6 +317,15 @@ private final class QuicSignalBridge: TTSignalHandler, Loggable, @unchecked Send
         eventLoopTask?.cancel()
     }
 
+    /// Test seam: seeds buffered messages and a pending failure without a live ttsignal connection.
+    func seedForTesting(buffer: [URLSessionWebSocketTask.Message], failure: LiveKitError?) {
+        _state.mutate {
+            $0.buffer = buffer
+            $0.failure = failure
+            $0.finished = failure != nil
+        }
+    }
+
     func setConnection(_ connection: TTSignalConnection) {
         _state.mutate { $0.connection = connection }
     }
@@ -349,12 +358,14 @@ private final class QuicSignalBridge: TTSignalHandler, Loggable, @unchecked Send
 
     func nextMessage() async throws -> URLSessionWebSocketTask.Message? {
         let immediate: Result<URLSessionWebSocketTask.Message?, LiveKitError>? = _state.mutate { state in
+            // Drain buffered messages first so a final message (e.g. a terminal `leave`)
+            // received just before the connection closed is not lost behind the failure.
+            if !state.buffer.isEmpty {
+                return .success(state.buffer.removeFirst())
+            }
             if let error = state.failure {
                 state.failure = nil
                 return .failure(error)
-            }
-            if !state.buffer.isEmpty {
-                return .success(state.buffer.removeFirst())
             }
             if state.finished { return .success(nil) }
             return nil
@@ -366,11 +377,11 @@ private final class QuicSignalBridge: TTSignalHandler, Loggable, @unchecked Send
 
         return try await withCheckedThrowingContinuation { continuation in
             _state.mutate { state in
-                if let error = state.failure {
+                if !state.buffer.isEmpty {
+                    continuation.resume(returning: state.buffer.removeFirst())
+                } else if let error = state.failure {
                     state.failure = nil
                     continuation.resume(throwing: error)
-                } else if !state.buffer.isEmpty {
-                    continuation.resume(returning: state.buffer.removeFirst())
                 } else if state.finished {
                     continuation.resume(returning: nil)
                 } else {
