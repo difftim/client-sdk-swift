@@ -53,6 +53,10 @@ actor SignalClient: Loggable {
 
     var isQuicMarkedUnhealthy: Bool { quicMarkedUnhealthy }
 
+    /// Set on receipt of a terminal DISCONNECT leave, before any delegate event, because detached
+    /// delegate events can reach the Room in any order relative to the following transport close.
+    private(set) var terminalLeaveError: LiveKitError?
+
     var lastConnectionError: LiveKitError?
     var useV0SignalPath: Bool { _state.useV0SignalPath }
 
@@ -130,6 +134,7 @@ actor SignalClient: Loggable {
                  connectSpan: Span? = nil) async throws -> ConnectResponse
     {
         await cleanUp()
+        terminalLeaveError = nil
 
         if let reconnectMode {
             log("[Connect] mode: \(String(describing: reconnectMode))")
@@ -343,6 +348,8 @@ private extension SignalClient {
             return
         }
 
+        recordTerminalLeave(from: response)
+
         Task.detached {
             let alwaysProcess = switch response.message {
             case .join, .reconnect, .leave: true
@@ -503,6 +510,19 @@ extension SignalClient {
         let result = await transport.restart(interface: interface)
         log("[reconnect][quic] restart transport result: \(result)")
         return result
+    }
+
+    /// The leave error for a DISCONNECT the client must not retry; `stateMismatch` is recoverable by rejoining.
+    static func terminalLeaveError(for leave: Livekit_LeaveRequest) -> LiveKitError? {
+        guard leave.action == .disconnect, !leave.canReconnect, leave.reason != .stateMismatch else {
+            return nil
+        }
+        return LiveKitError.from(reason: leave.reason)
+    }
+
+    func recordTerminalLeave(from response: Livekit_SignalResponse) {
+        guard case let .leave(leave) = response.message, let error = Self.terminalLeaveError(for: leave) else { return }
+        terminalLeaveError = error
     }
 }
 

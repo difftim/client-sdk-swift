@@ -65,7 +65,7 @@ extension Room: SignalClientDelegate {
            _state.connectionState == .connecting,
            await signalClient.connectionState == .disconnected
         {
-            failInitialConnectTransportWaits()
+            await failInitialConnectTransportWaits()
             return
         }
 
@@ -119,10 +119,12 @@ extension Room: SignalClientDelegate {
 
         let error = LiveKitError.from(reason: reason)
 
-        if action == .resume || action == .reconnect, _state.connectionState == .connecting {
+        let isRetryableLeave = action == .resume || action == .reconnect
+            || (action == .disconnect && (canReconnect || reason == .stateMismatch))
+        if isRetryableLeave, _state.connectionState == .connecting {
             log("leave \(action) during initial connect, failing connect instead of reconnecting", .warning)
             await signalClient.cleanUp(withError: error)
-            failInitialConnectTransportWaits()
+            await failInitialConnectTransportWaits()
             return
         }
 

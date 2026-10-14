@@ -54,7 +54,7 @@ struct RoomMediaUnreachableTests {
         let error = Room.mediaUnreachableError(from: LiveKitError(type), transport: "primary", elapsed: 1)
         #expect((error as? LiveKitError)?.type == type)
 
-        let waitError = Room.initialConnectWaitError(from: LiveKitError(type), isSignalConnected: false, transport: "primary", elapsed: 1)
+        let waitError = Room.initialConnectWaitError(from: LiveKitError(type), isSignalConnected: false, terminalLeaveError: nil, transport: "primary", elapsed: 1)
         #expect((waitError as? LiveKitError)?.type == type)
     }
 
@@ -66,7 +66,7 @@ struct RoomMediaUnreachableTests {
 
     @Test func waitFailureWithSignalLostBecomesRetryableNetworkError() {
         for source in [LiveKitError(.timedOut), LiveKitError(.network, message: "Transport subscriber state changed to failed"), Room.initialConnectSignalLostError] {
-            let error = Room.initialConnectWaitError(from: source, isSignalConnected: false, transport: "primary", elapsed: 1)
+            let error = Room.initialConnectWaitError(from: source, isSignalConnected: false, terminalLeaveError: nil, transport: "primary", elapsed: 1)
             let lkError = error as? LiveKitError
             #expect(lkError?.type == .network)
             #expect(lkError?.message == "signal lost during initial connect")
@@ -75,18 +75,71 @@ struct RoomMediaUnreachableTests {
     }
 
     @Test func waitFailureWithSignalConnectedBecomesMediaUnreachable() {
-        let timeout = Room.initialConnectWaitError(from: LiveKitError(.timedOut), isSignalConnected: true, transport: "publisher", elapsed: 15)
+        let timeout = Room.initialConnectWaitError(from: LiveKitError(.timedOut), isSignalConnected: true, terminalLeaveError: nil, transport: "publisher", elapsed: 15)
         #expect((timeout as? LiveKitError)?.type == .mediaUnreachable)
         let failed = Room.initialConnectWaitError(from: LiveKitError(.network, message: "Transport publisher state changed to closed"),
-                                                  isSignalConnected: true, transport: "publisher", elapsed: 2)
+                                                  isSignalConnected: true, terminalLeaveError: nil, transport: "publisher", elapsed: 2)
         #expect((failed as? LiveKitError)?.type == .mediaUnreachable)
     }
 
     @Test func waitCancellationIsPreservedEvenWithSignalLost() {
-        let lk = Room.initialConnectWaitError(from: LiveKitError(.cancelled), isSignalConnected: false, transport: "primary", elapsed: 0)
+        let lk = Room.initialConnectWaitError(from: LiveKitError(.cancelled), isSignalConnected: false, terminalLeaveError: nil, transport: "primary", elapsed: 0)
         #expect((lk as? LiveKitError)?.type == .cancelled)
-        let task = Room.initialConnectWaitError(from: CancellationError(), isSignalConnected: false, transport: "primary", elapsed: 0)
+        let task = Room.initialConnectWaitError(from: CancellationError(), isSignalConnected: false, terminalLeaveError: nil, transport: "primary", elapsed: 0)
         #expect(task is CancellationError)
+    }
+
+    @Test func recordedTerminalLeaveWinsOverSignalLost() {
+        let leave = LiveKitError(.duplicateIdentity)
+        for source in [LiveKitError(.timedOut), Room.initialConnectSignalLostError] {
+            let error = Room.initialConnectWaitError(from: source, isSignalConnected: false, terminalLeaveError: leave,
+                                                     transport: "primary", elapsed: 1)
+            #expect((error as? LiveKitError)?.type == .duplicateIdentity)
+        }
+        #expect(Room.initialConnectSignalLossError(terminalLeaveError: leave).type == .duplicateIdentity)
+    }
+
+    @Test func noTerminalLeaveFallsBackToSignalLost() {
+        let error = Room.initialConnectWaitError(from: LiveKitError(.timedOut), isSignalConnected: false, terminalLeaveError: nil,
+                                                 transport: "primary", elapsed: 1)
+        #expect((error as? LiveKitError)?.message == "signal lost during initial connect")
+        #expect(Room.initialConnectSignalLossError(terminalLeaveError: nil).message == "signal lost during initial connect")
+    }
+
+    @Test func terminalLeaveClassification() {
+        func leave(_ action: Livekit_LeaveRequest.Action, _ reason: Livekit_DisconnectReason, canReconnect: Bool = false) -> Livekit_LeaveRequest {
+            .with {
+                $0.action = action
+                $0.reason = reason
+                $0.canReconnect = canReconnect
+            }
+        }
+        #expect(SignalClient.terminalLeaveError(for: leave(.disconnect, .duplicateIdentity))?.type == .duplicateIdentity)
+        #expect(SignalClient.terminalLeaveError(for: leave(.disconnect, .roomDeleted))?.type == .roomDeleted)
+        #expect(SignalClient.terminalLeaveError(for: leave(.disconnect, .roomDeleted, canReconnect: true)) == nil)
+        #expect(SignalClient.terminalLeaveError(for: leave(.disconnect, .stateMismatch)) == nil)
+        #expect(SignalClient.terminalLeaveError(for: leave(.resume, .roomDeleted)) == nil)
+        #expect(SignalClient.terminalLeaveError(for: leave(.reconnect, .roomDeleted)) == nil)
+    }
+
+    @Test func onlyTerminalLeaveIsRecorded() async {
+        let signalClient = Room().signalClient
+        #expect(await signalClient.terminalLeaveError == nil)
+
+        func response(_ action: Livekit_LeaveRequest.Action, _ reason: Livekit_DisconnectReason) -> Livekit_SignalResponse {
+            .with {
+                $0.leave = .with {
+                    $0.action = action
+                    $0.reason = reason
+                }
+            }
+        }
+
+        await signalClient.recordTerminalLeave(from: response(.resume, .roomDeleted))
+        #expect(await signalClient.terminalLeaveError == nil)
+
+        await signalClient.recordTerminalLeave(from: response(.disconnect, .participantRemoved))
+        #expect(await signalClient.terminalLeaveError?.type == .participantRemoved)
     }
 
     @Test func transportConnectTimeoutsDefaultTo10Seconds() {
