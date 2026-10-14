@@ -317,9 +317,26 @@ extension Room {
         }
 
         log("[Connect] Waiting for subscriber to connect...")
-        // Wait for transport...
-        try await primaryTransportConnectedCompleter.wait(timeout: _state.connectOptions.primaryTransportConnectTimeout)
-        try Task.checkCancellation()
+        let pcWaitStart = Date()
+        var pendingTransport = "primary"
+        do {
+            try await primaryTransportConnectedCompleter.wait(timeout: _state.connectOptions.primaryTransportConnectTimeout)
+            try Task.checkCancellation()
+
+            if _state.transport?.publisher != nil, _state.hasPublished {
+                pendingTransport = "publisher"
+                log("[Connect] Waiting for publisher to connect...")
+                let elapsed = Date().timeIntervalSince(pcWaitStart)
+                let remaining = max(_state.connectOptions.publisherTransportConnectTimeout - elapsed, 0.1)
+                try await publisherTransportConnectedCompleter.wait(timeout: remaining)
+                try Task.checkCancellation()
+            }
+        } catch {
+            log("[Connect] \(pendingTransport) transport not connected, error: \(error)", .error)
+            throw Room.mediaUnreachableError(from: error,
+                                             transport: pendingTransport,
+                                             elapsed: Date().timeIntervalSince(pcWaitStart))
+        }
 
         connectSpan?.record("engine")
         connectSpan?.record("pc_connected")
