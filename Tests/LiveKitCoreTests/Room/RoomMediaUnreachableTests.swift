@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import Foundation
 @testable import LiveKit
 import Testing
 
@@ -42,9 +43,60 @@ struct RoomMediaUnreachableTests {
         #expect(task is CancellationError)
     }
 
-    @Test func transportConnectTimeoutsDefaultTo15Seconds() {
-        #expect(ConnectOptions().primaryTransportConnectTimeout == 15)
-        #expect(ConnectOptions().publisherTransportConnectTimeout == 15)
+    @Test func nonTransportErrorIsPreserved() {
+        let wrapped = LiveKitError(.invalidState)
+        let error = Room.mediaUnreachableError(from: wrapped, transport: "primary", elapsed: 1)
+        #expect((error as? LiveKitError)?.type == .invalidState)
+    }
+
+    @Test(arguments: [LiveKitErrorType.roomDeleted, .participantRemoved, .duplicateIdentity, .serverShutdown, .joinFailure])
+    func serverDisconnectIsPreserved(type: LiveKitErrorType) {
+        let error = Room.mediaUnreachableError(from: LiveKitError(type), transport: "primary", elapsed: 1)
+        #expect((error as? LiveKitError)?.type == type)
+
+        let waitError = Room.initialConnectWaitError(from: LiveKitError(type), isSignalConnected: false, transport: "primary", elapsed: 1)
+        #expect((waitError as? LiveKitError)?.type == type)
+    }
+
+    @Test func nonLiveKitFailureBecomesMediaUnreachable() {
+        struct SomeError: Error {}
+        let error = Room.mediaUnreachableError(from: SomeError(), transport: "primary", elapsed: 1)
+        #expect((error as? LiveKitError)?.type == .mediaUnreachable)
+    }
+
+    @Test func waitFailureWithSignalLostBecomesRetryableNetworkError() {
+        for source in [LiveKitError(.timedOut), LiveKitError(.network, message: "Transport subscriber state changed to failed"), Room.initialConnectSignalLostError] {
+            let error = Room.initialConnectWaitError(from: source, isSignalConnected: false, transport: "primary", elapsed: 1)
+            let lkError = error as? LiveKitError
+            #expect(lkError?.type == .network)
+            #expect(lkError?.message == "signal lost during initial connect")
+            #expect(error.isRetryableForRegionFailover)
+        }
+    }
+
+    @Test func waitFailureWithSignalConnectedBecomesMediaUnreachable() {
+        let timeout = Room.initialConnectWaitError(from: LiveKitError(.timedOut), isSignalConnected: true, transport: "publisher", elapsed: 15)
+        #expect((timeout as? LiveKitError)?.type == .mediaUnreachable)
+        let failed = Room.initialConnectWaitError(from: LiveKitError(.network, message: "Transport publisher state changed to closed"),
+                                                  isSignalConnected: true, transport: "publisher", elapsed: 2)
+        #expect((failed as? LiveKitError)?.type == .mediaUnreachable)
+    }
+
+    @Test func waitCancellationIsPreservedEvenWithSignalLost() {
+        let lk = Room.initialConnectWaitError(from: LiveKitError(.cancelled), isSignalConnected: false, transport: "primary", elapsed: 0)
+        #expect((lk as? LiveKitError)?.type == .cancelled)
+        let task = Room.initialConnectWaitError(from: CancellationError(), isSignalConnected: false, transport: "primary", elapsed: 0)
+        #expect(task is CancellationError)
+    }
+
+    @Test func transportConnectTimeoutsDefaultTo10Seconds() {
+        #expect(TimeInterval.defaultTransportState == 10)
+        #expect(ConnectOptions().primaryTransportConnectTimeout == 10)
+        #expect(ConnectOptions().publisherTransportConnectTimeout == 10)
+    }
+
+    @Test func initialConnectTransportTimeoutIs15Seconds() {
+        #expect(TimeInterval.initialConnectTransportTimeout == 15)
     }
 
     @Test func connectResetsQuicUnhealthyMarker() async {

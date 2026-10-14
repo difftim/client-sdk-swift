@@ -320,25 +320,38 @@ extension Room {
 
         log("[Connect] Waiting for subscriber to connect...")
         if isInitialConnect {
+            // Signal-loss events are only delivered to waiters already parked on the completers,
+            // so also check the signal state before and after the waits.
+            guard await signalClient.connectionState == .connected else {
+                log("[Connect] signal lost before transport wait", .error)
+                throw Room.initialConnectSignalLostError
+            }
+
             let pcWaitStart = Date()
             var pendingTransport = "primary"
             do {
-                try await primaryTransportConnectedCompleter.wait(timeout: _state.connectOptions.primaryTransportConnectTimeout)
+                try await primaryTransportConnectedCompleter.wait(timeout: .initialConnectTransportTimeout)
                 try Task.checkCancellation()
 
                 if _state.transport?.publisher != nil, _state.hasPublished {
                     pendingTransport = "publisher"
                     log("[Connect] Waiting for publisher to connect...")
                     let elapsed = Date().timeIntervalSince(pcWaitStart)
-                    let remaining = max(_state.connectOptions.publisherTransportConnectTimeout - elapsed, 0.1)
+                    let remaining = max(TimeInterval.initialConnectTransportTimeout - elapsed, 0.1)
                     try await publisherTransportConnectedCompleter.wait(timeout: remaining)
                     try Task.checkCancellation()
                 }
             } catch {
                 log("[Connect] \(pendingTransport) transport not connected, error: \(error)", .error)
-                throw Room.mediaUnreachableError(from: error,
-                                                 transport: pendingTransport,
-                                                 elapsed: Date().timeIntervalSince(pcWaitStart))
+                throw await Room.initialConnectWaitError(from: error,
+                                                         isSignalConnected: signalClient.connectionState == .connected,
+                                                         transport: pendingTransport,
+                                                         elapsed: Date().timeIntervalSince(pcWaitStart))
+            }
+
+            guard await signalClient.connectionState == .connected else {
+                log("[Connect] signal lost after transport wait", .error)
+                throw Room.initialConnectSignalLostError
             }
         } else {
             // Wait for transport...
@@ -685,16 +698,39 @@ extension Room {
 // MARK: - Initial connect errors
 
 extension Room {
+    static var initialConnectSignalLostError: LiveKitError {
+        LiveKitError(.network, message: "signal lost during initial connect")
+    }
+
+    // Only wait timeouts and PC FAILED/CLOSED (`.network`, see `transport(_:didUpdateState:)`) become
+    // `.mediaUnreachable`; cancellation and server leave errors (`.roomDeleted`, ...) pass through.
     static func mediaUnreachableError(from error: Error, transport: String, elapsed: TimeInterval) -> Error {
         if error is CancellationError {
             return error
         }
-        if let lkError = error as? LiveKitError, lkError.type == .cancelled {
+        if let lkError = error as? LiveKitError, lkError.type != .timedOut, lkError.type != .network {
             return error
         }
         let elapsedMs = Int((elapsed * 1000).rounded())
         return LiveKitError(.mediaUnreachable,
                             message: "\(transport) transport not connected after \(elapsedMs)ms",
                             internalError: error)
+    }
+
+    static func initialConnectWaitError(from error: Error, isSignalConnected: Bool, transport: String, elapsed: TimeInterval) -> Error {
+        let mapped = mediaUnreachableError(from: error, transport: transport, elapsed: elapsed)
+        guard !isSignalConnected, (mapped as? LiveKitError)?.type == .mediaUnreachable else {
+            return mapped
+        }
+        return initialConnectSignalLostError
+    }
+
+    /// Wakes the initial-connect PC waits with the retryable signal-lost error. No-op outside the initial connect.
+    func failInitialConnectTransportWaits() {
+        guard _state.connectionState == .connecting else { return }
+        log("[Connect] signal lost during initial connect, failing transport waits", .warning)
+        let error = Room.initialConnectSignalLostError
+        primaryTransportConnectedCompleter.reset(throwing: error)
+        publisherTransportConnectedCompleter.reset(throwing: error)
     }
 }

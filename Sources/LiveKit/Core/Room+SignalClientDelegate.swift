@@ -57,6 +57,18 @@ extension Room: SignalClientDelegate {
                       oldState: ConnectionState,
                       disconnectError: LiveKitError?) async
     {
+        // Initial connect never reconnects from here; fail its transport waits so `connect()` rejects promptly.
+        // The current-state check drops a late event from a previous region attempt's signal session.
+        if connectionState != oldState,
+           case .disconnected = connectionState,
+           let errorType = disconnectError?.type, errorType != .cancelled,
+           _state.connectionState == .connecting,
+           await signalClient.connectionState == .disconnected
+        {
+            failInitialConnectTransportWaits()
+            return
+        }
+
         // connectionState did update
         if connectionState != oldState,
            // did disconnect
@@ -106,6 +118,14 @@ extension Room: SignalClientDelegate {
         }
 
         let error = LiveKitError.from(reason: reason)
+
+        if action == .resume || action == .reconnect, _state.connectionState == .connecting {
+            log("leave \(action) during initial connect, failing connect instead of reconnecting", .warning)
+            await signalClient.cleanUp(withError: error)
+            failInitialConnectTransportWaits()
+            return
+        }
+
         switch action {
         case .reconnect:
             // Force .full for next reconnect

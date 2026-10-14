@@ -34,7 +34,9 @@ public extension TimeInterval {
     static let defaultHTTPConnect: Self = 5
 
     static let defaultJoinResponse: Self = 7
-    static let defaultTransportState: Self = 15
+    static let defaultTransportState: Self = 10
+    /// Fixed budget for the primary + publisher waits of the first connect; reconnects use `ConnectOptions`.
+    static let initialConnectTransportTimeout: Self = 15
     // Matches client-sdk-js (`peerConnectionTimeout`) and client-sdk-rust
     // (`ICE_CONNECT_TIMEOUT`); client-sdk-android uses 20s.
     static let defaultPublisherDataChannelOpen: Self = 15
