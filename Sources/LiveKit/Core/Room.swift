@@ -583,9 +583,10 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
                 finalUrl = try await connectWithCloudRegionFailover(regionManager: regionManager,
                                                                     initialUrl: nextUrl,
                                                                     initialRegion: nextRegion,
-                                                                    token: token)
+                                                                    token: token,
+                                                                    isInitialConnect: true)
             } else {
-                try await fullConnectSequence(nextUrl, token)
+                try await fullConnectSequence(nextUrl, token, isInitialConnect: true)
                 finalUrl = nextUrl
             }
 

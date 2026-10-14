@@ -284,7 +284,7 @@ extension Error {
     var isRetryableForRegionFailover: Bool {
         if let liveKitError = self as? LiveKitError {
             switch liveKitError.type {
-            case .network, .timedOut:
+            case .network, .timedOut, .mediaUnreachable:
                 return true
             default:
                 return false

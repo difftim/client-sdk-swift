@@ -110,6 +110,7 @@ import Testing
     @Test func regionManagerShouldRetryConnection() {
         #expect(LiveKitError(.network).isRetryableForRegionFailover)
         #expect(LiveKitError(.timedOut).isRetryableForRegionFailover)
+        #expect(LiveKitError(.mediaUnreachable).isRetryableForRegionFailover)
         #expect(!LiveKitError(.validation).isRetryableForRegionFailover)
 
         #expect(URLError(.timedOut).isRetryableForRegionFailover)

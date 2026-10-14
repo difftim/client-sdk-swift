@@ -126,13 +126,14 @@ extension Room {
         // When this failover runs as part of a full reconnect, preserve the remote roster + cryptors
         // between region attempts so the UI can hold the last frame. Initial connect passes false.
         preserveRemoteParticipants: Bool = false,
+        isInitialConnect: Bool = false,
     ) async throws -> URL {
         var nextUrl = initialUrl
         var nextRegion = initialRegion
 
         while true {
             do {
-                try await fullConnectSequence(nextUrl, token)
+                try await fullConnectSequence(nextUrl, token, isInitialConnect: isInitialConnect)
                 return nextUrl
             } catch {
                 // Re-throw if is cancel.

@@ -268,7 +268,9 @@ public enum StartReconnectReason: Sendable {
 // Room+ConnectSequences
 extension Room {
     // full connect sequence, doesn't update connection state
-    func fullConnectSequence(_ url: URL, _ token: String) async throws {
+    // `isInitialConnect`: only the first connect (from `Room.connect`) waits for the publisher
+    // and reports `.mediaUnreachable`; full reconnect keeps the primary-only wait and original error.
+    func fullConnectSequence(_ url: URL, _ token: String, isInitialConnect: Bool = false) async throws {
         var singlePC = _state.roomOptions.singlePeerConnection
 
         let connectResponse: SignalClient.ConnectResponse
@@ -317,25 +319,31 @@ extension Room {
         }
 
         log("[Connect] Waiting for subscriber to connect...")
-        let pcWaitStart = Date()
-        var pendingTransport = "primary"
-        do {
+        if isInitialConnect {
+            let pcWaitStart = Date()
+            var pendingTransport = "primary"
+            do {
+                try await primaryTransportConnectedCompleter.wait(timeout: _state.connectOptions.primaryTransportConnectTimeout)
+                try Task.checkCancellation()
+
+                if _state.transport?.publisher != nil, _state.hasPublished {
+                    pendingTransport = "publisher"
+                    log("[Connect] Waiting for publisher to connect...")
+                    let elapsed = Date().timeIntervalSince(pcWaitStart)
+                    let remaining = max(_state.connectOptions.publisherTransportConnectTimeout - elapsed, 0.1)
+                    try await publisherTransportConnectedCompleter.wait(timeout: remaining)
+                    try Task.checkCancellation()
+                }
+            } catch {
+                log("[Connect] \(pendingTransport) transport not connected, error: \(error)", .error)
+                throw Room.mediaUnreachableError(from: error,
+                                                 transport: pendingTransport,
+                                                 elapsed: Date().timeIntervalSince(pcWaitStart))
+            }
+        } else {
+            // Wait for transport...
             try await primaryTransportConnectedCompleter.wait(timeout: _state.connectOptions.primaryTransportConnectTimeout)
             try Task.checkCancellation()
-
-            if _state.transport?.publisher != nil, _state.hasPublished {
-                pendingTransport = "publisher"
-                log("[Connect] Waiting for publisher to connect...")
-                let elapsed = Date().timeIntervalSince(pcWaitStart)
-                let remaining = max(_state.connectOptions.publisherTransportConnectTimeout - elapsed, 0.1)
-                try await publisherTransportConnectedCompleter.wait(timeout: remaining)
-                try Task.checkCancellation()
-            }
-        } catch {
-            log("[Connect] \(pendingTransport) transport not connected, error: \(error)", .error)
-            throw Room.mediaUnreachableError(from: error,
-                                             transport: pendingTransport,
-                                             elapsed: Date().timeIntervalSince(pcWaitStart))
         }
 
         connectSpan?.record("engine")
