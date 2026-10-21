@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import Foundation
 @testable import LiveKit
 import Testing
 
@@ -62,5 +63,16 @@ struct ConnectOptionsTests {
         #expect(direct != systemRouted)
         #expect(direct.copyWith().forcePhysical)
         #expect(!direct.copyWith(forcePhysical: .value(false)).forcePhysical)
+    }
+
+    @Test func ttCallRequestDataParticipatesInEqualityAndHashing() {
+        let first = ConnectOptions(ttCallRequestData: Data([0x0A, 0x01, 0x74]))
+        let same = ConnectOptions(ttCallRequestData: Data([0x0A, 0x01, 0x74]))
+        let different = ConnectOptions(ttCallRequestData: Data([0x0A, 0x01, 0x75]))
+
+        #expect(first == same)
+        #expect(first.hash == same.hash)
+        #expect(first != different)
+        #expect(first != ConnectOptions())
     }
 }

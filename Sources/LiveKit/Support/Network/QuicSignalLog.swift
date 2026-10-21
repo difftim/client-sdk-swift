@@ -15,7 +15,7 @@
  */
 
 #if os(iOS)
-import TTSignal
+internal import TTSignal
 
 enum QuicSignalLog {
     static func configure() {

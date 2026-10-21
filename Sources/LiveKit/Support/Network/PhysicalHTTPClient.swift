@@ -17,7 +17,7 @@
 import Foundation
 
 #if os(iOS)
-import TTSignal
+internal import TTSignal
 
 extension TTSignalHttpConnector: @unchecked Sendable {}
 #endif

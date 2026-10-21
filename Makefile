@@ -1,7 +1,7 @@
 PROTO_SOURCE=./protocol/protobufs
 
 proto: protoc protoc-swift
-	protoc --swift_out=Sources/LiveKit/protos --swift_opt=Visibility=Public -I=${PROTO_SOURCE} \
+	protoc --swift_out=Sources/LiveKit/protos --swift_opt=Visibility=Internal -I=${PROTO_SOURCE} \
 		${PROTO_SOURCE}/livekit_temptalk.proto
 	protoc --swift_out=Sources/LiveKit/protos -I=${PROTO_SOURCE} \
 		${PROTO_SOURCE}/livekit_models.proto \

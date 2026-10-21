@@ -74,7 +74,13 @@ public final class ConnectOptions: NSObject, Sendable {
     /// LiveKit server protocol version to use. Generally, it's not recommended to change this.
     public let protocolVersion: ProtocolVersion
 
-    public let ttCallRequest: Livekit_TTCallRequest?
+    /// Serialized `livekit.TTCallRequest`. Passed as bytes so the public API does not expose SwiftProtobuf types.
+    public let ttCallRequestData: Data?
+
+    /// Nil when `ttCallRequestData` is nil or cannot be decoded.
+    var ttCallRequest: Livekit_TTCallRequest? {
+        ttCallRequestData.flatMap { try? Livekit_TTCallRequest(serializedBytes: $0) }
+    }
 
     public let userAgent: String?
 
@@ -204,7 +210,7 @@ public final class ConnectOptions: NSObject, Sendable {
         isDscpEnabled = false
         enableMicrophone = false
         protocolVersion = .v16
-        ttCallRequest = nil
+        ttCallRequestData = nil
         userAgent = nil
         transportKind = .websocket
         quicDeviceType = 0
@@ -237,7 +243,7 @@ public final class ConnectOptions: NSObject, Sendable {
                 isDscpEnabled: Bool = false,
                 enableMicrophone: Bool = false,
                 protocolVersion: ProtocolVersion = .v16,
-                ttCallRequest: Livekit_TTCallRequest? = nil,
+                ttCallRequestData: Data? = nil,
                 userAgent: String? = nil,
                 transportKind: TransportKind = .websocket,
                 quicDeviceType: Int = 0,
@@ -269,7 +275,7 @@ public final class ConnectOptions: NSObject, Sendable {
         self.isDscpEnabled = isDscpEnabled
         self.enableMicrophone = enableMicrophone
         self.protocolVersion = protocolVersion
-        self.ttCallRequest = ttCallRequest
+        self.ttCallRequestData = ttCallRequestData
         self.userAgent = userAgent
         self.transportKind = transportKind
         self.quicDeviceType = quicDeviceType
@@ -310,7 +316,7 @@ public final class ConnectOptions: NSObject, Sendable {
             isDscpEnabled == other.isDscpEnabled &&
             enableMicrophone == other.enableMicrophone &&
             protocolVersion == other.protocolVersion &&
-            ttCallRequest == other.ttCallRequest &&
+            ttCallRequestData == other.ttCallRequestData &&
             userAgent == other.userAgent &&
             transportKind == other.transportKind &&
             quicDeviceType == other.quicDeviceType &&
@@ -344,7 +350,7 @@ public final class ConnectOptions: NSObject, Sendable {
         hasher.combine(isDscpEnabled)
         hasher.combine(enableMicrophone)
         hasher.combine(protocolVersion)
-        hasher.combine(ttCallRequest)
+        hasher.combine(ttCallRequestData)
         hasher.combine(userAgent)
         hasher.combine(transportKind)
         hasher.combine(quicDeviceType)

@@ -38,343 +38,343 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-public nonisolated struct Livekit_TTCaller: Sendable {
+nonisolated struct Livekit_TTCaller: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var uid: String = String()
+  var uid: String = String()
 
-  public var did: Int32 = 0
+  var did: Int32 = 0
 
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
+  var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  public init() {}
+  init() {}
 }
 
-public nonisolated struct Livekit_TTExceptionRecipient: Sendable {
+nonisolated struct Livekit_TTExceptionRecipient: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var uid: String = String()
+  var uid: String = String()
 
-  public var registrationID: Int32 = 0
+  var registrationID: Int32 = 0
 
-  public var identityKey: String = String()
+  var identityKey: String = String()
 
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
+  var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  public init() {}
+  init() {}
 }
 
-public nonisolated struct Livekit_TTBaseResponse: Sendable {
+nonisolated struct Livekit_TTBaseResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var ver: UInt32 = 0
+  var ver: UInt32 = 0
 
-  public var status: UInt32 = 0
+  var status: UInt32 = 0
 
-  public var reason: String = String()
+  var reason: String = String()
 
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
+  var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  public init() {}
+  init() {}
 }
 
-public nonisolated struct Livekit_TTCallResponseBody: @unchecked Sendable {
+nonisolated struct Livekit_TTCallResponseBody: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var needsSync: Bool {
+  var needsSync: Bool {
     get {_storage._needsSync}
     set {_uniqueStorage()._needsSync = newValue}
   }
 
-  public var invalidUids: [String] {
+  var invalidUids: [String] {
     get {_storage._invalidUids}
     set {_uniqueStorage()._invalidUids = newValue}
   }
 
-  public var stale: [Livekit_TTExceptionRecipient] {
+  var stale: [Livekit_TTExceptionRecipient] {
     get {_storage._stale}
     set {_uniqueStorage()._stale = newValue}
   }
 
-  public var missing: [Livekit_TTExceptionRecipient] {
+  var missing: [Livekit_TTExceptionRecipient] {
     get {_storage._missing}
     set {_uniqueStorage()._missing = newValue}
   }
 
-  public var extra: [Livekit_TTExceptionRecipient] {
+  var extra: [Livekit_TTExceptionRecipient] {
     get {_storage._extra}
     set {_uniqueStorage()._extra = newValue}
   }
 
-  public var encMeta: Dictionary<String,String> {
+  var encMeta: Dictionary<String,String> {
     get {_storage._encMeta}
     set {_uniqueStorage()._encMeta = newValue}
   }
 
-  public var roomID: String {
+  var roomID: String {
     get {_storage._roomID}
     set {_uniqueStorage()._roomID = newValue}
   }
 
   /// in milliseconds
-  public var createdAt: Int64 {
+  var createdAt: Int64 {
     get {_storage._createdAt}
     set {_uniqueStorage()._createdAt = newValue}
   }
 
-  public var serviceURL: String {
+  var serviceURL: String {
     get {_storage._serviceURL}
     set {_uniqueStorage()._serviceURL = newValue}
   }
 
-  public var token: String {
+  var token: String {
     get {_storage._token}
     set {_uniqueStorage()._token = newValue}
   }
 
-  public var caller: Livekit_TTCaller {
+  var caller: Livekit_TTCaller {
     get {_storage._caller ?? Livekit_TTCaller()}
     set {_uniqueStorage()._caller = newValue}
   }
   /// Returns true if `caller` has been explicitly set.
-  public var hasCaller: Bool {_storage._caller != nil}
+  var hasCaller: Bool {_storage._caller != nil}
   /// Clears the value of `caller`. Subsequent reads from it will return its default value.
-  public mutating func clearCaller() {_uniqueStorage()._caller = nil}
+  mutating func clearCaller() {_uniqueStorage()._caller = nil}
 
-  public var version: Int32 {
+  var version: Int32 {
     get {_storage._version}
     set {_uniqueStorage()._version = newValue}
   }
 
-  public var emk: String {
+  var emk: String {
     get {_storage._emk}
     set {_uniqueStorage()._emk = newValue}
   }
 
-  public var publicKey: String {
+  var publicKey: String {
     get {_storage._publicKey}
     set {_uniqueStorage()._publicKey = newValue}
   }
 
-  public var serviceUrls: [String] {
+  var serviceUrls: [String] {
     get {_storage._serviceUrls}
     set {_uniqueStorage()._serviceUrls = newValue}
   }
 
   /// in milliseconds
-  public var systemShowTimestamp: UInt64 {
+  var systemShowTimestamp: UInt64 {
     get {_storage._systemShowTimestamp}
     set {_uniqueStorage()._systemShowTimestamp = newValue}
   }
 
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
+  var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  public init() {}
+  init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
 }
 
-public nonisolated struct Livekit_TTCallOptions: Sendable {
+nonisolated struct Livekit_TTCallOptions: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// If true, the SDK automatically publishes a silent (muted) audio track
   /// right after the room is connected.
-  public var autoPublishSilenceAudio: Bool = false
+  var autoPublishSilenceAudio: Bool = false
 
   /// Controls whether the SDK publishes a silent audio track when the user raises hand.
   ///
   /// Effective only when `auto_publish_silence_audio` is false:
   /// - true:  do NOT publish a silent track on raise-hand.
   /// - false: publish a silent track on raise-hand.
-  public var disableSilenceOnRaiseHand: Bool = false
+  var disableSilenceOnRaiseHand: Bool = false
 
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
+  var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  public init() {}
+  init() {}
 }
 
-public nonisolated struct Livekit_TTCallResponse: Sendable {
+nonisolated struct Livekit_TTCallResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var base: Livekit_TTBaseResponse {
+  var base: Livekit_TTBaseResponse {
     get {_base ?? Livekit_TTBaseResponse()}
     set {_base = newValue}
   }
   /// Returns true if `base` has been explicitly set.
-  public var hasBase: Bool {self._base != nil}
+  var hasBase: Bool {self._base != nil}
   /// Clears the value of `base`. Subsequent reads from it will return its default value.
-  public mutating func clearBase() {self._base = nil}
+  mutating func clearBase() {self._base = nil}
 
-  public var body: Livekit_TTCallResponseBody {
+  var body: Livekit_TTCallResponseBody {
     get {_body ?? Livekit_TTCallResponseBody()}
     set {_body = newValue}
   }
   /// Returns true if `body` has been explicitly set.
-  public var hasBody: Bool {self._body != nil}
+  var hasBody: Bool {self._body != nil}
   /// Clears the value of `body`. Subsequent reads from it will return its default value.
-  public mutating func clearBody() {self._body = nil}
+  mutating func clearBody() {self._body = nil}
 
-  public var callOptions: Livekit_TTCallOptions {
+  var callOptions: Livekit_TTCallOptions {
     get {_callOptions ?? Livekit_TTCallOptions()}
     set {_callOptions = newValue}
   }
   /// Returns true if `callOptions` has been explicitly set.
-  public var hasCallOptions: Bool {self._callOptions != nil}
+  var hasCallOptions: Bool {self._callOptions != nil}
   /// Clears the value of `callOptions`. Subsequent reads from it will return its default value.
-  public mutating func clearCallOptions() {self._callOptions = nil}
+  mutating func clearCallOptions() {self._callOptions = nil}
 
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
+  var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  public init() {}
+  init() {}
 
   fileprivate var _base: Livekit_TTBaseResponse? = nil
   fileprivate var _body: Livekit_TTCallResponseBody? = nil
   fileprivate var _callOptions: Livekit_TTCallOptions? = nil
 }
 
-public nonisolated struct Livekit_TTCipherMessages: Sendable {
+nonisolated struct Livekit_TTCipherMessages: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var content: String = String()
+  var content: String = String()
 
-  public var uid: String = String()
+  var uid: String = String()
 
-  public var registrationID: Int32 = 0
+  var registrationID: Int32 = 0
 
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
+  var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  public init() {}
+  init() {}
 }
 
-public nonisolated struct Livekit_TTEncInfo: Sendable {
+nonisolated struct Livekit_TTEncInfo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var uid: String = String()
+  var uid: String = String()
 
-  public var emk: String = String()
+  var emk: String = String()
 
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
+  var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  public init() {}
+  init() {}
 }
 
-public nonisolated struct Livekit_TTNotification: Sendable {
+nonisolated struct Livekit_TTNotification: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var type: Int32 = 0
+  var type: Int32 = 0
 
-  public var args: Livekit_TTNotification.TTArgs {
+  var args: Livekit_TTNotification.TTArgs {
     get {_args ?? Livekit_TTNotification.TTArgs()}
     set {_args = newValue}
   }
   /// Returns true if `args` has been explicitly set.
-  public var hasArgs: Bool {self._args != nil}
+  var hasArgs: Bool {self._args != nil}
   /// Clears the value of `args`. Subsequent reads from it will return its default value.
-  public mutating func clearArgs() {self._args = nil}
+  mutating func clearArgs() {self._args = nil}
 
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
+  var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  public nonisolated struct TTArgs: Sendable {
+  nonisolated struct TTArgs: Sendable {
     // SwiftProtobuf.Message conformance is added in an extension below. See the
     // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
     // methods supported on all messages.
 
-    public var collapseID: String = String()
+    var collapseID: String = String()
 
-    public var unknownFields = SwiftProtobuf.UnknownStorage()
+    var unknownFields = SwiftProtobuf.UnknownStorage()
 
-    public init() {}
+    init() {}
   }
 
-  public init() {}
+  init() {}
 
   fileprivate var _args: Livekit_TTNotification.TTArgs? = nil
 }
 
-public nonisolated struct Livekit_TTStartCall: Sendable {
+nonisolated struct Livekit_TTStartCall: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// [must] 1on1, group, instant
-  public var type: String = String()
+  var type: String = String()
 
-  public var version: Int32 = 0
+  var version: Int32 = 0
 
-  public var roomID: String = String()
+  var roomID: String = String()
 
   /// conversation id
-  public var conversationID: String = String()
+  var conversationID: String = String()
 
-  public var publicKey: String = String()
+  var publicKey: String = String()
 
-  public var encInfos: [Livekit_TTEncInfo] = []
+  var encInfos: [Livekit_TTEncInfo] = []
 
-  public var encMeta: Dictionary<String,String> = [:]
+  var encMeta: Dictionary<String,String> = [:]
 
   /// in milliseconds
-  public var timestamp: Int64 = 0
+  var timestamp: Int64 = 0
 
-  public var notification: Livekit_TTNotification {
+  var notification: Livekit_TTNotification {
     get {_notification ?? Livekit_TTNotification()}
     set {_notification = newValue}
   }
   /// Returns true if `notification` has been explicitly set.
-  public var hasNotification: Bool {self._notification != nil}
+  var hasNotification: Bool {self._notification != nil}
   /// Clears the value of `notification`. Subsequent reads from it will return its default value.
-  public mutating func clearNotification() {self._notification = nil}
+  mutating func clearNotification() {self._notification = nil}
 
-  public var cipherMessages: [Livekit_TTCipherMessages] = []
+  var cipherMessages: [Livekit_TTCipherMessages] = []
 
-  public var clientCallID: String = String()
+  var clientCallID: String = String()
 
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
+  var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  public init() {}
+  init() {}
 
   fileprivate var _notification: Livekit_TTNotification? = nil
 }
 
-public nonisolated struct Livekit_TTCallRequest: Sendable {
+nonisolated struct Livekit_TTCallRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// client token: for verify
-  public var token: String = String()
+  var token: String = String()
 
-  public var startCall: Livekit_TTStartCall {
+  var startCall: Livekit_TTStartCall {
     get {_startCall ?? Livekit_TTStartCall()}
     set {_startCall = newValue}
   }
   /// Returns true if `startCall` has been explicitly set.
-  public var hasStartCall: Bool {self._startCall != nil}
+  var hasStartCall: Bool {self._startCall != nil}
   /// Clears the value of `startCall`. Subsequent reads from it will return its default value.
-  public mutating func clearStartCall() {self._startCall = nil}
+  mutating func clearStartCall() {self._startCall = nil}
 
-  public var userAgent: String = String()
+  var userAgent: String = String()
 
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
+  var unknownFields = SwiftProtobuf.UnknownStorage()
 
-  public init() {}
+  init() {}
 
   fileprivate var _startCall: Livekit_TTStartCall? = nil
 }
@@ -384,10 +384,10 @@ public nonisolated struct Livekit_TTCallRequest: Sendable {
 fileprivate nonisolated let _protobuf_package = "livekit"
 
 nonisolated extension Livekit_TTCaller: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".TTCaller"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}uid\0\u{1}did\0")
+  static let protoMessageName: String = _protobuf_package + ".TTCaller"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}uid\0\u{1}did\0")
 
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -400,7 +400,7 @@ nonisolated extension Livekit_TTCaller: SwiftProtobuf.Message, SwiftProtobuf._Me
     }
   }
 
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.uid.isEmpty {
       try visitor.visitSingularStringField(value: self.uid, fieldNumber: 1)
     }
@@ -410,7 +410,7 @@ nonisolated extension Livekit_TTCaller: SwiftProtobuf.Message, SwiftProtobuf._Me
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Livekit_TTCaller, rhs: Livekit_TTCaller) -> Bool {
+  static func ==(lhs: Livekit_TTCaller, rhs: Livekit_TTCaller) -> Bool {
     if lhs.uid != rhs.uid {return false}
     if lhs.did != rhs.did {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -419,10 +419,10 @@ nonisolated extension Livekit_TTCaller: SwiftProtobuf.Message, SwiftProtobuf._Me
 }
 
 nonisolated extension Livekit_TTExceptionRecipient: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".TTExceptionRecipient"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}uid\0\u{1}registrationId\0\u{1}identityKey\0")
+  static let protoMessageName: String = _protobuf_package + ".TTExceptionRecipient"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}uid\0\u{1}registrationId\0\u{1}identityKey\0")
 
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -436,7 +436,7 @@ nonisolated extension Livekit_TTExceptionRecipient: SwiftProtobuf.Message, Swift
     }
   }
 
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.uid.isEmpty {
       try visitor.visitSingularStringField(value: self.uid, fieldNumber: 1)
     }
@@ -449,7 +449,7 @@ nonisolated extension Livekit_TTExceptionRecipient: SwiftProtobuf.Message, Swift
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Livekit_TTExceptionRecipient, rhs: Livekit_TTExceptionRecipient) -> Bool {
+  static func ==(lhs: Livekit_TTExceptionRecipient, rhs: Livekit_TTExceptionRecipient) -> Bool {
     if lhs.uid != rhs.uid {return false}
     if lhs.registrationID != rhs.registrationID {return false}
     if lhs.identityKey != rhs.identityKey {return false}
@@ -459,10 +459,10 @@ nonisolated extension Livekit_TTExceptionRecipient: SwiftProtobuf.Message, Swift
 }
 
 nonisolated extension Livekit_TTBaseResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".TTBaseResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}ver\0\u{1}status\0\u{1}reason\0")
+  static let protoMessageName: String = _protobuf_package + ".TTBaseResponse"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}ver\0\u{1}status\0\u{1}reason\0")
 
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -476,7 +476,7 @@ nonisolated extension Livekit_TTBaseResponse: SwiftProtobuf.Message, SwiftProtob
     }
   }
 
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.ver != 0 {
       try visitor.visitSingularUInt32Field(value: self.ver, fieldNumber: 1)
     }
@@ -489,7 +489,7 @@ nonisolated extension Livekit_TTBaseResponse: SwiftProtobuf.Message, SwiftProtob
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Livekit_TTBaseResponse, rhs: Livekit_TTBaseResponse) -> Bool {
+  static func ==(lhs: Livekit_TTBaseResponse, rhs: Livekit_TTBaseResponse) -> Bool {
     if lhs.ver != rhs.ver {return false}
     if lhs.status != rhs.status {return false}
     if lhs.reason != rhs.reason {return false}
@@ -499,8 +499,8 @@ nonisolated extension Livekit_TTBaseResponse: SwiftProtobuf.Message, SwiftProtob
 }
 
 nonisolated extension Livekit_TTCallResponseBody: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".TTCallResponseBody"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}needsSync\0\u{1}invalidUids\0\u{1}stale\0\u{1}missing\0\u{1}extra\0\u{1}encMeta\0\u{1}roomId\0\u{1}createdAt\0\u{1}serviceUrl\0\u{1}token\0\u{1}caller\0\u{1}version\0\u{1}emk\0\u{1}publicKey\0\u{1}serviceUrls\0\u{1}systemShowTimestamp\0")
+  static let protoMessageName: String = _protobuf_package + ".TTCallResponseBody"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}needsSync\0\u{1}invalidUids\0\u{1}stale\0\u{1}missing\0\u{1}extra\0\u{1}encMeta\0\u{1}roomId\0\u{1}createdAt\0\u{1}serviceUrl\0\u{1}token\0\u{1}caller\0\u{1}version\0\u{1}emk\0\u{1}publicKey\0\u{1}serviceUrls\0\u{1}systemShowTimestamp\0")
 
   fileprivate class _StorageClass {
     var _needsSync: Bool = false
@@ -555,7 +555,7 @@ nonisolated extension Livekit_TTCallResponseBody: SwiftProtobuf.Message, SwiftPr
     return _storage
   }
 
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     _ = _uniqueStorage()
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       while let fieldNumber = try decoder.nextFieldNumber() {
@@ -585,7 +585,7 @@ nonisolated extension Livekit_TTCallResponseBody: SwiftProtobuf.Message, SwiftPr
     }
   }
 
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every if/case branch local when no optimizations
@@ -643,7 +643,7 @@ nonisolated extension Livekit_TTCallResponseBody: SwiftProtobuf.Message, SwiftPr
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Livekit_TTCallResponseBody, rhs: Livekit_TTCallResponseBody) -> Bool {
+  static func ==(lhs: Livekit_TTCallResponseBody, rhs: Livekit_TTCallResponseBody) -> Bool {
     if lhs._storage !== rhs._storage {
       let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
         let _storage = _args.0
@@ -674,10 +674,10 @@ nonisolated extension Livekit_TTCallResponseBody: SwiftProtobuf.Message, SwiftPr
 }
 
 nonisolated extension Livekit_TTCallOptions: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".TTCallOptions"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}auto_publish_silence_audio\0\u{3}disable_silence_on_raise_hand\0")
+  static let protoMessageName: String = _protobuf_package + ".TTCallOptions"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}auto_publish_silence_audio\0\u{3}disable_silence_on_raise_hand\0")
 
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -690,7 +690,7 @@ nonisolated extension Livekit_TTCallOptions: SwiftProtobuf.Message, SwiftProtobu
     }
   }
 
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if self.autoPublishSilenceAudio != false {
       try visitor.visitSingularBoolField(value: self.autoPublishSilenceAudio, fieldNumber: 1)
     }
@@ -700,7 +700,7 @@ nonisolated extension Livekit_TTCallOptions: SwiftProtobuf.Message, SwiftProtobu
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Livekit_TTCallOptions, rhs: Livekit_TTCallOptions) -> Bool {
+  static func ==(lhs: Livekit_TTCallOptions, rhs: Livekit_TTCallOptions) -> Bool {
     if lhs.autoPublishSilenceAudio != rhs.autoPublishSilenceAudio {return false}
     if lhs.disableSilenceOnRaiseHand != rhs.disableSilenceOnRaiseHand {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -709,10 +709,10 @@ nonisolated extension Livekit_TTCallOptions: SwiftProtobuf.Message, SwiftProtobu
 }
 
 nonisolated extension Livekit_TTCallResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".TTCallResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}base\0\u{1}body\0\u{4}b\u{1}call_options\0")
+  static let protoMessageName: String = _protobuf_package + ".TTCallResponse"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}base\0\u{1}body\0\u{4}b\u{1}call_options\0")
 
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -726,7 +726,7 @@ nonisolated extension Livekit_TTCallResponse: SwiftProtobuf.Message, SwiftProtob
     }
   }
 
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -743,7 +743,7 @@ nonisolated extension Livekit_TTCallResponse: SwiftProtobuf.Message, SwiftProtob
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Livekit_TTCallResponse, rhs: Livekit_TTCallResponse) -> Bool {
+  static func ==(lhs: Livekit_TTCallResponse, rhs: Livekit_TTCallResponse) -> Bool {
     if lhs._base != rhs._base {return false}
     if lhs._body != rhs._body {return false}
     if lhs._callOptions != rhs._callOptions {return false}
@@ -753,10 +753,10 @@ nonisolated extension Livekit_TTCallResponse: SwiftProtobuf.Message, SwiftProtob
 }
 
 nonisolated extension Livekit_TTCipherMessages: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".TTCipherMessages"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}content\0\u{1}uid\0\u{1}registrationId\0")
+  static let protoMessageName: String = _protobuf_package + ".TTCipherMessages"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}content\0\u{1}uid\0\u{1}registrationId\0")
 
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -770,7 +770,7 @@ nonisolated extension Livekit_TTCipherMessages: SwiftProtobuf.Message, SwiftProt
     }
   }
 
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.content.isEmpty {
       try visitor.visitSingularStringField(value: self.content, fieldNumber: 1)
     }
@@ -783,7 +783,7 @@ nonisolated extension Livekit_TTCipherMessages: SwiftProtobuf.Message, SwiftProt
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Livekit_TTCipherMessages, rhs: Livekit_TTCipherMessages) -> Bool {
+  static func ==(lhs: Livekit_TTCipherMessages, rhs: Livekit_TTCipherMessages) -> Bool {
     if lhs.content != rhs.content {return false}
     if lhs.uid != rhs.uid {return false}
     if lhs.registrationID != rhs.registrationID {return false}
@@ -793,10 +793,10 @@ nonisolated extension Livekit_TTCipherMessages: SwiftProtobuf.Message, SwiftProt
 }
 
 nonisolated extension Livekit_TTEncInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".TTEncInfo"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}uid\0\u{1}emk\0")
+  static let protoMessageName: String = _protobuf_package + ".TTEncInfo"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}uid\0\u{1}emk\0")
 
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -809,7 +809,7 @@ nonisolated extension Livekit_TTEncInfo: SwiftProtobuf.Message, SwiftProtobuf._M
     }
   }
 
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.uid.isEmpty {
       try visitor.visitSingularStringField(value: self.uid, fieldNumber: 1)
     }
@@ -819,7 +819,7 @@ nonisolated extension Livekit_TTEncInfo: SwiftProtobuf.Message, SwiftProtobuf._M
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Livekit_TTEncInfo, rhs: Livekit_TTEncInfo) -> Bool {
+  static func ==(lhs: Livekit_TTEncInfo, rhs: Livekit_TTEncInfo) -> Bool {
     if lhs.uid != rhs.uid {return false}
     if lhs.emk != rhs.emk {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -828,10 +828,10 @@ nonisolated extension Livekit_TTEncInfo: SwiftProtobuf.Message, SwiftProtobuf._M
 }
 
 nonisolated extension Livekit_TTNotification: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".TTNotification"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}type\0\u{1}args\0")
+  static let protoMessageName: String = _protobuf_package + ".TTNotification"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}type\0\u{1}args\0")
 
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -844,7 +844,7 @@ nonisolated extension Livekit_TTNotification: SwiftProtobuf.Message, SwiftProtob
     }
   }
 
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -858,7 +858,7 @@ nonisolated extension Livekit_TTNotification: SwiftProtobuf.Message, SwiftProtob
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Livekit_TTNotification, rhs: Livekit_TTNotification) -> Bool {
+  static func ==(lhs: Livekit_TTNotification, rhs: Livekit_TTNotification) -> Bool {
     if lhs.type != rhs.type {return false}
     if lhs._args != rhs._args {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -867,10 +867,10 @@ nonisolated extension Livekit_TTNotification: SwiftProtobuf.Message, SwiftProtob
 }
 
 nonisolated extension Livekit_TTNotification.TTArgs: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = Livekit_TTNotification.protoMessageName + ".TTArgs"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}collapseId\0")
+  static let protoMessageName: String = Livekit_TTNotification.protoMessageName + ".TTArgs"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}collapseId\0")
 
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -882,14 +882,14 @@ nonisolated extension Livekit_TTNotification.TTArgs: SwiftProtobuf.Message, Swif
     }
   }
 
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     if !self.collapseID.isEmpty {
       try visitor.visitSingularStringField(value: self.collapseID, fieldNumber: 1)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Livekit_TTNotification.TTArgs, rhs: Livekit_TTNotification.TTArgs) -> Bool {
+  static func ==(lhs: Livekit_TTNotification.TTArgs, rhs: Livekit_TTNotification.TTArgs) -> Bool {
     if lhs.collapseID != rhs.collapseID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
@@ -897,10 +897,10 @@ nonisolated extension Livekit_TTNotification.TTArgs: SwiftProtobuf.Message, Swif
 }
 
 nonisolated extension Livekit_TTStartCall: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".TTStartCall"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}type\0\u{1}version\0\u{1}roomId\0\u{1}conversationId\0\u{1}publicKey\0\u{1}encInfos\0\u{1}encMeta\0\u{1}timestamp\0\u{1}notification\0\u{1}cipherMessages\0\u{1}clientCallId\0")
+  static let protoMessageName: String = _protobuf_package + ".TTStartCall"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}type\0\u{1}version\0\u{1}roomId\0\u{1}conversationId\0\u{1}publicKey\0\u{1}encInfos\0\u{1}encMeta\0\u{1}timestamp\0\u{1}notification\0\u{1}cipherMessages\0\u{1}clientCallId\0")
 
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -922,7 +922,7 @@ nonisolated extension Livekit_TTStartCall: SwiftProtobuf.Message, SwiftProtobuf.
     }
   }
 
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -963,7 +963,7 @@ nonisolated extension Livekit_TTStartCall: SwiftProtobuf.Message, SwiftProtobuf.
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Livekit_TTStartCall, rhs: Livekit_TTStartCall) -> Bool {
+  static func ==(lhs: Livekit_TTStartCall, rhs: Livekit_TTStartCall) -> Bool {
     if lhs.type != rhs.type {return false}
     if lhs.version != rhs.version {return false}
     if lhs.roomID != rhs.roomID {return false}
@@ -981,10 +981,10 @@ nonisolated extension Livekit_TTStartCall: SwiftProtobuf.Message, SwiftProtobuf.
 }
 
 nonisolated extension Livekit_TTCallRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".TTCallRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}token\0\u{1}startCall\0\u{1}userAgent\0")
+  static let protoMessageName: String = _protobuf_package + ".TTCallRequest"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}token\0\u{1}startCall\0\u{1}userAgent\0")
 
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
       // The use of inline closures is to circumvent an issue where the compiler
       // allocates stack space for every case branch when no optimizations are
@@ -998,7 +998,7 @@ nonisolated extension Livekit_TTCallRequest: SwiftProtobuf.Message, SwiftProtobu
     }
   }
 
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
     // The use of inline closures is to circumvent an issue where the compiler
     // allocates stack space for every if/case branch local when no optimizations
     // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
@@ -1015,7 +1015,7 @@ nonisolated extension Livekit_TTCallRequest: SwiftProtobuf.Message, SwiftProtobu
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Livekit_TTCallRequest, rhs: Livekit_TTCallRequest) -> Bool {
+  static func ==(lhs: Livekit_TTCallRequest, rhs: Livekit_TTCallRequest) -> Bool {
     if lhs.token != rhs.token {return false}
     if lhs._startCall != rhs._startCall {return false}
     if lhs.userAgent != rhs.userAgent {return false}

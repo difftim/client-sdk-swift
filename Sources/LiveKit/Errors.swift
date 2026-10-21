@@ -152,7 +152,10 @@ public class LiveKitError: NSError, @unchecked Sendable, Loggable {
     public let type: LiveKitErrorType
     public let message: String?
     public let internalError: Error?
-    public let response: Livekit_TTCallResponse?
+    let response: Livekit_TTCallResponse?
+
+    /// Serialized `livekit.TTCallResponse` returned with a start-call failure.
+    public var responseData: Data? { try? response?.serializedData() }
 
     @available(*, deprecated, renamed: "internalError")
     public var underlyingError: Error? { internalError }
@@ -161,10 +164,17 @@ public class LiveKitError: NSError, @unchecked Sendable, Loggable {
         [internalError].compactMap(\.self)
     }
 
-    public init(_ type: LiveKitErrorType,
-                message: String? = nil,
-                internalError: Error? = nil,
-                response: Livekit_TTCallResponse? = nil)
+    public convenience init(_ type: LiveKitErrorType,
+                            message: String? = nil,
+                            internalError: Error? = nil)
+    {
+        self.init(type, message: message, internalError: internalError, response: nil)
+    }
+
+    init(_ type: LiveKitErrorType,
+         message: String? = nil,
+         internalError: Error? = nil,
+         response: Livekit_TTCallResponse?)
     {
         func _computeDescription() -> String {
             var suffix = ""

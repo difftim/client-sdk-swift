@@ -130,7 +130,11 @@ public class Room: NSObject, @unchecked Sendable, ObservableObject, Loggable {
         set { _e2eeManager.mutate { $0 = newValue } }
     }
 
-    public internal(set) var ttCallResp: Livekit_TTCallResponse?
+    var ttCallResp: Livekit_TTCallResponse?
+
+    /// Serialized `livekit.TTCallResponse` from the join response.
+    public var ttCallRespData: Data? { try? ttCallResp?.serializedData() }
+
     /// Enables or disables end-to-end encryption on this Room.
     ///
     /// Requires the Room to have been constructed with ``EncryptionOptions``

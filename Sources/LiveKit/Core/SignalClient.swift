@@ -169,7 +169,11 @@ actor SignalClient: Loggable {
 
         do {
             let sendAfterOpen: Data? = {
-                guard let tt = connectOptions?.ttCallRequest, token.isEmpty else { return nil }
+                guard let connectOptions, connectOptions.ttCallRequestData != nil, token.isEmpty else { return nil }
+                guard let tt = connectOptions.ttCallRequest else {
+                    log("[startcall] ttCallRequestData cannot be decoded", .error)
+                    return nil
+                }
                 let r = Livekit_SignalRequest.with { $0.ttCallRequest = tt }
                 return try? r.serializedData()
             }()

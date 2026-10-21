@@ -28,7 +28,7 @@ func normalizeQuicConnectTimeoutMs(_ value: Int) -> Int {
 #if os(iOS)
 import Foundation
 import Network
-import TTSignal
+internal import TTSignal
 
 extension TTSignalConnector: @unchecked Sendable {}
 extension TTSignalConnection: @unchecked Sendable {}
