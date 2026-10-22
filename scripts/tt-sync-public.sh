@@ -37,13 +37,6 @@ VERSION=$1
 gh auth status >/dev/null 2>&1 || die "gh is not logged in: gh auth login"
 gh api "repos/$PRIVATE_REPO/git/ref/tags/$VERSION" >/dev/null 2>&1 \
     || die "$PRIVATE_REPO has no tag $VERSION; release it with tt-release.sh first."
-gh repo view "$PUBLIC_REPO" >/dev/null 2>&1 || die "Cannot read $PUBLIC_REPO with the current gh login."
-if gh release view "$VERSION" -R "$PUBLIC_REPO" >/dev/null 2>&1; then
-    die "Release $VERSION already exists on $PUBLIC_REPO."
-fi
-if gh api "repos/$PUBLIC_REPO/git/ref/tags/$VERSION" >/dev/null 2>&1; then
-    die "$PUBLIC_REPO already has tag $VERSION."
-fi
 grep -qs 'machine api.github.com' "$HOME/.netrc" \
     || die "~/.netrc has no 'machine api.github.com' entry; it is needed to download the private zip."
 
@@ -65,6 +58,15 @@ fi
 ZIP_CHECKSUM=$(checksum "$WORK/$ZIP_NAME")
 if [ "$ZIP_CHECKSUM" != "$INFO_CHECKSUM" ] || [ "$ZIP_CHECKSUM" != "$MANIFEST_CHECKSUM" ]; then
     die "Checksum mismatch for $VERSION (zip $ZIP_CHECKSUM, build-info.json $INFO_CHECKSUM, Package.swift $MANIFEST_CHECKSUM); nothing was pushed."
+fi
+
+# ── Public repo preflight (after the private zip checks out) ────────
+gh repo view "$PUBLIC_REPO" >/dev/null 2>&1 || die "Cannot read $PUBLIC_REPO with the current gh login."
+if gh release view "$VERSION" -R "$PUBLIC_REPO" >/dev/null 2>&1; then
+    die "Release $VERSION already exists on $PUBLIC_REPO."
+fi
+if gh api "repos/$PUBLIC_REPO/git/ref/tags/$VERSION" >/dev/null 2>&1; then
+    die "$PUBLIC_REPO already has tag $VERSION."
 fi
 
 # ── Commit the public files, then publish the same zip ──────────────
