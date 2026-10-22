@@ -68,7 +68,13 @@ git diff --quiet && git diff --cached --quiet || die "Uncommitted changes."
 gh auth status >/dev/null 2>&1 || die "gh is not logged in: gh auth login"
 
 git pull --ff-only chative main
-git fetch --tags chative
+# Upstream tags fetched from origin (2.15.2 and others) also exist on chative under the same
+# names but point at fork commits. Leave those local tags alone; any other fetch error stops here.
+if ! FETCH_OUT=$(git fetch --tags chative 2>&1); then
+    UNEXPECTED=$(printf '%s\n' "$FETCH_OUT" | grep -vE '^From |would clobber existing tag|^Connection to |^[[:space:]]*$' || true)
+    [ -z "$UNEXPECTED" ] || die "git fetch --tags chative failed: $FETCH_OUT"
+    echo "Note: kept local tags that clash with chative's: $(printf '%s\n' "$FETCH_OUT" | grep -c 'would clobber')"
+fi
 VERSION=$(sdk_version)
 [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || die "Cannot read LiveKitSDK.version from $VERSION_FILE (got '$VERSION')."
 git rev-parse -q --verify "refs/tags/$VERSION" >/dev/null \
