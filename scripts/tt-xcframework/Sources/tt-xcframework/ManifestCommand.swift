@@ -14,13 +14,15 @@ struct ManifestCommand: ParsableCommand {
     @Option(name: .customLong("livekit-url"), help: "Release asset URL of LiveKit.xcframework.zip.")
     var liveKitURL: String
 
+    @Option(name: .customLong("webrtc-url"), help: "WebRTC zip URL to use instead of the one in build-info.json.")
+    var webrtcURL: String?
+
     @Option(help: "Package.swift to write.")
     var output: String
 
     func run() throws {
         let buildInfo = try JSONDecoder().decode(BuildInfo.self, from: Data(contentsOf: URL(fileURLWithPath: info)))
-        let manifest = renderManifest(liveKit: .url(liveKitURL, checksum: buildInfo.checksum),
-                                      webrtc: buildInfo.webrtc, uniffi: buildInfo.uniffi)
-        try manifest.write(toFile: output, atomically: true, encoding: .utf8)
+        let (liveKit, webrtc, uniffi) = manifestSources(info: buildInfo, liveKitURL: liveKitURL, webrtcURL: webrtcURL)
+        try renderManifest(liveKit: liveKit, webrtc: webrtc, uniffi: uniffi).write(toFile: output, atomically: true, encoding: .utf8)
     }
 }

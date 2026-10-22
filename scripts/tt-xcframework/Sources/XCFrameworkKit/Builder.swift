@@ -77,7 +77,8 @@ public struct Builder {
         try exec(["ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", xcframework.string, zip.string], log: logDir + "zip.log")
         let checksum = try String(exec(["shasum", "-a", "256", zip.string], log: logDir + "checksum.log").prefix(64))
 
-        let info = BuildInfo(version: version, checksum: checksum, webrtc: webrtc, uniffi: uniffi)
+        let webrtcVersion = try forkDependency("webrtc-xcframework", in: (repoRoot + "Package.swift").read()).version
+        let info = BuildInfo(version: version, checksum: checksum, webrtc: webrtc, uniffi: uniffi, webrtcVersion: webrtcVersion)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         try (outputDir + "build-info.json").write(encoder.encode(info) + Data("\n".utf8))

@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import XCFrameworkKit
 
@@ -85,5 +86,47 @@ struct ManifestTests {
         // tvOS declarations keep resolving.
         #expect(manifest.contains("platforms: [.iOS(.v13), .macOS(.v10_15), .macCatalyst(.v14)]"))
         #expect(!manifest.contains("path:"))
+    }
+
+    private func buildInfoJSON(webrtcVersion: String?) -> Data {
+        let field = webrtcVersion.map { "\"webrtcVersion\": \"\($0)\"," } ?? ""
+        return Data("""
+            {
+              "checksum": "\(String(repeating: "a", count: 64))",
+              "uniffi": {"checksum": "\(String(repeating: "c", count: 64))", "url": "https://example.com/RustLiveKitUniFFI.xcframework.zip"},
+              "version": "2.15.2-a13",
+              "webrtc": {"checksum": "\(String(repeating: "b", count: 64))", "url": "https://api.github.com/repos/difftim/webrtc-xcframework/releases/assets/7.zip"},
+              \(field)
+              "x": 0
+            }
+            """.utf8)
+    }
+
+    @Test func buildInfoDecodesWebRTCVersion() throws {
+        let info = try JSONDecoder().decode(BuildInfo.self, from: buildInfoJSON(webrtcVersion: "144.7559.15"))
+        #expect(info.webrtcVersion == "144.7559.15")
+        // build-info.json of 2.15.2-a12 and earlier has no webrtcVersion.
+        let legacy = try JSONDecoder().decode(BuildInfo.self, from: buildInfoJSON(webrtcVersion: nil))
+        #expect(legacy.webrtcVersion == nil)
+        #expect(legacy.webrtc.url == "https://api.github.com/repos/difftim/webrtc-xcframework/releases/assets/7.zip")
+    }
+
+    @Test func manifestUsesWebRTCOverride() throws {
+        let info = try JSONDecoder().decode(BuildInfo.self, from: buildInfoJSON(webrtcVersion: "144.7559.15"))
+        let liveKitURL = "https://github.com/TempTalkOrg/client-sdk-swift-xcframework/releases/download/2.15.2-a13/LiveKit.xcframework.zip"
+        let publicWebRTC = "https://github.com/TempTalkOrg/webrtc-xcframework/releases/download/144.7559.15/LiveKitWebRTC.xcframework.zip"
+
+        let (liveKit, webrtc, uniffi) = manifestSources(info: info, liveKitURL: liveKitURL, webrtcURL: publicWebRTC)
+        guard case let .url(url, checksum) = liveKit else {
+            Issue.record("LiveKit source should be a URL")
+            return
+        }
+        #expect(url == liveKitURL)
+        #expect(checksum == info.checksum)
+        #expect(webrtc == BinaryDep(url: publicWebRTC, checksum: info.webrtc.checksum))
+        #expect(uniffi == info.uniffi)
+
+        let (_, defaultWebRTC, _) = manifestSources(info: info, liveKitURL: liveKitURL, webrtcURL: nil)
+        #expect(defaultWebRTC == info.webrtc)
     }
 }

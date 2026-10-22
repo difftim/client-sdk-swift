@@ -34,13 +34,24 @@ public struct BuildInfo: Codable, Equatable, Sendable {
     public let checksum: String
     public let webrtc: BinaryDep
     public let uniffi: BinaryDep
+    /// The WebRTC tag the fork pins; the public sync copies that release to the public WebRTC repo.
+    /// nil in build-info.json of 2.15.2-a12 and earlier.
+    public let webrtcVersion: String?
 
-    public init(version: String, checksum: String, webrtc: BinaryDep, uniffi: BinaryDep) {
+    public init(version: String, checksum: String, webrtc: BinaryDep, uniffi: BinaryDep, webrtcVersion: String?) {
         self.version = version
         self.checksum = checksum
         self.webrtc = webrtc
         self.uniffi = uniffi
+        self.webrtcVersion = webrtcVersion
     }
+}
+
+/// The three binary sources of a distribution Package.swift. `webrtcURL` replaces the WebRTC URL
+/// (the public repo points at the public WebRTC copy); the checksum stays the one in build-info.
+public func manifestSources(info: BuildInfo, liveKitURL: String, webrtcURL: String?) -> (BinarySource, BinaryDep, BinaryDep) {
+    let webrtc = webrtcURL.map { BinaryDep(url: $0, checksum: info.webrtc.checksum) } ?? info.webrtc
+    return (.url(liveKitURL, checksum: info.checksum), webrtc, info.uniffi)
 }
 
 /// `.package(url: "...", exact|from: "...")` for the dependency whose line contains `pattern`.
