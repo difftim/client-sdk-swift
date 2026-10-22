@@ -71,4 +71,19 @@ struct ManifestTests {
         #expect(local.contains(".binaryTarget(name: \"LiveKit\", path: \"LiveKit.xcframework.zip\")"))
         #expect(!local.contains(checksum))
     }
+
+    @Test func renderWebRTCManifestUsesGivenURL() {
+        let url = "https://api.github.com/repos/difftim/webrtc-xcframework/releases/assets/1.zip"
+        let checksum = "9003e3ae71ec76abd4b2495121e582ca0930b3d4c7a09ef5ce6ea7004c80004b"
+
+        let manifest = renderWebRTCManifest(url: url, checksum: checksum)
+        #expect(manifest.contains("name: \"LiveKitWebRTC\""))
+        #expect(manifest.contains(".library(name: \"LiveKitWebRTC\", targets: [\"LiveKitWebRTC\"])"))
+        #expect(manifest.contains("url: \"\(url)\""))
+        #expect(manifest.contains("checksum: \"\(checksum)\""))
+        // Same platforms as the 3th1UOYgUtJkurSZ package it replaces, so the fork's iOS 13 / macOS /
+        // tvOS declarations keep resolving.
+        #expect(manifest.contains("platforms: [.iOS(.v13), .macOS(.v10_15), .macCatalyst(.v14)]"))
+        #expect(!manifest.contains("path:"))
+    }
 }
