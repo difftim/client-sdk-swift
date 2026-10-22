@@ -129,6 +129,6 @@ curl --netrc -fsSL --retry 3 --retry-all-errors -H 'Accept: application/octet-st
     -o "$VERIFY_DIR/$ZIP_NAME" "$ASSET_URL" \
     || die "Release $VERSION is published, but downloading $ASSET_URL with ~/.netrc failed; retry and compare shasum -a 256 with $CHECKSUM."
 [ "$(checksum "$VERIFY_DIR/$ZIP_NAME")" = "$CHECKSUM" ] || die "The zip downloaded from $ASSET_URL does not match checksum $CHECKSUM."
-rm -rf "$VERIFY_DIR"
+rm -rf "$VERIFY_DIR" "$(dirname "$DIST_DIR")"
 
-echo "Published LiveKit $VERSION to $DIST_REPO: tag at $(git -C "$DIST_DIR" rev-parse --short HEAD), checksum $CHECKSUM verified via ~/.netrc."
+echo "Published LiveKit $VERSION to $DIST_REPO: tag at ${DIST_COMMIT:0:7}, checksum $CHECKSUM verified via ~/.netrc."
